@@ -10,6 +10,7 @@ levels = [
 
 config = GridEngineConfig(
     quantity=10,
+    take_profit_percent=Decimal("1.00"),
 )
 
 engine = GridEngine(
@@ -31,6 +32,10 @@ prices = [
     Decimal("297"),
     Decimal("297.20"),
     Decimal("297.45"),
+    Decimal("298"),
+    Decimal("299"),
+    Decimal("300"),
+    Decimal("301"),
 ]
 
 for price in prices:
@@ -44,5 +49,17 @@ for price in prices:
 
     if events:
         print(f"events={events}")
+
+    for event in events:
+        next_commands = engine.on_trade_executed(event)
+        print(f"next_commands={next_commands}")
+
+        next_events = broker.execute_commands(
+            commands=next_commands,
+            current_price=price,
+        )
+
+        if next_events:
+            print(f"next_events={next_events}")
 
 broker.summary()

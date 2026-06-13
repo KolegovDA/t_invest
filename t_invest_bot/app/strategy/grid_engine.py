@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from domain.commands import PlaceBuyLimitCommand, TradingCommand
+from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
 from domain.enums import GridLevelStatus
+from domain.events import TradeExecutedEvent
 from strategy.trailing_engine import TrailingEngine, TrailingEntryState
 
 
@@ -19,6 +20,7 @@ class GridEngineConfig:
     entry_limit_offset_percent: Decimal = Decimal("0.15")
     entry_rebound_percent: Decimal = Decimal("0.15")
     trailing_percent: Decimal = Decimal("0.50")
+    take_profit_percent: Decimal = Decimal("1.00")
     quantity: int = 1
 
 
@@ -71,5 +73,30 @@ class GridEngine:
                     )
 
                     level.status = GridLevelStatus.ORDER_PLACED
+
+        return commands
+
+    def on_trade_executed(
+        self,
+        event: TradeExecutedEvent,
+    ) -> list[TradingCommand]:
+        commands: list[TradingCommand] = []
+
+        if event.instrument_id != self.instrument_id:
+            return commands
+
+        if event.side == "BUY":
+            sell_price = event.price * (
+                Decimal("1")
+                + self.config.take_profit_percent / Decimal("100")
+            )
+
+            commands.append(
+                PlaceSellLimitCommand(
+                    instrument_id=self.instrument_id,
+                    quantity=event.quantity,
+                    price=sell_price,
+                )
+            )
 
         return commands
