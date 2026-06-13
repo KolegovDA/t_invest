@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from broker.virtual_broker import VirtualBroker
+from domain.commands import TradingCommand
 from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
 
 
@@ -23,6 +24,8 @@ broker = VirtualBroker(
     cash=Decimal("100000"),
 )
 
+pending_commands: list[TradingCommand] = []
+
 prices = [
     Decimal("305"),
     Decimal("302"),
@@ -39,27 +42,28 @@ prices = [
 ]
 
 for price in prices:
-    commands = engine.on_price(price)
-    print(f"price={price}, commands={commands}")
+    new_commands = engine.on_price(price)
+    pending_commands.extend(new_commands)
+
+    print(f"price={price}, new_commands={new_commands}")
+    print(f"pending_commands={pending_commands}")
 
     events = broker.execute_commands(
-        commands=commands,
+        commands=pending_commands,
         current_price=price,
     )
 
-    if events:
-        print(f"events={events}")
-
     for event in events:
+        pending_commands = [
+            command
+            for command in pending_commands
+            if command.price != event.price
+        ]
+
         next_commands = engine.on_trade_executed(event)
+        pending_commands.extend(next_commands)
+
+        print(f"event={event}")
         print(f"next_commands={next_commands}")
-
-        next_events = broker.execute_commands(
-            commands=next_commands,
-            current_price=price,
-        )
-
-        if next_events:
-            print(f"next_events={next_events}")
 
 broker.summary()
