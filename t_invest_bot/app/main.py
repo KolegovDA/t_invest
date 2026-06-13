@@ -1,21 +1,31 @@
 from decimal import Decimal
 
-from domain.entities import Instrument
-from domain.enums import InstrumentType
+from strategy.trailing_engine import TrailingEngine, TrailingEntryState
 
 
 def main():
-    instrument = Instrument(
-        id="SBER",
-        ticker="SBER",
-        name="Sberbank",
-        instrument_type=InstrumentType.STOCK,
-        currency="RUB",
-        lot_size=10,
-        min_price_step=Decimal("0.01"),
+    engine = TrailingEngine()
+
+    state = TrailingEntryState(
+        level_price=Decimal("300"),
+        lowest_price=Decimal("300"),
     )
 
-    print(instrument)
+    prices = [
+        Decimal("299"),
+        Decimal("298"),
+        Decimal("297"),
+        Decimal("297.20"),
+        Decimal("297.45"),
+    ]
+
+    for price in prices:
+        state = engine.update_entry(state, price)
+        print(price, state)
+
+        if state.is_confirmed:
+            print("Entry confirmed")
+            break
 
 
 if __name__ == "__main__":
