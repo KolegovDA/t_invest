@@ -7,6 +7,22 @@ from strategy.trailing_engine import TrailingEngine, TrailingEntryState
 
 
 @dataclass(slots=True)
+class GridLevel:
+    index: int
+    price: Decimal
+    status: GridLevelStatus = GridLevelStatus.WAITING_PRICE
+    trailing_entry: TrailingEntryState | None = None
+
+
+@dataclass(slots=True)
+class GridEngineConfig:
+    entry_limit_offset_percent: Decimal = Decimal("0.15")
+    entry_rebound_percent: Decimal = Decimal("0.15")
+    trailing_percent: Decimal = Decimal("0.50")
+    quantity: int = 1
+
+
+@dataclass(slots=True)
 class GridEngine:
     instrument_id: str
     levels: list[GridLevel]
