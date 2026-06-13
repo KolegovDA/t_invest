@@ -5,15 +5,18 @@ from broker.virtual_broker import VirtualBroker
 
 
 levels = [
-    GridLevel(price=Decimal("297.896175"), quantity=10),
+    GridLevel(index=1, price=Decimal("297.896175")),
 ]
 
 config = GridEngineConfig(
-    instrument_id="SBER",
-    levels=levels,
+    quantity=10,
 )
 
-engine = GridEngine(config=config)
+engine = GridEngine(
+    instrument_id="SBER",
+    levels=levels,
+    config=config,
+)
 
 broker = VirtualBroker(
     cash=Decimal("100000")
