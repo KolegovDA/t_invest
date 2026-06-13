@@ -1,0 +1,11 @@
+pydantic
+sqlalchemy
+pytest
+ruff
+mypy
+python-dotenv
+pyyaml
+pandas
+numpy
+matplotlib
+tinkoff-investments
