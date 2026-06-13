@@ -1,17 +1,23 @@
 from decimal import Decimal
 
-from strategy.trailing_engine import TrailingEngine, TrailingEntryState
+from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 
 
 def main():
-    engine = TrailingEngine()
-
-    state = TrailingEntryState(
-        level_price=Decimal("300"),
-        lowest_price=Decimal("300"),
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(index=1, price=Decimal("300")),
+        ],
+        config=GridEngineConfig(
+            quantity=10,
+        ),
     )
 
     prices = [
+        Decimal("305"),
+        Decimal("302"),
+        Decimal("300"),
         Decimal("299"),
         Decimal("298"),
         Decimal("297"),
@@ -20,12 +26,8 @@ def main():
     ]
 
     for price in prices:
-        state = engine.update_entry(state, price)
-        print(price, state)
-
-        if state.is_confirmed:
-            print("Entry confirmed")
-            break
+        commands = grid.on_price(price)
+        print(f"price={price}, commands={commands}")
 
 
 if __name__ == "__main__":
