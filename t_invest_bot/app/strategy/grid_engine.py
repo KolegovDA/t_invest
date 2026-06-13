@@ -67,6 +67,7 @@ class GridEngine:
                     commands.append(
                         PlaceBuyLimitCommand(
                             instrument_id=self.instrument_id,
+                            level_index=level.index,
                             quantity=self.config.quantity,
                             price=buy_price,
                         )
@@ -85,6 +86,11 @@ class GridEngine:
         if event.instrument_id != self.instrument_id:
             return commands
 
+        level = self._get_level_by_index(event.level_index)
+
+        if level is None:
+            return commands
+
         if event.side == "BUY":
             sell_price = event.price * (
                 Decimal("1")
@@ -94,14 +100,21 @@ class GridEngine:
             commands.append(
                 PlaceSellLimitCommand(
                     instrument_id=self.instrument_id,
+                    level_index=event.level_index,
                     quantity=event.quantity,
                     price=sell_price,
                 )
             )
 
         elif event.side == "SELL":
-            for level in self.levels:
-                level.status = GridLevelStatus.WAITING_PRICE
-                level.trailing_entry = None
+            level.status = GridLevelStatus.WAITING_PRICE
+            level.trailing_entry = None
 
         return commands
+
+    def _get_level_by_index(self, level_index: int) -> GridLevel | None:
+        for level in self.levels:
+            if level.index == level_index:
+                return level
+
+        return None

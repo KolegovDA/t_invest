@@ -10,6 +10,7 @@ class TradingCommand:
 @dataclass(slots=True)
 class PlaceBuyLimitCommand(TradingCommand):
     instrument_id: str
+    level_index: int
     quantity: int
     price: Decimal
 
@@ -17,6 +18,7 @@ class PlaceBuyLimitCommand(TradingCommand):
 @dataclass(slots=True)
 class PlaceSellLimitCommand(TradingCommand):
     instrument_id: str
+    level_index: int
     quantity: int
     price: Decimal
 

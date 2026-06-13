@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List
 
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
 from domain.events import TradeExecutedEvent
@@ -9,6 +8,7 @@ from domain.events import TradeExecutedEvent
 @dataclass
 class VirtualTrade:
     instrument_id: str
+    level_index: int
     side: str
     quantity: int
     price: Decimal
@@ -21,7 +21,7 @@ class VirtualBroker:
     position: int = 0
     avg_price: Decimal = Decimal("0")
     realized_profit: Decimal = Decimal("0")
-    trades: List[VirtualTrade] = field(default_factory=list)
+    trades: list[VirtualTrade] = field(default_factory=list)
 
     def execute_buy_limit(
         self,
@@ -48,16 +48,21 @@ class VirtualBroker:
         self.trades.append(
             VirtualTrade(
                 instrument_id=command.instrument_id,
+                level_index=command.level_index,
                 side="BUY",
                 quantity=command.quantity,
                 price=command.price,
             )
         )
 
-        print(f"BUY {command.quantity} {command.instrument_id} по {command.price}")
+        print(
+            f"BUY level={command.level_index} "
+            f"{command.quantity} {command.instrument_id} по {command.price}"
+        )
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
+            level_index=command.level_index,
             side="BUY",
             quantity=command.quantity,
             price=command.price,
@@ -88,6 +93,7 @@ class VirtualBroker:
         self.trades.append(
             VirtualTrade(
                 instrument_id=command.instrument_id,
+                level_index=command.level_index,
                 side="SELL",
                 quantity=command.quantity,
                 price=command.price,
@@ -96,12 +102,14 @@ class VirtualBroker:
         )
 
         print(
-            f"SELL {command.quantity} {command.instrument_id} "
+            f"SELL level={command.level_index} "
+            f"{command.quantity} {command.instrument_id} "
             f"по {command.price}, profit={profit}"
         )
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
+            level_index=command.level_index,
             side="SELL",
             quantity=command.quantity,
             price=command.price,
