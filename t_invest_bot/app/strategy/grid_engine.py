@@ -99,4 +99,9 @@ class GridEngine:
                 )
             )
 
+        elif event.side == "SELL":
+            for level in self.levels:
+                level.status = GridLevelStatus.WAITING_PRICE
+                level.trailing_entry = None
+
         return commands
