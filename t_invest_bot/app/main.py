@@ -39,6 +39,16 @@ prices = [
     Decimal("299"),
     Decimal("300"),
     Decimal("301"),
+
+    Decimal("299"),
+    Decimal("298"),
+    Decimal("297"),
+    Decimal("297.30"),
+    Decimal("297.60"),
+    Decimal("298"),
+    Decimal("299"),
+    Decimal("301"),
+    Decimal("302"),
 ]
 
 for price in prices:
