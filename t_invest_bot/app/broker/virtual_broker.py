@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import List
 
-from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
+from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
 from domain.events import TradeExecutedEvent
 
 
@@ -21,7 +22,29 @@ class VirtualBroker:
     position: int = 0
     avg_price: Decimal = Decimal("0")
     realized_profit: Decimal = Decimal("0")
-    trades: list[VirtualTrade] = field(default_factory=list)
+    trades: List[VirtualTrade] = field(default_factory=list)
+
+    level_positions: dict[int, VirtualTrade] = field(default_factory=dict)
+
+    def execute_commands(
+        self,
+        commands: list[TradingCommand],
+        current_price: Decimal,
+    ) -> list[TradeExecutedEvent]:
+        events: list[TradeExecutedEvent] = []
+
+        for command in commands:
+            if isinstance(command, PlaceBuyLimitCommand):
+                event = self.execute_buy_limit(command, current_price)
+                if event:
+                    events.append(event)
+
+            elif isinstance(command, PlaceSellLimitCommand):
+                event = self.execute_sell_limit(command, current_price)
+                if event:
+                    events.append(event)
+
+        return events
 
     def execute_buy_limit(
         self,
@@ -37,28 +60,24 @@ class VirtualBroker:
             print("Недостаточно виртуальных денег")
             return None
 
-        old_position_value = self.avg_price * self.position
-        new_position_value = old_position_value + total
-        new_position = self.position + command.quantity
-
         self.cash -= total
-        self.position = new_position
-        self.avg_price = new_position_value / Decimal(new_position)
 
-        self.trades.append(
-            VirtualTrade(
-                instrument_id=command.instrument_id,
-                level_index=command.level_index,
-                side="BUY",
-                quantity=command.quantity,
-                price=command.price,
-            )
+        total_position_value = self.avg_price * self.position + total
+        self.position += command.quantity
+        self.avg_price = total_position_value / self.position
+
+        trade = VirtualTrade(
+            instrument_id=command.instrument_id,
+            level_index=command.level_index,
+            side="BUY",
+            quantity=command.quantity,
+            price=command.price,
         )
 
-        print(
-            f"BUY level={command.level_index} "
-            f"{command.quantity} {command.instrument_id} по {command.price}"
-        )
+        self.level_positions[command.level_index] = trade
+        self.trades.append(trade)
+
+        print(f"BUY level={command.level_index} {command.quantity} {command.instrument_id} по {command.price}")
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
@@ -76,12 +95,16 @@ class VirtualBroker:
         if current_price < command.price:
             return None
 
+        buy_trade = self.level_positions.get(command.level_index)
+
+        if buy_trade is None:
+            return None
+
         if self.position < command.quantity:
-            print("Недостаточно позиции для продажи")
             return None
 
         total = command.price * command.quantity
-        profit = (command.price - self.avg_price) * command.quantity
+        profit = (command.price - buy_trade.price) * command.quantity
 
         self.cash += total
         self.position -= command.quantity
@@ -90,22 +113,19 @@ class VirtualBroker:
         if self.position == 0:
             self.avg_price = Decimal("0")
 
-        self.trades.append(
-            VirtualTrade(
-                instrument_id=command.instrument_id,
-                level_index=command.level_index,
-                side="SELL",
-                quantity=command.quantity,
-                price=command.price,
-                profit=profit,
-            )
+        trade = VirtualTrade(
+            instrument_id=command.instrument_id,
+            level_index=command.level_index,
+            side="SELL",
+            quantity=command.quantity,
+            price=command.price,
+            profit=profit,
         )
 
-        print(
-            f"SELL level={command.level_index} "
-            f"{command.quantity} {command.instrument_id} "
-            f"по {command.price}, profit={profit}"
-        )
+        self.trades.append(trade)
+        del self.level_positions[command.level_index]
+
+        print(f"SELL level={command.level_index} {command.quantity} {command.instrument_id} по {command.price}, profit={profit}")
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
@@ -114,27 +134,6 @@ class VirtualBroker:
             quantity=command.quantity,
             price=command.price,
         )
-
-    def execute_commands(
-        self,
-        commands: list,
-        current_price: Decimal,
-    ) -> list[TradeExecutedEvent]:
-        events: list[TradeExecutedEvent] = []
-
-        for command in commands:
-            event = None
-
-            if isinstance(command, PlaceBuyLimitCommand):
-                event = self.execute_buy_limit(command, current_price)
-
-            elif isinstance(command, PlaceSellLimitCommand):
-                event = self.execute_sell_limit(command, current_price)
-
-            if event is not None:
-                events.append(event)
-
-        return events
 
     def summary(self) -> None:
         print("----- VIRTUAL BROKER -----")

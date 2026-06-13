@@ -1,68 +1,80 @@
 from decimal import Decimal
 
-from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 from broker.virtual_broker import VirtualBroker
+from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 
 
 def main():
-    instrument_id = "SBER"
-
     levels = [
-        GridLevel(
-            instrument_id=instrument_id,
-            level_index=1,
-            buy_price=Decimal("297.50"),
-            sell_price=Decimal("300.50"),
-            quantity=10,
-        ),
-        GridLevel(
-            instrument_id=instrument_id,
-            level_index=2,
-            buy_price=Decimal("295.00"),
-            sell_price=Decimal("298.00"),
-            quantity=10,
-        ),
-        GridLevel(
-            instrument_id=instrument_id,
-            level_index=3,
-            buy_price=Decimal("292.50"),
-            sell_price=Decimal("295.50"),
-            quantity=10,
-        ),
+        GridLevel(index=1, price=Decimal("297.896175")),
+        GridLevel(index=2, price=Decimal("295.000000")),
+        GridLevel(index=3, price=Decimal("292.500000")),
     ]
 
     config = GridEngineConfig(
-        instrument_id=instrument_id,
-        levels=levels,
+        entry_limit_offset_percent=Decimal("0.15"),
+        entry_rebound_percent=Decimal("0.15"),
+        trailing_percent=Decimal("0.50"),
+        quantity=10,
     )
 
-    engine = GridEngine(config)
-    broker = VirtualBroker(start_cash=Decimal("100000"))
+    engine = GridEngine(
+        instrument_id="SBER",
+        levels=levels,
+        config=config,
+    )
+
+    broker = VirtualBroker(
+        cash=Decimal("100000"),
+    )
 
     prices = [
         Decimal("305"),
-        Decimal("301"),
+        Decimal("302"),
+        Decimal("300"),
         Decimal("298"),
-        Decimal("297.50"),  # BUY level 1
+        Decimal("297"),
+        Decimal("297.20"),
+        Decimal("297.45"),
+
         Decimal("296"),
-        Decimal("295.00"),  # BUY level 2
+        Decimal("295"),
+        Decimal("295.20"),
+        Decimal("295.45"),
+
         Decimal("293"),
-        Decimal("292.50"),  # BUY level 3
-        Decimal("295.50"),  # SELL level 3
-        Decimal("298.00"),  # SELL level 2
-        Decimal("300.50"),  # SELL level 1
+        Decimal("292.50"),
+        Decimal("292.70"),
+        Decimal("293.00"),
+
+ 
+        Decimal("296.40"), 
+        Decimal("298.90"),  
+        Decimal("300.90"), 
     ]
 
     for price in prices:
         commands = engine.on_price(price)
 
+        events = broker.execute_commands(
+            commands=commands,
+            current_price=price,
+        )
+
+        for event in events:
+            next_commands = engine.on_trade_executed(event)
+
+            next_events = broker.execute_commands(
+                commands=next_commands,
+                current_price=price,
+            )
+
+            for next_event in next_events:
+                engine.on_trade_executed(next_event)
+
         print(f"price={price}, commands={commands}")
 
-        for command in commands:
-            broker.execute(command)
-
-    print()
-    broker.print_report()
+    broker.summary()
 
 
 if __name__ == "__main__":
