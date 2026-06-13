@@ -1,7 +1,8 @@
 from decimal import Decimal
 
-from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 from broker.virtual_broker import VirtualBroker
+from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
+
 
 levels = [
     GridLevel(index=1, price=Decimal("297.896175")),
@@ -17,7 +18,9 @@ engine = GridEngine(
     config=config,
 )
 
-broker = VirtualBroker(cash=Decimal("100000"))
+broker = VirtualBroker(
+    cash=Decimal("100000"),
+)
 
 prices = [
     Decimal("305"),
@@ -34,9 +37,12 @@ for price in prices:
     commands = engine.on_price(price)
     print(f"price={price}, commands={commands}")
 
-    broker.execute_commands(
+    events = broker.execute_commands(
         commands=commands,
         current_price=price,
     )
+
+    if events:
+        print(f"events={events}")
 
 broker.summary()

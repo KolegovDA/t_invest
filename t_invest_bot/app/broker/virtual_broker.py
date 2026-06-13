@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import List
 
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
+from domain.events import TradeExecutedEvent
 
 
 @dataclass
@@ -26,15 +27,15 @@ class VirtualBroker:
         self,
         command: PlaceBuyLimitCommand,
         current_price: Decimal,
-    ) -> bool:
+    ) -> TradeExecutedEvent | None:
         if current_price > command.price:
-            return False
+            return None
 
         total = command.price * command.quantity
 
         if self.cash < total:
             print("Недостаточно виртуальных денег")
-            return False
+            return None
 
         old_position_value = self.avg_price * self.position
         new_position_value = old_position_value + total
@@ -54,19 +55,25 @@ class VirtualBroker:
         )
 
         print(f"BUY {command.quantity} {command.instrument_id} по {command.price}")
-        return True
+
+        return TradeExecutedEvent(
+            instrument_id=command.instrument_id,
+            side="BUY",
+            quantity=command.quantity,
+            price=command.price,
+        )
 
     def execute_sell_limit(
         self,
         command: PlaceSellLimitCommand,
         current_price: Decimal,
-    ) -> bool:
+    ) -> TradeExecutedEvent | None:
         if current_price < command.price:
-            return False
+            return None
 
         if self.position < command.quantity:
             print("Недостаточно позиции для продажи")
-            return False
+            return None
 
         total = command.price * command.quantity
         profit = (command.price - self.avg_price) * command.quantity
@@ -93,19 +100,33 @@ class VirtualBroker:
             f"по {command.price}, profit={profit}"
         )
 
-        return True
+        return TradeExecutedEvent(
+            instrument_id=command.instrument_id,
+            side="SELL",
+            quantity=command.quantity,
+            price=command.price,
+        )
 
     def execute_commands(
         self,
         commands: list,
         current_price: Decimal,
-    ) -> None:
+    ) -> list[TradeExecutedEvent]:
+        events: list[TradeExecutedEvent] = []
+
         for command in commands:
+            event = None
+
             if isinstance(command, PlaceBuyLimitCommand):
-                self.execute_buy_limit(command, current_price)
+                event = self.execute_buy_limit(command, current_price)
 
             elif isinstance(command, PlaceSellLimitCommand):
-                self.execute_sell_limit(command, current_price)
+                event = self.execute_sell_limit(command, current_price)
+
+            if event is not None:
+                events.append(event)
+
+        return events
 
     def summary(self) -> None:
         print("----- VIRTUAL BROKER -----")
