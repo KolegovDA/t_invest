@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from broker.order_manager import OrderManager
 from broker.virtual_broker import VirtualBroker
 from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 
@@ -28,73 +29,48 @@ def main():
     )
 
     broker = VirtualBroker(cash=Decimal("100000"))
+    order_manager = OrderManager(broker=broker)
 
     prices = [
         Decimal("305"),
         Decimal("301"),
         Decimal("298"),
-
         Decimal("297.50"),
         Decimal("297.00"),
         Decimal("297.20"),
         Decimal("297.45"),
-
         Decimal("296"),
         Decimal("295.00"),
         Decimal("294.70"),
         Decimal("295.00"),
         Decimal("295.20"),
-
         Decimal("293"),
         Decimal("292.50"),
         Decimal("292.20"),
         Decimal("292.50"),
         Decimal("292.70"),
-
         Decimal("296.50"),
         Decimal("299.00"),
         Decimal("301.00"),
     ]
 
-    active_commands = []
-
     for price in prices:
-        commands = engine.on_price(price)
+        new_commands = engine.on_price(price)
+        order_manager.add_commands(new_commands)
 
-        active_commands.extend(commands)
-
-        print(f"price={price}, new_commands={commands}")
-        print(f"active_commands={active_commands}")
-
-        events = broker.execute_commands(
-            commands=active_commands,
-            current_price=price,
-        )
-
-        executed_commands = []
+        events = order_manager.process_price(price)
 
         for event in events:
-            for command in active_commands:
-                if (
-                    command.instrument_id == event.instrument_id
-                    and command.level_index == event.level_index
-                    and command.quantity == event.quantity
-                    and command.price == event.price
-                ):
-                    executed_commands.append(command)
-                    break
-
             next_commands = engine.on_trade_executed(event)
-            active_commands.extend(next_commands)
+            order_manager.add_commands(next_commands)
 
-            print(f"event={event}, next_commands={next_commands}")
-
-        for command in executed_commands:
-            if command in active_commands:
-                active_commands.remove(command)
-
+        print(f"price={price}")
+        print(f"new_commands={new_commands}")
+        print(f"events={events}")
+        print(f"active_commands={order_manager.active_commands}")
         print()
-        broker.summary()
+
+    broker.summary()
 
 
 if __name__ == "__main__":
