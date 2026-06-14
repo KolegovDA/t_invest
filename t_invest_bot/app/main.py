@@ -10,8 +10,11 @@ def process_instrument_price(
     price: Decimal,
     engine: GridEngine,
     broker: VirtualBroker,
+    portfolio_manager: PortfolioManager,
     active_commands: list,
 ) -> None:
+    portfolio_manager.update_price(instrument_id, price)
+
     commands = engine.on_price(price)
     active_commands.extend(commands)
 
@@ -50,6 +53,7 @@ def process_instrument_price(
 
 def main() -> None:
     broker = VirtualBroker(cash=Decimal("100000"))
+    portfolio_manager = PortfolioManager(broker=broker)
 
     config = GridEngineConfig(
         entry_limit_offset_percent=Decimal("0.15"),
@@ -129,12 +133,11 @@ def main() -> None:
             price=price,
             engine=engines[instrument_id],
             broker=broker,
+            portfolio_manager=portfolio_manager,
             active_commands=active_commands_by_instrument[instrument_id],
         )
 
     broker.summary()
-
-    portfolio_manager = PortfolioManager(broker=broker)
     portfolio_manager.summary()
 
 

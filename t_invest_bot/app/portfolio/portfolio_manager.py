@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from broker.virtual_broker import VirtualBroker
@@ -7,6 +7,7 @@ from broker.virtual_broker import VirtualBroker
 @dataclass(slots=True)
 class PortfolioManager:
     broker: VirtualBroker
+    last_prices: dict[str, Decimal] = field(default_factory=dict)
 
     @property
     def cash(self) -> Decimal:
@@ -16,17 +17,57 @@ class PortfolioManager:
     def realized_profit(self) -> Decimal:
         return self.broker.realized_profit
 
+    def update_price(self, instrument_id: str, price: Decimal) -> None:
+        self.last_prices[instrument_id] = price
+
+    def get_market_value(self) -> Decimal:
+        market_value = Decimal("0")
+
+        for instrument_id, position in self.broker.positions.items():
+            last_price = self.last_prices.get(instrument_id)
+
+            if last_price is None:
+                continue
+
+            market_value += last_price * position.quantity
+
+        return market_value
+
+    def get_unrealized_profit(self) -> Decimal:
+        unrealized_profit = Decimal("0")
+
+        for instrument_id, position in self.broker.positions.items():
+            last_price = self.last_prices.get(instrument_id)
+
+            if last_price is None:
+                continue
+
+            unrealized_profit += (
+                last_price - position.avg_price
+            ) * position.quantity
+
+        return unrealized_profit
+
+    def get_equity(self) -> Decimal:
+        return self.cash + self.get_market_value()
+
     def summary(self) -> None:
         print("----- PORTFOLIO MANAGER -----")
         print(f"Cash: {self.cash}")
+        print(f"Market value: {self.get_market_value()}")
+        print(f"Equity: {self.get_equity()}")
         print(f"Realized profit: {self.realized_profit}")
+        print(f"Unrealized profit: {self.get_unrealized_profit()}")
         print("Positions:")
 
-        for position in self.broker.positions.values():
+        for instrument_id, position in self.broker.positions.items():
+            last_price = self.last_prices.get(instrument_id)
+
             print(
-                f"{position.instrument_id}: "
+                f"{instrument_id}: "
                 f"quantity={position.quantity}, "
                 f"avg_price={position.avg_price}, "
+                f"last_price={last_price}, "
                 f"realized_profit={position.realized_profit}"
             )
 
