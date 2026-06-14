@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from broker.virtual_broker import VirtualBroker
 from portfolio.portfolio_manager import PortfolioManager
+from risk.risk_manager import RiskManager, RiskManagerConfig
 from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 
 
@@ -11,14 +12,18 @@ def process_instrument_price(
     engine: GridEngine,
     broker: VirtualBroker,
     portfolio_manager: PortfolioManager,
+    risk_manager: RiskManager,
     active_commands: list,
 ) -> None:
     portfolio_manager.update_price(instrument_id, price)
 
     commands = engine.on_price(price)
-    active_commands.extend(commands)
+    approved_commands = risk_manager.filter_commands(commands)
+
+    active_commands.extend(approved_commands)
 
     print(f"[{instrument_id}] price={price}, new_commands={commands}")
+    print(f"[{instrument_id}] approved_commands={approved_commands}")
     print(f"[{instrument_id}] active_commands={active_commands}")
 
     events = broker.execute_commands(
@@ -40,9 +45,15 @@ def process_instrument_price(
                 break
 
         next_commands = engine.on_trade_executed(event)
-        active_commands.extend(next_commands)
+        approved_next_commands = risk_manager.filter_commands(next_commands)
 
-        print(f"[{instrument_id}] event={event}, next_commands={next_commands}")
+        active_commands.extend(approved_next_commands)
+
+        print(
+            f"[{instrument_id}] event={event}, "
+            f"next_commands={next_commands}, "
+            f"approved_next_commands={approved_next_commands}"
+        )
 
     for command in executed_commands:
         if command in active_commands:
@@ -54,6 +65,14 @@ def process_instrument_price(
 def main() -> None:
     broker = VirtualBroker(cash=Decimal("100000"))
     portfolio_manager = PortfolioManager(broker=broker)
+
+    risk_manager = RiskManager(
+        broker=broker,
+        config=RiskManagerConfig(
+            max_position_value_per_instrument=Decimal("5000"),
+            max_total_position_value=Decimal("15000"),
+        ),
+    )
 
     config = GridEngineConfig(
         entry_limit_offset_percent=Decimal("0.15"),
@@ -134,6 +153,7 @@ def main() -> None:
             engine=engines[instrument_id],
             broker=broker,
             portfolio_manager=portfolio_manager,
+            risk_manager=risk_manager,
             active_commands=active_commands_by_instrument[instrument_id],
         )
 
