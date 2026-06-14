@@ -15,29 +15,15 @@ class OrderManager:
         self.active_commands.extend(commands)
 
     def process_price(self, current_price: Decimal) -> list[TradeExecutedEvent]:
+        if not self.active_commands:
+            return []
+
         events = self.broker.execute_commands(
             commands=self.active_commands,
             current_price=current_price,
         )
 
-        self._remove_executed_commands(events)
+        if events:
+            self.active_commands.clear()
 
         return events
-
-    def _remove_executed_commands(self, events: list[TradeExecutedEvent]) -> None:
-        executed_commands: list[TradingCommand] = []
-
-        for event in events:
-            for command in self.active_commands:
-                if (
-                    command.instrument_id == event.instrument_id
-                    and command.level_index == event.level_index
-                    and command.quantity == event.quantity
-                    and command.price == event.price
-                ):
-                    executed_commands.append(command)
-                    break
-
-        for command in executed_commands:
-            if command in self.active_commands:
-                self.active_commands.remove(command)

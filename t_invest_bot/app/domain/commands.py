@@ -24,6 +24,14 @@ class PlaceSellLimitCommand(TradingCommand):
 
 
 @dataclass(slots=True)
+class PlaceSellAllLimitCommand(TradingCommand):
+    instrument_id: str
+    quantity: int
+    price: Decimal
+    reason: str = "COMPENSATION_CLOSE"
+
+
+@dataclass(slots=True)
 class CancelOrderCommand(TradingCommand):
     order_id: str
 

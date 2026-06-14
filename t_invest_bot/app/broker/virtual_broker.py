@@ -2,7 +2,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import List
 
-from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
+from domain.commands import (
+    PlaceBuyLimitCommand,
+    PlaceSellAllLimitCommand,
+    PlaceSellLimitCommand,
+    TradingCommand,
+)
 from domain.events import TradeExecutedEvent
 
 
@@ -45,13 +50,19 @@ class VirtualBroker:
         for command in commands:
             if isinstance(command, PlaceBuyLimitCommand):
                 event = self.execute_buy_limit(command, current_price)
+
                 if event:
                     events.append(event)
 
             elif isinstance(command, PlaceSellLimitCommand):
                 event = self.execute_sell_limit(command, current_price)
+
                 if event:
                     events.append(event)
+
+            elif isinstance(command, PlaceSellAllLimitCommand):
+                sell_all_events = self.execute_sell_all_limit(command, current_price)
+                events.extend(sell_all_events)
 
         return events
 
@@ -74,6 +85,7 @@ class VirtualBroker:
         self.cash -= total_with_commission
 
         key = (command.instrument_id, command.level_index)
+
         self.level_positions[key] = VirtualLevelPosition(
             instrument_id=command.instrument_id,
             level_index=command.level_index,
@@ -125,45 +137,53 @@ class VirtualBroker:
         if position.quantity < command.quantity:
             return None
 
-        total = command.price * command.quantity
-        sell_commission = self._calculate_commission(total)
-
-        buy_total = position.entry_price * position.quantity
-        sell_total_after_commission = total - sell_commission
-
-        profit = sell_total_after_commission - buy_total - position.buy_commission
-
-        self.cash += sell_total_after_commission
-        self.realized_profit += profit
-
-        trade = VirtualTrade(
-            instrument_id=command.instrument_id,
-            level_index=command.level_index,
-            side="SELL",
+        event = self._close_level_position(
+            position=position,
+            sell_price=command.price,
             quantity=command.quantity,
-            price=command.price,
-            commission=sell_commission,
-            profit=profit,
         )
 
-        self.trades.append(trade)
         del self.level_positions[key]
 
-        print(
-            f"SELL level={command.level_index} "
-            f"{command.quantity} {command.instrument_id} по {command.price}, "
-            f"commission={sell_commission}, "
-            f"profit={profit}"
-        )
+        return event
 
-        return TradeExecutedEvent(
-            instrument_id=command.instrument_id,
-            level_index=command.level_index,
-            side="SELL",
-            quantity=command.quantity,
-            price=command.price,
-            commission=sell_commission,
-        )
+    def execute_sell_all_limit(
+        self,
+        command: PlaceSellAllLimitCommand,
+        current_price: Decimal,
+    ) -> list[TradeExecutedEvent]:
+        if current_price < command.price:
+            return []
+
+        positions_to_close = [
+            position
+            for position in self.level_positions.values()
+            if position.instrument_id == command.instrument_id
+        ]
+
+        total_available_quantity = sum(position.quantity for position in positions_to_close)
+
+        if total_available_quantity <= 0:
+            return []
+
+        if command.quantity > total_available_quantity:
+            return []
+
+        events: list[TradeExecutedEvent] = []
+
+        for position in positions_to_close:
+            event = self._close_level_position(
+                position=position,
+                sell_price=command.price,
+                quantity=position.quantity,
+            )
+
+            events.append(event)
+
+            key = (position.instrument_id, position.level_index)
+            del self.level_positions[key]
+
+        return events
 
     def summary(self) -> None:
         print("----- VIRTUAL BROKER -----")
@@ -182,6 +202,51 @@ class VirtualBroker:
         print(f"Trades: {len(self.trades)}")
         for trade in self.trades:
             print(trade)
+
+    def _close_level_position(
+        self,
+        position: VirtualLevelPosition,
+        sell_price: Decimal,
+        quantity: int,
+    ) -> TradeExecutedEvent:
+        total = sell_price * quantity
+        sell_commission = self._calculate_commission(total)
+
+        buy_total = position.entry_price * quantity
+        sell_total_after_commission = total - sell_commission
+
+        profit = sell_total_after_commission - buy_total - position.buy_commission
+
+        self.cash += sell_total_after_commission
+        self.realized_profit += profit
+
+        trade = VirtualTrade(
+            instrument_id=position.instrument_id,
+            level_index=position.level_index,
+            side="SELL",
+            quantity=quantity,
+            price=sell_price,
+            commission=sell_commission,
+            profit=profit,
+        )
+
+        self.trades.append(trade)
+
+        print(
+            f"SELL level={position.level_index} "
+            f"{quantity} {position.instrument_id} по {sell_price}, "
+            f"commission={sell_commission}, "
+            f"profit={profit}"
+        )
+
+        return TradeExecutedEvent(
+            instrument_id=position.instrument_id,
+            level_index=position.level_index,
+            side="SELL",
+            quantity=quantity,
+            price=sell_price,
+            commission=sell_commission,
+        )
 
     def _calculate_commission(self, amount: Decimal) -> Decimal:
         return amount * self.commission_percent / Decimal("100")

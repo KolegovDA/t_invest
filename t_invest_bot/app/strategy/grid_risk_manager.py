@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from domain.commands import PlaceSellLimitCommand, TradingCommand
+from domain.commands import PlaceSellAllLimitCommand, TradingCommand
 from domain.positions import OpenLevelPosition
 
 
@@ -34,7 +34,14 @@ class GridRiskManager:
         if floating_loss <= Decimal("0"):
             return []
 
-        if realized_profit < floating_loss * self.config.compensation_multiplier:
+        required_profit = floating_loss * self.config.compensation_multiplier
+
+        if realized_profit < required_profit:
+            return []
+
+        total_quantity = sum(position.quantity for position in open_positions.values())
+
+        if total_quantity <= 0:
             return []
 
         sell_price = current_price * (
@@ -42,13 +49,12 @@ class GridRiskManager:
         )
 
         return [
-            PlaceSellLimitCommand(
+            PlaceSellAllLimitCommand(
                 instrument_id=self.instrument_id,
-                level_index=position.level_index,
-                quantity=position.quantity,
+                quantity=total_quantity,
                 price=sell_price,
+                reason="COMPENSATION_CLOSE",
             )
-            for position in open_positions.values()
         ]
 
     def calculate_floating_loss(
@@ -61,6 +67,7 @@ class GridRiskManager:
         for position in open_positions.values():
             position_value_now = current_price * position.quantity
             position_cost = position.entry_price * position.quantity + position.buy_commission
+
             loss = position_cost - position_value_now
 
             if loss > Decimal("0"):
