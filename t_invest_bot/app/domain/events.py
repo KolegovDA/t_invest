@@ -9,3 +9,4 @@ class TradeExecutedEvent:
     side: str
     quantity: int
     price: Decimal
+    commission: Decimal = Decimal("0")
