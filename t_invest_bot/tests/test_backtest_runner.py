@@ -1,11 +1,3 @@
-from pathlib import Path
-import sys
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_DIR = ROOT / "app"
-
-sys.path.insert(0, str(APP_DIR))
-
 from backtest.backtest_config import BacktestConfig
 from backtest.backtest_report import BacktestReportBuilder
 from backtest.backtest_runner import BacktestRunner
