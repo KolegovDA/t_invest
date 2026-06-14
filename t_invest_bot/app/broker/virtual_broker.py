@@ -185,6 +185,31 @@ class VirtualBroker:
 
         return events
 
+    def calculate_market_value(
+        self,
+        current_price: Decimal,
+        instrument_id: str | None = None,
+    ) -> Decimal:
+        market_value = Decimal("0")
+
+        for position in self.level_positions.values():
+            if instrument_id is not None and position.instrument_id != instrument_id:
+                continue
+
+            market_value += current_price * position.quantity
+
+        return market_value
+
+    def calculate_equity(
+        self,
+        current_price: Decimal,
+        instrument_id: str | None = None,
+    ) -> Decimal:
+        return self.cash + self.calculate_market_value(
+            current_price=current_price,
+            instrument_id=instrument_id,
+        )
+
     def summary(self) -> None:
         print("----- VIRTUAL BROKER -----")
         print(f"Cash: {self.cash}")

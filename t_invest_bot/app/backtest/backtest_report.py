@@ -22,6 +22,9 @@ class BacktestReport:
 
     open_positions_count: int
 
+    max_drawdown: Decimal
+    max_drawdown_percent: Decimal
+
     def print(self) -> None:
         print("----- BACKTEST REPORT -----")
         print(f"Instrument: {self.instrument_id}")
@@ -29,6 +32,8 @@ class BacktestReport:
         print(f"Final cash: {self.final_cash}")
         print(f"Net profit: {self.net_profit}")
         print(f"Return: {self.return_percent}%")
+        print(f"Max drawdown: {self.max_drawdown}")
+        print(f"Max drawdown percent: {self.max_drawdown_percent}%")
         print(f"Total trades: {self.total_trades}")
         print(f"Buy trades: {self.buy_trades}")
         print(f"Sell trades: {self.sell_trades}")
@@ -90,4 +95,6 @@ class BacktestReportBuilder:
             initial_cash=result.initial_cash,
             final_cash=result.final_cash,
             open_positions_count=result.open_positions_count,
+            max_drawdown=result.max_drawdown,
+            max_drawdown_percent=result.max_drawdown_percent,
         )

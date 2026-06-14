@@ -10,6 +10,15 @@ from strategy.history_analyzer import HistoryAnalyzer, PriceRange
 
 
 @dataclass(slots=True)
+class EquityPoint:
+    index: int
+    price: Decimal
+    equity: Decimal
+    drawdown: Decimal
+    drawdown_percent: Decimal
+
+
+@dataclass(slots=True)
 class BacktestResult:
     instrument_id: str
     price_range: PriceRange
@@ -20,6 +29,10 @@ class BacktestResult:
 
     trades: list[VirtualTrade] = field(default_factory=list)
     open_positions_count: int = 0
+
+    equity_curve: list[EquityPoint] = field(default_factory=list)
+    max_drawdown: Decimal = Decimal("0")
+    max_drawdown_percent: Decimal = Decimal("0")
 
 
 @dataclass(slots=True)
@@ -55,7 +68,12 @@ class Backtester:
             broker=broker,
         )
 
-        for price in price_series:
+        equity_curve: list[EquityPoint] = []
+        peak_equity = self.initial_cash
+        max_drawdown = Decimal("0")
+        max_drawdown_percent = Decimal("0")
+
+        for index, price in enumerate(price_series):
             commands = engine.on_price(price)
             order_manager.add_commands(commands)
 
@@ -63,6 +81,35 @@ class Backtester:
 
             for event in events:
                 engine.on_trade_executed(event)
+
+            equity = broker.calculate_equity(
+                current_price=price,
+                instrument_id=instrument_id,
+            )
+
+            if equity > peak_equity:
+                peak_equity = equity
+
+            drawdown = peak_equity - equity
+
+            if peak_equity == Decimal("0"):
+                drawdown_percent = Decimal("0")
+            else:
+                drawdown_percent = drawdown / peak_equity * Decimal("100")
+
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                max_drawdown_percent = drawdown_percent
+
+            equity_curve.append(
+                EquityPoint(
+                    index=index,
+                    price=price,
+                    equity=equity,
+                    drawdown=drawdown,
+                    drawdown_percent=drawdown_percent,
+                )
+            )
 
         return BacktestResult(
             instrument_id=instrument_id,
@@ -72,4 +119,7 @@ class Backtester:
             realized_profit=broker.realized_profit,
             trades=broker.trades,
             open_positions_count=len(engine.open_positions),
+            equity_curve=equity_curve,
+            max_drawdown=max_drawdown,
+            max_drawdown_percent=max_drawdown_percent,
         )
