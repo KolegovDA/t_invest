@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from application.grid_session_config import GridSessionConfig
 from application.sandbox_trading_session import SandboxTradingSession
 from broker.live_order_manager import LiveOrderManager
 from config.settings import Settings
@@ -15,7 +16,8 @@ from infrastructure.tinvest.sandbox_account_provider import (
 from infrastructure.tinvest.sandbox_order_executor import (
     TInvestSandboxOrderExecutor,
 )
-from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
+from strategy.grid_builder import GridBuilder
+from strategy.grid_engine import GridEngine
 
 
 @dataclass(slots=True)
@@ -42,10 +44,7 @@ class TradingSessionFactory:
 
     def create_sandbox_session(
         self,
-        ticker: str,
-        sandbox_deposit: Decimal,
-        levels: list[GridLevel],
-        grid_config: GridEngineConfig,
+        config: GridSessionConfig,
     ) -> SandboxTradingSessionContext:
         token = (
             self.settings.tinvest_sandbox_token
@@ -78,27 +77,34 @@ class TradingSessionFactory:
         )
 
         instrument = instrument_provider.find_share_by_ticker(
-            ticker=ticker,
+            ticker=config.ticker,
         )
 
         if instrument is None:
-            raise ValueError(f"Instrument not found: {ticker}")
+            raise ValueError(f"Instrument not found: {config.ticker}")
 
         current_price = price_provider.get_last_price(
             instrument_uid=instrument.id,
+        )
+
+        levels = GridBuilder(
+            levels_count=config.levels_count,
+        ).build_from_range(
+            min_price=current_price * Decimal("0.90"),
+            max_price=current_price * Decimal("1.01"),
         )
 
         sandbox_account_id = sandbox_account_provider.open_account()
 
         sandbox_balance = sandbox_account_provider.pay_in(
             account_id=sandbox_account_id,
-            amount=sandbox_deposit,
+            amount=config.sandbox_deposit,
         )
 
         grid_engine = GridEngine(
             instrument_id=instrument.id,
             levels=levels,
-            config=grid_config,
+            config=config.to_grid_engine_config(),
         )
 
         live_order_manager = LiveOrderManager(

@@ -1,8 +1,8 @@
 from decimal import Decimal
 
+from application.grid_session_config import GridSessionConfig
 from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
-from strategy.grid_engine import GridEngineConfig, GridLevel
 
 
 def main() -> None:
@@ -12,20 +12,17 @@ def main() -> None:
         settings=settings,
     )
 
-    context = factory.create_sandbox_session(
+    config = GridSessionConfig(
         ticker="SBER",
+        levels_count=5,
+        quantity=1,
         sandbox_deposit=Decimal("100000"),
-        levels=[
-            GridLevel(
-                index=1,
-                price=Decimal("325"),
-            )
-        ],
-        grid_config=GridEngineConfig(
-            quantity=1,
-            entry_rebound_percent=Decimal("0.01"),
-            entry_limit_offset_percent=Decimal("0.01"),
-        ),
+        entry_rebound_percent=Decimal("0.01"),
+        entry_limit_offset_percent=Decimal("0.01"),
+    )
+
+    context = factory.create_sandbox_session(
+        config=config,
     )
 
     print("Sandbox account:", context.sandbox_account_id)
