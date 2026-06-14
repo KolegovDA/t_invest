@@ -21,11 +21,19 @@ from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
 @dataclass(slots=True)
 class SandboxTradingSessionContext:
     session: SandboxTradingSession
+    sandbox_account_provider: TInvestSandboxAccountProvider
     sandbox_account_id: str
     instrument_id: str
     ticker: str
     current_price: Decimal
     sandbox_balance: Decimal
+
+    def close(self) -> None:
+        self.session.stop()
+
+        self.sandbox_account_provider.close_account(
+            account_id=self.sandbox_account_id,
+        )
 
 
 @dataclass(slots=True)
@@ -105,6 +113,7 @@ class TradingSessionFactory:
 
         return SandboxTradingSessionContext(
             session=session,
+            sandbox_account_provider=sandbox_account_provider,
             sandbox_account_id=sandbox_account_id,
             instrument_id=instrument.id,
             ticker=instrument.ticker,

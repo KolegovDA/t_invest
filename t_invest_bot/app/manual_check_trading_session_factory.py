@@ -2,10 +2,6 @@ from decimal import Decimal
 
 from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
-from infrastructure.tinvest.client_factory import TInvestClientFactory
-from infrastructure.tinvest.sandbox_account_provider import (
-    TInvestSandboxAccountProvider,
-)
 from strategy.grid_engine import GridEngineConfig, GridLevel
 
 
@@ -16,8 +12,6 @@ def main() -> None:
         settings=settings,
     )
 
-    # Временный уровень выше текущей цены.
-    # Чтобы гарантированно получить сигнал BUY после просадки и отскока.
     context = factory.create_sandbox_session(
         ticker="SBER",
         sandbox_deposit=Decimal("100000"),
@@ -64,23 +58,7 @@ def main() -> None:
                 break
 
     finally:
-        context.session.stop()
-
-        token = (
-            settings.tinvest_sandbox_token
-            or settings.tinvest_token
-        )
-
-        sandbox_account_provider = TInvestSandboxAccountProvider(
-            client_factory=TInvestClientFactory(
-                token=token,
-            ),
-        )
-
-        sandbox_account_provider.close_account(
-            account_id=context.sandbox_account_id,
-        )
-
+        context.close()
         print("Sandbox account closed")
 
 
