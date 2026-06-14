@@ -1,3 +1,11 @@
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+APP_DIR = ROOT / "app"
+
+sys.path.insert(0, str(APP_DIR))
+
 from decimal import Decimal
 
 from broker.order_manager import OrderManager
