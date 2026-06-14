@@ -18,17 +18,6 @@ class GridLevel:
 
 
 @dataclass(slots=True)
-class OpenLevelPosition:
-    level_index: int
-    entry_price: Decimal
-    quantity: int
-    buy_commission: Decimal
-    expected_sell_commission_percent: Decimal
-    hard_take_profit_price: Decimal
-    trailing_exit: TrailingExitState | None = None
-
-
-@dataclass(slots=True)
 class GridEngineConfig:
     entry_limit_offset_percent: Decimal = Decimal("0.15")
     exit_limit_offset_percent: Decimal = Decimal("0.15")
