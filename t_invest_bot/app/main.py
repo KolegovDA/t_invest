@@ -78,6 +78,9 @@ def main():
 
     broker.summary()
 
+    portfolio_manager = PortfolioManager(broker=broker)
+    portfolio_manager.summary()
+
     print()
     portfolio.print_portfolio()
 

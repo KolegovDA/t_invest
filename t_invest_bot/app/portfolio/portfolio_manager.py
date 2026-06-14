@@ -5,7 +5,7 @@ from broker.virtual_broker import VirtualBroker
 
 
 @dataclass(slots=True)
-class PorfolioManager:
+class PortfolioManager:
     broker: VirtualBroker
 
     @property
@@ -17,7 +17,7 @@ class PorfolioManager:
         return self.broker.realized_profit
 
     def summary(self) -> None:
-        print("----- PORFOLIO MANAGER -----")
+        print("----- PORTFOLIO MANAGER -----")
         print(f"Cash: {self.cash}")
         print(f"Realized profit: {self.realized_profit}")
         print("Positions:")
