@@ -27,7 +27,7 @@ def main() -> None:
         print("Если видишь CERTIFICATE_VERIFY_FAILED:")
         print("1. Отключи VPN / прокси / HTTPS-фильтрацию антивируса")
         print("2. Выполни: pip install --upgrade certifi grpcio t-tech-investments")
-        print("3. Проверь дату и время Windows")
+        print("3. Проверь дату и время Windows")  
 
 
 if __name__ == "__main__":
