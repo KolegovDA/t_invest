@@ -4,7 +4,7 @@ from typing import List
 
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
 from domain.events import TradeExecutedEvent
-from domain.level_position import LevelPosition
+from domain.position import Position
 
 
 @dataclass
@@ -20,12 +20,15 @@ class VirtualTrade:
 @dataclass
 class VirtualBroker:
     cash: Decimal
-    position: int = 0
-    avg_price: Decimal = Decimal("0")
+    positions: dict[str, Position] = field(default_factory=dict)
     realized_profit: Decimal = Decimal("0")
     trades: List[VirtualTrade] = field(default_factory=list)
+    level_positions: dict[tuple[str, int], VirtualTrade] = field(default_factory=dict)
 
-    level_positions: dict[int, LevelPosition] = field(default_factory=dict)
+    def get_position(self, instrument_id: str) -> Position:
+        if instrument_id not in self.positions:
+            self.positions[instrument_id] = Position(instrument_id=instrument_id)
+        return self.positions[instrument_id]
 
     def execute_commands(
         self,
@@ -61,11 +64,13 @@ class VirtualBroker:
             print("Недостаточно виртуальных денег")
             return None
 
+        position = self.get_position(command.instrument_id)
+
         self.cash -= total
 
-        total_position_value = self.avg_price * self.position + total
-        self.position += command.quantity
-        self.avg_price = total_position_value / self.position
+        total_position_value = position.avg_price * position.quantity + total
+        position.quantity += command.quantity
+        position.avg_price = total_position_value / position.quantity
 
         trade = VirtualTrade(
             instrument_id=command.instrument_id,
@@ -75,16 +80,13 @@ class VirtualBroker:
             price=command.price,
         )
 
-        self.level_positions[command.level_index] = LevelPosition(
-            instrument_id=command.instrument_id,
-            level_index=command.level_index,
-            quantity=command.quantity,
-            entry_price=command.price,
-            take_profit_price=Decimal("0"),
-        )
+        self.level_positions[(command.instrument_id, command.level_index)] = trade
         self.trades.append(trade)
 
-        print(f"BUY level={command.level_index} {command.quantity} {command.instrument_id} по {command.price}")
+        print(
+            f"BUY level={command.level_index} "
+            f"{command.quantity} {command.instrument_id} по {command.price}"
+        )
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
@@ -102,23 +104,27 @@ class VirtualBroker:
         if current_price < command.price:
             return None
 
-        level_position = self.level_positions.get(command.level_index)
+        key = (command.instrument_id, command.level_index)
+        buy_trade = self.level_positions.get(key)
 
-        if level_position is None:
+        if buy_trade is None:
             return None
 
-        if self.position < command.quantity:
+        position = self.get_position(command.instrument_id)
+
+        if position.quantity < command.quantity:
             return None
 
         total = command.price * command.quantity
-        profit = (command.price - level_position.entry_price) * command.quantity
+        profit = (command.price - buy_trade.price) * command.quantity
 
         self.cash += total
-        self.position -= command.quantity
+        position.quantity -= command.quantity
+        position.realized_profit += profit
         self.realized_profit += profit
 
-        if self.position == 0:
-            self.avg_price = Decimal("0")
+        if position.quantity == 0:
+            position.avg_price = Decimal("0")
 
         trade = VirtualTrade(
             instrument_id=command.instrument_id,
@@ -130,9 +136,13 @@ class VirtualBroker:
         )
 
         self.trades.append(trade)
-        del self.level_positions[command.level_index]
+        del self.level_positions[key]
 
-        print(f"SELL level={command.level_index} {command.quantity} {command.instrument_id} по {command.price}, profit={profit}")
+        print(
+            f"SELL level={command.level_index} "
+            f"{command.quantity} {command.instrument_id} по {command.price}, "
+            f"profit={profit}"
+        )
 
         return TradeExecutedEvent(
             instrument_id=command.instrument_id,
@@ -145,9 +155,12 @@ class VirtualBroker:
     def summary(self) -> None:
         print("----- VIRTUAL BROKER -----")
         print(f"Cash: {self.cash}")
-        print(f"Position: {self.position}")
-        print(f"Avg price: {self.avg_price}")
         print(f"Realized profit: {self.realized_profit}")
+        print("Positions:")
+
+        for position in self.positions.values():
+            print(position)
+
         print(f"Trades: {len(self.trades)}")
 
         for trade in self.trades:
