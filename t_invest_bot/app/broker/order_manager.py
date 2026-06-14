@@ -2,7 +2,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from broker.virtual_broker import VirtualBroker
-from domain.commands import TradingCommand
+from domain.commands import (
+    PlaceBuyLimitCommand,
+    PlaceSellAllLimitCommand,
+    PlaceSellLimitCommand,
+    TradingCommand,
+)
 from domain.events import TradeExecutedEvent
 
 
@@ -18,12 +23,20 @@ class OrderManager:
         if not self.active_commands:
             return []
 
-        events = self.broker.execute_commands(
-            commands=self.active_commands,
-            current_price=current_price,
-        )
+        executed_events: list[TradeExecutedEvent] = []
+        remaining_commands: list[TradingCommand] = []
 
-        if events:
-            self.active_commands.clear()
+        for command in self.active_commands:
+            events = self.broker.execute_commands(
+                commands=[command],
+                current_price=current_price,
+            )
 
-        return events
+            if events:
+                executed_events.extend(events)
+            else:
+                remaining_commands.append(command)
+
+        self.active_commands = remaining_commands
+
+        return executed_events
