@@ -4,6 +4,8 @@ from decimal import Decimal
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
 from domain.enums import GridLevelStatus
 from domain.events import TradeExecutedEvent
+from domain.positions import OpenLevelPosition
+from strategy.grid_risk_manager import GridRiskManager, GridRiskManagerConfig
 from strategy.trailing_engine import TrailingEngine, TrailingEntryState, TrailingExitState
 
 
@@ -40,6 +42,9 @@ class GridEngineConfig:
     fallback_buy_commission_percent: Decimal = Decimal("0.30")
     fallback_sell_commission_percent: Decimal = Decimal("0.30")
 
+    min_open_positions_for_compensation: int = 5
+    compensation_multiplier: Decimal = Decimal("3")
+
     quantity: int = 1
 
 
@@ -50,7 +55,10 @@ class GridEngine:
     config: GridEngineConfig = field(default_factory=GridEngineConfig)
 
     trailing_engine: TrailingEngine = field(init=False)
+    risk_manager: GridRiskManager = field(init=False)
+
     open_positions: dict[int, OpenLevelPosition] = field(default_factory=dict)
+    realized_profit: Decimal = Decimal("0")
 
     def __post_init__(self) -> None:
         self.trailing_engine = TrailingEngine(
@@ -58,11 +66,27 @@ class GridEngine:
             trailing_percent=self.config.trailing_percent,
         )
 
+        self.risk_manager = GridRiskManager(
+            instrument_id=self.instrument_id,
+            config=GridRiskManagerConfig(
+                min_open_positions_for_compensation=self.config.min_open_positions_for_compensation,
+                compensation_multiplier=self.config.compensation_multiplier,
+                emergency_sell_offset_percent=self.config.exit_limit_offset_percent,
+            ),
+        )
+
     def on_price(self, current_price: Decimal) -> list[TradingCommand]:
         commands: list[TradingCommand] = []
 
         commands.extend(self._process_entries(current_price))
         commands.extend(self._process_exits(current_price))
+        commands.extend(
+            self.risk_manager.check_compensation_close(
+                open_positions=self.open_positions,
+                realized_profit=self.realized_profit,
+                current_price=current_price,
+            )
+        )
 
         return commands
 
@@ -71,6 +95,7 @@ class GridEngine:
             return []
 
         level = self._get_level_by_index(event.level_index)
+
         if level is None:
             return []
 
@@ -92,7 +117,14 @@ class GridEngine:
             level.trailing_entry = None
 
         elif event.side == "SELL":
-            self.open_positions.pop(event.level_index, None)
+            position = self.open_positions.pop(event.level_index, None)
+
+            if position is not None:
+                sell_total = event.price * event.quantity
+                buy_total = position.entry_price * position.quantity
+                profit = sell_total - event.commission - buy_total - position.buy_commission
+                self.realized_profit += profit
+
             level.status = GridLevelStatus.WAITING_PRICE
             level.trailing_entry = None
 
@@ -143,6 +175,7 @@ class GridEngine:
 
         for level_index, position in list(self.open_positions.items()):
             level = self._get_level_by_index(level_index)
+
             if level is None:
                 continue
 
