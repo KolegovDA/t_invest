@@ -1,45 +1,108 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from backtest.backtester import Backtester
 from domain.entities import Candle
 from strategy.grid_engine import GridEngineConfig
-from strategy.grid_factory import GridFactory
-from strategy.history_analyzer import HistoryAnalyzer
 
 
-def main() -> None:
-    start = datetime(2024, 1, 1)
+def build_test_history(instrument_id: str) -> list[Candle]:
+    history_start = datetime(2024, 1, 1)
 
-    candles = []
+    candles: list[Candle] = []
 
     for i in range(20):
         candles.append(
             Candle(
-                instrument_id="SBER",
-                open=Decimal("100") + Decimal(i),
-                high=Decimal("110") + Decimal(i),
-                low=Decimal("90") + Decimal(i),
-                close=Decimal("100") + Decimal(i),
+                instrument_id=instrument_id,
+                open=Decimal("290"),
+                high=Decimal("310"),
+                low=Decimal("280"),
+                close=Decimal("290"),
                 volume=1000,
-                timestamp=start + timedelta(days=i),
+                timestamp=history_start + timedelta(days=i),
             )
         )
 
-    factory = GridFactory(
-        history_analyzer=HistoryAnalyzer(exclude_first_days=7),
+    return candles
+
+
+def main() -> None:
+    instrument_id = "SBER"
+
+    history_candles = build_test_history(
+        instrument_id=instrument_id,
     )
 
-    result = factory.create_grid_engine(
-        instrument_id="SBER",
-        candles=candles,
+    price_series = [
+        Decimal("305"),
+        Decimal("300"),
+        Decimal("296"),
+        Decimal("292"),
+        Decimal("288"),
+        Decimal("284"),
+        Decimal("280"),
+        Decimal("280.50"),
+        Decimal("286"),
+        Decimal("292"),
+        Decimal("298"),
+        Decimal("304"),
+        Decimal("302"),
+        Decimal("300"),
+        Decimal("296"),
+        Decimal("292"),
+        Decimal("288"),
+        Decimal("284"),
+        Decimal("280"),
+        Decimal("280.50"),
+        Decimal("286"),
+        Decimal("292"),
+        Decimal("298"),
+        Decimal("304"),
+        Decimal("302"),
+        Decimal("300"),
+        Decimal("296"),
+        Decimal("292"),
+        Decimal("288"),
+        Decimal("284"),
+        Decimal("280"),
+        Decimal("276"),
+        Decimal("272"),
+        Decimal("268"),
+        Decimal("264"),
+        Decimal("260"),
+        Decimal("260.50"),
+        Decimal("259"),
+        Decimal("259.50"),
+        Decimal("258"),
+        Decimal("258.50"),
+        Decimal("257"),
+        Decimal("257.50"),
+        Decimal("256"),
+        Decimal("256.50"),
+        Decimal("256.20"),
+    ]
+
+    backtester = Backtester(
+        initial_cash=Decimal("100000"),
+    )
+
+    result = backtester.run(
+        instrument_id=instrument_id,
+        history_candles=history_candles,
+        price_series=price_series,
         levels_count=5,
-        config=GridEngineConfig(quantity=10),
+        config=GridEngineConfig(
+            quantity=10,
+            min_open_positions_for_compensation=5,
+            compensation_multiplier=Decimal("3"),
+        ),
     )
 
-    print(result.price_range)
-
-    for level in result.grid_engine.levels:
-        print(level)
+    print(result)
+    print("Trades:")
+    for trade in result.trades:
+        print(trade)
 
 
 if __name__ == "__main__":
