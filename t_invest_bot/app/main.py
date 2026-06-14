@@ -82,7 +82,6 @@ def main():
     portfolio_manager.summary()
 
     print()
-    portfolio.print_portfolio()
 
 
 if __name__ == "__main__":
