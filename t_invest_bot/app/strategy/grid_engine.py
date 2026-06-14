@@ -64,6 +64,8 @@ class GridEngine:
             ),
         )
 
+        self.levels.sort(key=lambda level: level.index)
+
     def on_price(self, current_price: Decimal) -> list[TradingCommand]:
         commands: list[TradingCommand] = []
 
@@ -119,63 +121,62 @@ class GridEngine:
 
         return []
 
-        def _process_entries(self, current_price: Decimal) -> list[TradingCommand]:
-            commands: list[TradingCommand] = []
+    def _process_entries(self, current_price: Decimal) -> list[TradingCommand]:
+        commands: list[TradingCommand] = []
 
-            active_entry_level_exists = any(
-                level.status in (
-                    GridLevelStatus.TRAILING_ENTRY,
-                    GridLevelStatus.ORDER_PLACED,
-                )
-                for level in self.levels
+        active_entry_level_exists = any(
+            level.status in (
+                GridLevelStatus.TRAILING_ENTRY,
+                GridLevelStatus.ORDER_PLACED,
+            )
+            for level in self.levels
+        )
+
+        if not active_entry_level_exists:
+            for level in self.levels:
+                if level.status != GridLevelStatus.WAITING_PRICE:
+                    continue
+
+                if current_price <= level.price:
+                    level.status = GridLevelStatus.TRAILING_ENTRY
+                    level.trailing_entry = TrailingEntryState(
+                        level_price=level.price,
+                        lowest_price=current_price,
+                    )
+                    break
+
+        for level in self.levels:
+            if level.status != GridLevelStatus.TRAILING_ENTRY:
+                continue
+
+            if level.trailing_entry is None:
+                continue
+
+            level.trailing_entry = self.trailing_engine.update_entry(
+                level.trailing_entry,
+                current_price,
             )
 
-            if not active_entry_level_exists:
-                for level in self.levels:
-                    if level.status != GridLevelStatus.WAITING_PRICE:
-                        continue
-
-                    if current_price <= level.price:
-                        level.status = GridLevelStatus.TRAILING_ENTRY
-                        level.trailing_entry = TrailingEntryState(
-                            level_price=level.price,
-                            lowest_price=current_price,
-                        )
-
-                        break
-
-            for level in self.levels:
-                if level.status != GridLevelStatus.TRAILING_ENTRY:
-                    continue
-
-                if level.trailing_entry is None:
-                    continue
-
-                level.trailing_entry = self.trailing_engine.update_entry(
-                    level.trailing_entry,
-                    current_price,
+            if level.trailing_entry.is_confirmed:
+                buy_price = current_price * (
+                    Decimal("1")
+                    + self.config.entry_limit_offset_percent / Decimal("100")
                 )
 
-                if level.trailing_entry.is_confirmed:
-                    buy_price = current_price * (
-                        Decimal("1")
-                        + self.config.entry_limit_offset_percent / Decimal("100")
+                commands.append(
+                    PlaceBuyLimitCommand(
+                        instrument_id=self.instrument_id,
+                        level_index=level.index,
+                        quantity=self.config.quantity,
+                        price=buy_price,
                     )
+                )
 
-                    commands.append(
-                        PlaceBuyLimitCommand(
-                            instrument_id=self.instrument_id,
-                            level_index=level.index,
-                            quantity=self.config.quantity,
-                            price=buy_price,
-                        )
-                    )
+                level.status = GridLevelStatus.ORDER_PLACED
 
-                    level.status = GridLevelStatus.ORDER_PLACED
+            break
 
-                break
-
-            return commands
+        return commands
 
     def _process_exits(self, current_price: Decimal) -> list[TradingCommand]:
         commands: list[TradingCommand] = []
