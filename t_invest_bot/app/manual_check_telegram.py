@@ -18,6 +18,8 @@ def main() -> None:
     notifier = TelegramNotifier(
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
+        timeout_seconds=90,
+        raise_on_error=True,
     )
 
     notifier.notify(
