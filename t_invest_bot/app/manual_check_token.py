@@ -1,30 +1,14 @@
-import certifi
-
-from t_tech.invest import Client
 from t_tech.invest.exceptions import RequestError
 
 from config.settings import load_settings
+from infrastructure.tinvest.client_factory import TInvestClientFactory
 
 
 def main() -> None:
     settings = load_settings()
 
-    options = [
-        (
-            "grpc.ssl_target_name_override",
-            "invest-public-api.tinkoff.ru",
-        ),
-        (
-            "grpc.default_ssl_roots_file_path",
-            certifi.where(),
-        ),
-    ]
-
     try:
-        with Client(
-            settings.tinvest_token,
-            options=options,
-        ) as client:
+        with TInvestClientFactory(settings.tinvest_token).create_client() as client:
             accounts = client.users.get_accounts()
 
             print("Accounts:")
@@ -42,4 +26,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main() 
+    main()
