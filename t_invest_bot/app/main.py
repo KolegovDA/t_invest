@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from broker.order_manager import OrderManager
 from broker.virtual_broker import VirtualBroker
+from portfolio.portfolio_manager import PortfolioManager
 from strategy.grid_engine import GridEngine, GridLevel, GridEngineConfig
 
 
@@ -29,26 +30,31 @@ def main():
     )
 
     broker = VirtualBroker(cash=Decimal("100000"))
+    portfolio = PortfolioManager(broker=broker)
     order_manager = OrderManager(broker=broker)
 
     prices = [
         Decimal("305"),
         Decimal("301"),
         Decimal("298"),
+
         Decimal("297.50"),
         Decimal("297.00"),
         Decimal("297.20"),
         Decimal("297.45"),
+
         Decimal("296"),
         Decimal("295.00"),
         Decimal("294.70"),
         Decimal("295.00"),
         Decimal("295.20"),
+
         Decimal("293"),
         Decimal("292.50"),
         Decimal("292.20"),
         Decimal("292.50"),
         Decimal("292.70"),
+
         Decimal("296.50"),
         Decimal("299.00"),
         Decimal("301.00"),
@@ -71,6 +77,9 @@ def main():
         print()
 
     broker.summary()
+
+    print()
+    portfolio.print_portfolio()
 
 
 if __name__ == "__main__":
