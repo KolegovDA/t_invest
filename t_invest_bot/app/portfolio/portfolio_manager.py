@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from broker.virtual_broker import VirtualBroker
 
@@ -19,6 +19,9 @@ class PortfolioManager:
 
     def update_price(self, instrument_id: str, price: Decimal) -> None:
         self.last_prices[instrument_id] = price
+
+    def money(self, value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     def get_market_value(self) -> Decimal:
         market_value = Decimal("0")
@@ -51,13 +54,22 @@ class PortfolioManager:
     def get_equity(self) -> Decimal:
         return self.cash + self.get_market_value()
 
+    def get_total_profit(self) -> Decimal:
+        return self.realized_profit + self.get_unrealized_profit()
+
     def summary(self) -> None:
+        market_value = self.get_market_value()
+        equity = self.get_equity()
+        unrealized_profit = self.get_unrealized_profit()
+        total_profit = self.get_total_profit()
+
         print("----- PORTFOLIO MANAGER -----")
-        print(f"Cash: {self.cash}")
-        print(f"Market value: {self.get_market_value()}")
-        print(f"Equity: {self.get_equity()}")
-        print(f"Realized profit: {self.realized_profit}")
-        print(f"Unrealized profit: {self.get_unrealized_profit()}")
+        print(f"Cash: {self.money(self.cash)}")
+        print(f"Market value: {self.money(market_value)}")
+        print(f"Equity: {self.money(equity)}")
+        print(f"Realized profit: {self.money(self.realized_profit)}")
+        print(f"Unrealized profit: {self.money(unrealized_profit)}")
+        print(f"Total profit: {self.money(total_profit)}")
         print("Positions:")
 
         for instrument_id, position in self.broker.positions.items():
@@ -66,9 +78,9 @@ class PortfolioManager:
             print(
                 f"{instrument_id}: "
                 f"quantity={position.quantity}, "
-                f"avg_price={position.avg_price}, "
+                f"avg_price={self.money(position.avg_price)}, "
                 f"last_price={last_price}, "
-                f"realized_profit={position.realized_profit}"
+                f"realized_profit={self.money(position.realized_profit)}"
             )
 
         print("Open level positions:")
@@ -77,5 +89,5 @@ class PortfolioManager:
             instrument_id, level_index = key
             print(
                 f"{instrument_id} level={level_index}: "
-                f"{trade.quantity} шт. по {trade.price}"
+                f"{trade.quantity} шт. по {self.money(trade.price)}"
             )
