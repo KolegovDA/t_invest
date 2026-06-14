@@ -119,19 +119,35 @@ class GridEngine:
 
         return []
 
-    def _process_entries(self, current_price: Decimal) -> list[TradingCommand]:
-        commands: list[TradingCommand] = []
+        def _process_entries(self, current_price: Decimal) -> list[TradingCommand]:
+            commands: list[TradingCommand] = []
 
-        for level in self.levels:
-            if level.status == GridLevelStatus.WAITING_PRICE:
-                if current_price <= level.price:
-                    level.status = GridLevelStatus.TRAILING_ENTRY
-                    level.trailing_entry = TrailingEntryState(
-                        level_price=level.price,
-                        lowest_price=current_price,
-                    )
+            active_entry_level_exists = any(
+                level.status in (
+                    GridLevelStatus.TRAILING_ENTRY,
+                    GridLevelStatus.ORDER_PLACED,
+                )
+                for level in self.levels
+            )
 
-            if level.status == GridLevelStatus.TRAILING_ENTRY:
+            if not active_entry_level_exists:
+                for level in self.levels:
+                    if level.status != GridLevelStatus.WAITING_PRICE:
+                        continue
+
+                    if current_price <= level.price:
+                        level.status = GridLevelStatus.TRAILING_ENTRY
+                        level.trailing_entry = TrailingEntryState(
+                            level_price=level.price,
+                            lowest_price=current_price,
+                        )
+
+                        break
+
+            for level in self.levels:
+                if level.status != GridLevelStatus.TRAILING_ENTRY:
+                    continue
+
                 if level.trailing_entry is None:
                     continue
 
@@ -157,7 +173,9 @@ class GridEngine:
 
                     level.status = GridLevelStatus.ORDER_PLACED
 
-        return commands
+                break
+
+            return commands
 
     def _process_exits(self, current_price: Decimal) -> list[TradingCommand]:
         commands: list[TradingCommand] = []
