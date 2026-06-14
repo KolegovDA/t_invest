@@ -66,7 +66,7 @@ def run_scenario() -> None:
     )
 
     prices = [
-        # level 1
+        # First profitable cycle on level 1
         Decimal("305"),
         Decimal("300"),
         Decimal("298"),
@@ -80,35 +80,51 @@ def run_scenario() -> None:
         Decimal("282"),
         Decimal("280"),
         Decimal("280.50"),
+        Decimal("286"),
+        Decimal("292"),
+        Decimal("298"),
+        Decimal("304"),
+        Decimal("302"),
 
-        # level 2
-        Decimal("279"),
-        Decimal("279.50"),
+        # Second profitable cycle on level 1/2
+        Decimal("300"),
+        Decimal("296"),
+        Decimal("292"),
+        Decimal("288"),
+        Decimal("284"),
+        Decimal("280"),
+        Decimal("280.50"),
+        Decimal("286"),
+        Decimal("292"),
+        Decimal("298"),
+        Decimal("304"),
+        Decimal("302"),
 
-        # level 3
-        Decimal("278"),
-        Decimal("278.50"),
-
-        # level 4
-        Decimal("277"),
-        Decimal("277.50"),
-
-        # level 5
+        # Deep fall to open several positions
+        Decimal("300"),
+        Decimal("296"),
+        Decimal("292"),
+        Decimal("288"),
+        Decimal("284"),
+        Decimal("280"),
         Decimal("276"),
-        Decimal("276.50"),
-
-        # simulate previous realized profit from grid
-        Decimal("276"),
+        Decimal("272"),
+        Decimal("268"),
+        Decimal("264"),
+        Decimal("260"),
+        Decimal("260.50"),
+        Decimal("259"),
+        Decimal("259.50"),
+        Decimal("258"),
+        Decimal("258.50"),
+        Decimal("257"),
+        Decimal("257.50"),
+        Decimal("256"),
+        Decimal("256.50"),
+        Decimal("256.20"),
     ]
 
     for price in prices:
-        if price == Decimal("276") and len(engine.open_positions) >= 5:
-            floating_loss = engine.risk_manager.calculate_floating_loss(
-                open_positions=engine.open_positions,
-                current_price=price,
-            )
-            engine.realized_profit = floating_loss * Decimal("3")
-
         process_price(
             price=price,
             engine=engine,
@@ -124,6 +140,14 @@ def run_scenario() -> None:
     print("ENGINE:")
     print("Open positions:", engine.open_positions)
     print("Realized profit:", engine.realized_profit)
+
+    if len(engine.open_positions) >= 5:
+        floating_loss = engine.risk_manager.calculate_floating_loss(
+            open_positions=engine.open_positions,
+            current_price=prices[-1],
+        )
+        print("Floating loss:", floating_loss)
+        print("Required profit:", floating_loss * engine.config.compensation_multiplier)
 
 
 if __name__ == "__main__":
