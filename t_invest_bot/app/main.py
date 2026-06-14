@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from backtest.backtester import Backtester
+from backtest.backtest_report import BacktestReportBuilder
 from domain.entities import Candle
 from strategy.grid_engine import GridEngineConfig
 
@@ -99,10 +100,8 @@ def main() -> None:
         ),
     )
 
-    print(result)
-    print("Trades:")
-    for trade in result.trades:
-        print(trade)
+    report = BacktestReportBuilder().build(result)
+    report.print()
 
 
 if __name__ == "__main__":
