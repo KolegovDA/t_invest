@@ -4,14 +4,9 @@ from uuid import uuid4
 
 from t_tech.invest import OrderDirection, OrderType
 
+from domain.order_execution import PlacedOrder
 from infrastructure.tinvest.client_factory import TInvestClientFactory
 from infrastructure.tinvest.quotation_mapper import TInvestQuotationMapper
-
-
-@dataclass(slots=True)
-class TInvestPlacedOrder:
-    order_id: str
-    request_id: str
 
 
 @dataclass(slots=True)
@@ -25,7 +20,7 @@ class TInvestOrderExecutor:
         instrument_id: str,
         quantity: int,
         price: Decimal,
-    ) -> TInvestPlacedOrder:
+    ) -> PlacedOrder:
         return self._place_limit_order(
             account_id=account_id,
             instrument_id=instrument_id,
@@ -40,7 +35,7 @@ class TInvestOrderExecutor:
         instrument_id: str,
         quantity: int,
         price: Decimal,
-    ) -> TInvestPlacedOrder:
+    ) -> PlacedOrder:
         return self._place_limit_order(
             account_id=account_id,
             instrument_id=instrument_id,
@@ -67,7 +62,7 @@ class TInvestOrderExecutor:
         quantity: int,
         price: Decimal,
         direction: OrderDirection,
-    ) -> TInvestPlacedOrder:
+    ) -> PlacedOrder:
         request_id = str(uuid4())
 
         with self.client_factory.create_client() as client:
@@ -81,7 +76,7 @@ class TInvestOrderExecutor:
                 order_id=request_id,
             )
 
-        return TInvestPlacedOrder(
+        return PlacedOrder(
             order_id=response.order_id,
             request_id=request_id,
         )
