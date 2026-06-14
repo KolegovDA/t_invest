@@ -13,3 +13,4 @@ matplotlib
 t-tech-investments
 certifi
 grpcio
+requests
