@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from domain.entities import Candle
-from strategy.grid_builder import GridBuilder
+from strategy.grid_engine import GridEngineConfig
+from strategy.grid_factory import GridFactory
 from strategy.history_analyzer import HistoryAnalyzer
 
 
@@ -24,19 +25,20 @@ def main() -> None:
             )
         )
 
-    analyzer = HistoryAnalyzer(exclude_first_days=7)
-    price_range = analyzer.calculate_range(candles)
-
-    print(price_range)
-
-    builder = GridBuilder(levels_count=5)
-
-    levels = builder.build_from_range(
-        min_price=price_range.min_price,
-        max_price=price_range.max_price,
+    factory = GridFactory(
+        history_analyzer=HistoryAnalyzer(exclude_first_days=7),
     )
 
-    for level in levels:
+    result = factory.create_grid_engine(
+        instrument_id="SBER",
+        candles=candles,
+        levels_count=5,
+        config=GridEngineConfig(quantity=10),
+    )
+
+    print(result.price_range)
+
+    for level in result.grid_engine.levels:
         print(level)
 
 
