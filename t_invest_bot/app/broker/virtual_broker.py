@@ -4,6 +4,7 @@ from typing import List
 
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand, TradingCommand
 from domain.events import TradeExecutedEvent
+from domain.level_position import LevelPosition
 
 
 @dataclass
@@ -24,7 +25,7 @@ class VirtualBroker:
     realized_profit: Decimal = Decimal("0")
     trades: List[VirtualTrade] = field(default_factory=list)
 
-    level_positions: dict[int, VirtualTrade] = field(default_factory=dict)
+    level_positions: dict[int, LevelPosition] = field(default_factory=dict)
 
     def execute_commands(
         self,
@@ -74,7 +75,13 @@ class VirtualBroker:
             price=command.price,
         )
 
-        self.level_positions[command.level_index] = trade
+        self.level_positions[command.level_index] = LevelPosition(
+            instrument_id=command.instrument_id,
+            level_index=command.level_index,
+            quantity=command.quantity,
+            entry_price=command.price,
+            take_profit_price=Decimal("0"),
+        )
         self.trades.append(trade)
 
         print(f"BUY level={command.level_index} {command.quantity} {command.instrument_id} по {command.price}")
@@ -95,16 +102,16 @@ class VirtualBroker:
         if current_price < command.price:
             return None
 
-        buy_trade = self.level_positions.get(command.level_index)
+        level_position = self.level_positions.get(command.level_index)
 
-        if buy_trade is None:
+        if level_position is None:
             return None
 
         if self.position < command.quantity:
             return None
 
         total = command.price * command.quantity
-        profit = (command.price - buy_trade.price) * command.quantity
+        profit = (command.price - level_position.entry_price) * command.quantity
 
         self.cash += total
         self.position -= command.quantity
