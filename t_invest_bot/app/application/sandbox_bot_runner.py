@@ -32,10 +32,19 @@ class SandboxBotRunner:
                 price=price,
             )
 
+            executed_events = self.session.poll_executions()
+
             print(
                 f"PRICE={price} "
-                f"ORDERS={len(placed_orders)}"
+                f"PLACED={len(placed_orders)} "
+                f"EXECUTED={len(executed_events)}"
             )
+
+            for order in placed_orders:
+                print("PLACED ORDER:", order)
+
+            for event in executed_events:
+                print("EXECUTED EVENT:", event)
 
             counter += 1
 

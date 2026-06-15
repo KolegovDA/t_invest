@@ -36,6 +36,16 @@ def main() -> None:
         config=config,
     )
 
+    print("Sandbox account:", context.sandbox_account_id)
+    print("Ticker:", context.ticker)
+    print("Current price:", context.current_price)
+    print("Sandbox balance:", context.sandbox_balance)
+    print("Price range:", context.price_range)
+
+    print("Levels:")
+    for level in context.levels:
+        print(level)
+
     token = (
         settings.tinvest_sandbox_token
         or settings.tinvest_token
