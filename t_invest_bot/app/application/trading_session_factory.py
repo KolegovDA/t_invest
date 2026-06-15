@@ -3,11 +3,14 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from application.grid_session_config import GridSessionConfig
+from application.portfolio_manager import PortfolioManager
 from application.sandbox_trading_session import SandboxTradingSession
+from application.trade_event_handler import TradeEventHandler
 from broker.live_order_manager import LiveOrderManager
 from broker.order_execution_event_mapper import OrderExecutionEventMapper
 from broker.order_state_tracker import OrderStateTracker
 from config.settings import Settings
+from domain.portfolio import Portfolio
 from infrastructure.tinvest.candles_mapper import TInvestCandlesMapper
 from infrastructure.tinvest.client_factory import TInvestClientFactory
 from infrastructure.tinvest.history_provider import TInvestHistoryProvider
@@ -32,6 +35,7 @@ from strategy.history_analyzer import HistoryAnalyzer, PriceRange
 @dataclass(slots=True)
 class SandboxTradingSessionContext:
     session: SandboxTradingSession
+    portfolio_manager: PortfolioManager
     sandbox_account_provider: TInvestSandboxAccountProvider
     sandbox_account_id: str
     instrument_id: str
@@ -155,15 +159,25 @@ class TradingSessionFactory:
             order_state_provider=order_state_provider,
         )
 
+        portfolio_manager = PortfolioManager(
+            portfolio=Portfolio(
+                cash=sandbox_balance,
+            )
+        )
+
         session = SandboxTradingSession(
             grid_engine=grid_engine,
             live_order_manager=live_order_manager,
             order_state_tracker=order_state_tracker,
             execution_event_mapper=OrderExecutionEventMapper(),
+            trade_event_handler=TradeEventHandler(
+                portfolio_manager=portfolio_manager,
+            ),
         )
 
         return SandboxTradingSessionContext(
             session=session,
+            portfolio_manager=portfolio_manager,
             sandbox_account_provider=sandbox_account_provider,
             sandbox_account_id=sandbox_account_id,
             instrument_id=instrument.id,

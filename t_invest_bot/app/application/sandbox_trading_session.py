@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from application.trade_event_handler import TradeEventHandler
 from broker.live_order_manager import LiveOrderManager
 from broker.order_execution_event_mapper import OrderExecutionEventMapper
 from broker.order_state_tracker import OrderStateTracker
@@ -15,6 +16,7 @@ class SandboxTradingSession:
     live_order_manager: LiveOrderManager
     order_state_tracker: OrderStateTracker | None = None
     execution_event_mapper: OrderExecutionEventMapper | None = None
+    trade_event_handler: TradeEventHandler | None = None
     placed_orders: list[PlacedOrder] = field(default_factory=list)
     executed_events: list[TradeExecutedEvent] = field(default_factory=list)
 
@@ -58,6 +60,11 @@ class SandboxTradingSession:
             self.grid_engine.on_trade_executed(
                 event=event,
             )
+
+            if self.trade_event_handler is not None:
+                self.trade_event_handler.handle(
+                    event=event,
+                )
 
             self.executed_events.append(event)
             events.append(event)
