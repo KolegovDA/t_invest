@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from time import sleep
 
+from application.portfolio_manager import PortfolioManager
 from application.sandbox_trading_session import (
     SandboxTradingSession,
 )
@@ -14,6 +15,7 @@ class SandboxBotRunner:
     session: SandboxTradingSession
     instrument_id: str
     price_provider: TInvestLastPriceProvider
+    portfolio_manager: PortfolioManager | None = None
 
     polling_interval_seconds: int = 10
 
@@ -27,6 +29,12 @@ class SandboxBotRunner:
             price = self.price_provider.get_last_price(
                 instrument_uid=self.instrument_id,
             )
+
+            if self.portfolio_manager is not None:
+                self.portfolio_manager.update_market_price(
+                    instrument_id=self.instrument_id,
+                    price=price,
+                )
 
             placed_orders = self.session.on_price(
                 price=price,
@@ -46,6 +54,9 @@ class SandboxBotRunner:
             for event in executed_events:
                 print("EXECUTED EVENT:", event)
 
+            if self.portfolio_manager is not None:
+                self._print_portfolio()
+
             counter += 1
 
             if (
@@ -57,3 +68,16 @@ class SandboxBotRunner:
             sleep(
                 self.polling_interval_seconds
             )
+
+    def _print_portfolio(self) -> None:
+        if self.portfolio_manager is None:
+            return
+
+        portfolio = self.portfolio_manager.portfolio
+
+        print("PORTFOLIO:")
+        print("Cash:", portfolio.cash)
+        print("Market value:", portfolio.market_value)
+        print("Equity:", portfolio.equity)
+        print("Realized profit:", portfolio.realized_profit)
+        print("Unrealized profit:", portfolio.unrealized_profit)

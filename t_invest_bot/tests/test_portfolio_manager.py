@@ -62,3 +62,29 @@ def test_portfolio_manager_tracks_position_and_profit() -> None:
         manager.portfolio.realized_profit
         == Decimal("100")
     )
+
+def test_portfolio_manager_updates_cash() -> None:
+    manager = PortfolioManager(
+        portfolio=Portfolio(
+            cash=Decimal("100000"),
+        )
+    )
+
+    manager.on_buy(
+        instrument_id="SBER",
+        quantity=10,
+        price=Decimal("300"),
+        commission=Decimal("9"),
+    )
+
+    assert manager.portfolio.cash == Decimal("96991")
+
+    manager.on_sell(
+        instrument_id="SBER",
+        quantity=10,
+        price=Decimal("310"),
+        profit=Decimal("91"),
+        commission=Decimal("9.3"),
+    )
+
+    assert manager.portfolio.cash == Decimal("100081.7")

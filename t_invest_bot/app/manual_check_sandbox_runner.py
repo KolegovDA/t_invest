@@ -61,6 +61,7 @@ def main() -> None:
         session=context.session,
         instrument_id=context.instrument_id,
         price_provider=price_provider,
+        portfolio_manager=context.portfolio_manager,
         polling_interval_seconds=5,
     )
 
