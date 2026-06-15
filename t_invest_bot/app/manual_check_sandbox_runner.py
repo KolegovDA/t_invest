@@ -1,21 +1,11 @@
 from decimal import Decimal
 
-from application.grid_session_config import (
-    GridSessionConfig,
-)
-from application.sandbox_bot_runner import (
-    SandboxBotRunner,
-)
-from application.trading_session_factory import (
-    TradingSessionFactory,
-)
+from application.grid_session_config import GridSessionConfig
+from application.sandbox_bot_runner import SandboxBotRunner
+from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
-from infrastructure.tinvest.client_factory import (
-    TInvestClientFactory,
-)
-from infrastructure.tinvest.last_price_provider import (
-    TInvestLastPriceProvider,
-)
+from infrastructure.tinvest.client_factory import TInvestClientFactory
+from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 
 
 def main() -> None:
@@ -62,6 +52,7 @@ def main() -> None:
         instrument_id=context.instrument_id,
         price_provider=price_provider,
         portfolio_manager=context.portfolio_manager,
+        trade_capital_service=context.trade_capital_service,
         polling_interval_seconds=5,
     )
 

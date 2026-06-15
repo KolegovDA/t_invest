@@ -5,6 +5,7 @@ from decimal import Decimal
 from application.grid_session_config import GridSessionConfig
 from application.portfolio_manager import PortfolioManager
 from application.sandbox_trading_session import SandboxTradingSession
+from application.trade_capital_service import TradeCapitalService
 from application.trade_event_handler import TradeEventHandler
 from broker.live_order_manager import LiveOrderManager
 from broker.order_execution_event_mapper import OrderExecutionEventMapper
@@ -27,6 +28,7 @@ from infrastructure.tinvest.sandbox_order_executor import (
 from infrastructure.tinvest.sandbox_order_state_provider import (
     TInvestSandboxOrderStateProvider,
 )
+from portfolio.capital_reservation_manager import CapitalReservationManager
 from strategy.grid_builder import GridBuilder
 from strategy.grid_engine import GridEngine, GridLevel
 from strategy.history_analyzer import HistoryAnalyzer, PriceRange
@@ -36,6 +38,7 @@ from strategy.history_analyzer import HistoryAnalyzer, PriceRange
 class SandboxTradingSessionContext:
     session: SandboxTradingSession
     portfolio_manager: PortfolioManager
+    trade_capital_service: TradeCapitalService
     sandbox_account_provider: TInvestSandboxAccountProvider
     sandbox_account_id: str
     instrument_id: str
@@ -138,6 +141,19 @@ class TradingSessionFactory:
             amount=config.sandbox_deposit,
         )
 
+        portfolio_manager = PortfolioManager(
+            portfolio=Portfolio(
+                cash=sandbox_balance,
+            )
+        )
+
+        trade_capital_service = TradeCapitalService(
+            portfolio_manager=portfolio_manager,
+            reservation_manager=CapitalReservationManager(
+                available_cash=sandbox_balance,
+            ),
+        )
+
         grid_engine = GridEngine(
             instrument_id=instrument.id,
             levels=levels,
@@ -147,6 +163,7 @@ class TradingSessionFactory:
         live_order_manager = LiveOrderManager(
             account_id=sandbox_account_id,
             order_executor=order_executor,
+            trade_capital_service=trade_capital_service,
         )
 
         order_state_provider = TInvestSandboxOrderStateProvider(
@@ -157,12 +174,6 @@ class TradingSessionFactory:
             account_id=sandbox_account_id,
             live_order_manager=live_order_manager,
             order_state_provider=order_state_provider,
-        )
-
-        portfolio_manager = PortfolioManager(
-            portfolio=Portfolio(
-                cash=sandbox_balance,
-            )
         )
 
         session = SandboxTradingSession(
@@ -178,6 +189,7 @@ class TradingSessionFactory:
         return SandboxTradingSessionContext(
             session=session,
             portfolio_manager=portfolio_manager,
+            trade_capital_service=trade_capital_service,
             sandbox_account_provider=sandbox_account_provider,
             sandbox_account_id=sandbox_account_id,
             instrument_id=instrument.id,

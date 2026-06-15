@@ -2,12 +2,9 @@ from dataclasses import dataclass
 from time import sleep
 
 from application.portfolio_manager import PortfolioManager
-from application.sandbox_trading_session import (
-    SandboxTradingSession,
-)
-from infrastructure.tinvest.last_price_provider import (
-    TInvestLastPriceProvider,
-)
+from application.sandbox_trading_session import SandboxTradingSession
+from application.trade_capital_service import TradeCapitalService
+from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 
 
 @dataclass(slots=True)
@@ -16,6 +13,7 @@ class SandboxBotRunner:
     instrument_id: str
     price_provider: TInvestLastPriceProvider
     portfolio_manager: PortfolioManager | None = None
+    trade_capital_service: TradeCapitalService | None = None
 
     polling_interval_seconds: int = 10
 
@@ -57,6 +55,9 @@ class SandboxBotRunner:
             if self.portfolio_manager is not None:
                 self._print_portfolio()
 
+            if self.trade_capital_service is not None:
+                self._print_capital_reservation()
+
             counter += 1
 
             if (
@@ -81,3 +82,13 @@ class SandboxBotRunner:
         print("Equity:", portfolio.equity)
         print("Realized profit:", portfolio.realized_profit)
         print("Unrealized profit:", portfolio.unrealized_profit)
+
+    def _print_capital_reservation(self) -> None:
+        if self.trade_capital_service is None:
+            return
+
+        reservation_manager = self.trade_capital_service.reservation_manager
+
+        print("CAPITAL RESERVATION:")
+        print("Available cash:", reservation_manager.available_cash)
+        print("Reserved total:", reservation_manager.get_reserved_total())
