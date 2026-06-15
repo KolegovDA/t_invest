@@ -13,6 +13,7 @@ class PlaceBuyLimitCommand(TradingCommand):
     level_index: int
     quantity: int
     price: Decimal
+    commission_percent: Decimal = Decimal("0.30")
 
 
 @dataclass(slots=True)
@@ -21,6 +22,7 @@ class PlaceSellLimitCommand(TradingCommand):
     level_index: int
     quantity: int
     price: Decimal
+    commission_percent: Decimal = Decimal("0.30")
 
 
 @dataclass(slots=True)
@@ -29,6 +31,8 @@ class PlaceSellAllLimitCommand(TradingCommand):
     quantity: int
     price: Decimal
     reason: str = "COMPENSATION_CLOSE"
+    level_index: int = 0
+    commission_percent: Decimal = Decimal("0.30")
 
 
 @dataclass(slots=True)

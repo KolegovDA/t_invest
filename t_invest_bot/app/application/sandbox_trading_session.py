@@ -57,6 +57,12 @@ class SandboxTradingSession:
                 executed_order=executed_order,
             )
 
+            if event.side == "BUY":
+                self.live_order_manager.release_reserved_capital_after_buy_execution(
+                    instrument_id=event.instrument_id,
+                    level_index=event.level_index,
+                )
+
             self.grid_engine.on_trade_executed(
                 event=event,
             )

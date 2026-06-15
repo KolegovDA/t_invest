@@ -1,8 +1,11 @@
 from decimal import Decimal
 
+from application.portfolio_manager import PortfolioManager
+from application.trade_capital_service import TradeCapitalService
 from broker.order_manager import OrderManager
 from broker.virtual_broker import VirtualBroker
 from domain.commands import PlaceBuyLimitCommand
+from domain.portfolio import Portfolio
 from portfolio.capital_reservation_manager import CapitalReservationManager
 
 
@@ -14,18 +17,33 @@ class FakeNotifier:
         self.messages.append(message)
 
 
+def create_trade_capital_service(
+    cash: Decimal,
+) -> TradeCapitalService:
+    return TradeCapitalService(
+        portfolio_manager=PortfolioManager(
+            portfolio=Portfolio(
+                cash=cash,
+            )
+        ),
+        reservation_manager=CapitalReservationManager(
+            available_cash=cash,
+        ),
+    )
+
+
 def test_order_manager_keeps_buy_command_when_reserve_fails() -> None:
     broker = VirtualBroker(
         cash=Decimal("100000"),
     )
 
-    reservation_manager = CapitalReservationManager(
-        available_cash=Decimal("100"),
+    trade_capital_service = create_trade_capital_service(
+        cash=Decimal("100"),
     )
 
     order_manager = OrderManager(
         broker=broker,
-        capital_reservation_manager=reservation_manager,
+        trade_capital_service=trade_capital_service,
     )
 
     command = PlaceBuyLimitCommand(
@@ -51,13 +69,13 @@ def test_order_manager_executes_buy_when_reserve_succeeds() -> None:
         cash=Decimal("100000"),
     )
 
-    reservation_manager = CapitalReservationManager(
-        available_cash=Decimal("10000"),
+    trade_capital_service = create_trade_capital_service(
+        cash=Decimal("10000"),
     )
 
     order_manager = OrderManager(
         broker=broker,
-        capital_reservation_manager=reservation_manager,
+        trade_capital_service=trade_capital_service,
     )
 
     command = PlaceBuyLimitCommand(
@@ -77,6 +95,7 @@ def test_order_manager_executes_buy_when_reserve_succeeds() -> None:
     assert events[0].side == "BUY"
     assert order_manager.active_commands == []
     assert len(broker.trades) == 1
+    assert trade_capital_service.reservation_manager.get_reserved_total() == Decimal("0")
 
 
 def test_order_manager_notifies_when_reserve_fails() -> None:
@@ -84,15 +103,15 @@ def test_order_manager_notifies_when_reserve_fails() -> None:
         cash=Decimal("100000"),
     )
 
-    reservation_manager = CapitalReservationManager(
-        available_cash=Decimal("100"),
+    trade_capital_service = create_trade_capital_service(
+        cash=Decimal("100"),
     )
 
     notifier = FakeNotifier()
 
     order_manager = OrderManager(
         broker=broker,
-        capital_reservation_manager=reservation_manager,
+        trade_capital_service=trade_capital_service,
         notifier=notifier,
     )
 

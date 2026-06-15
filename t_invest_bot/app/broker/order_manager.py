@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from application.trade_capital_service import TradeCapitalService
 from broker.virtual_broker import VirtualBroker
 from domain.commands import (
     PlaceBuyLimitCommand,
@@ -8,13 +9,12 @@ from domain.commands import (
 )
 from domain.events import TradeExecutedEvent
 from notifications.notifier import Notifier
-from portfolio.capital_reservation_manager import CapitalReservationManager
 
 
 @dataclass
 class OrderManager:
     broker: VirtualBroker
-    capital_reservation_manager: CapitalReservationManager | None = None
+    trade_capital_service: TradeCapitalService | None = None
     notifier: Notifier | None = None
     active_commands: list[TradingCommand] = field(default_factory=list)
 
@@ -56,20 +56,26 @@ class OrderManager:
         self,
         command: PlaceBuyLimitCommand,
     ) -> bool:
-        if self.capital_reservation_manager is None:
+        if self.trade_capital_service is None:
             return True
 
-        required_amount = self._calculate_required_amount_for_buy(
-            command=command,
-        )
-
-        result = self.capital_reservation_manager.reserve(
+        success = self.trade_capital_service.reserve_for_buy(
             instrument_id=command.instrument_id,
             level_index=command.level_index,
-            amount=required_amount,
+            quantity=command.quantity,
+            price=command.price,
+            commission_percent=self.broker.commission_percent,
         )
 
-        if not result.success:
+        if not success:
+            required_amount = (
+                self.trade_capital_service.calculate_required_buy_amount(
+                    quantity=command.quantity,
+                    price=command.price,
+                    commission_percent=self.broker.commission_percent,
+                )
+            )
+
             message = (
                 f"Недостаточно средств для покупки: "
                 f"{command.instrument_id} level={command.level_index}, "
@@ -82,25 +88,16 @@ class OrderManager:
             else:
                 print(message)
 
-        return result.success
+        return success
 
     def _release_reserved_capital(
         self,
         event: TradeExecutedEvent,
     ) -> None:
-        if self.capital_reservation_manager is None:
+        if self.trade_capital_service is None:
             return
 
-        self.capital_reservation_manager.release(
+        self.trade_capital_service.release_after_buy_execution(
             instrument_id=event.instrument_id,
             level_index=event.level_index,
         )
-
-    def _calculate_required_amount_for_buy(
-        self,
-        command: PlaceBuyLimitCommand,
-    ) -> Decimal:
-        total = command.price * command.quantity
-        commission = total * self.broker.commission_percent / Decimal("100")
-
-        return total + commission

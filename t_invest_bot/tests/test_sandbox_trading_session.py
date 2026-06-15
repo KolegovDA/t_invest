@@ -195,3 +195,66 @@ def test_sandbox_trading_session_polls_executions_and_updates_grid() -> None:
     assert events[0].side == "BUY"
     assert len(session.executed_events) == 1
     assert live_order_manager.active_orders == {}
+
+def test_sandbox_trading_session_releases_reserved_capital_after_buy_execution() -> None:
+    from application.portfolio_manager import PortfolioManager
+    from application.trade_capital_service import TradeCapitalService
+    from domain.portfolio import Portfolio
+    from portfolio.capital_reservation_manager import CapitalReservationManager
+
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("300"),
+            )
+        ],
+        config=GridEngineConfig(
+            quantity=1,
+            entry_rebound_percent=Decimal("0.01"),
+            entry_limit_offset_percent=Decimal("0.01"),
+        ),
+    )
+
+    executor = FakeOrderExecutor()
+
+    trade_capital_service = TradeCapitalService(
+        portfolio_manager=PortfolioManager(
+            portfolio=Portfolio(
+                cash=Decimal("1000"),
+            )
+        ),
+        reservation_manager=CapitalReservationManager(
+            available_cash=Decimal("1000"),
+        ),
+    )
+
+    live_order_manager = LiveOrderManager(
+        account_id="account-1",
+        order_executor=executor,
+        trade_capital_service=trade_capital_service,
+    )
+
+    tracker = OrderStateTracker(
+        account_id="account-1",
+        live_order_manager=live_order_manager,
+        order_state_provider=FakeExecutedStateProvider(),
+    )
+
+    session = SandboxTradingSession(
+        grid_engine=grid,
+        live_order_manager=live_order_manager,
+        order_state_tracker=tracker,
+        execution_event_mapper=OrderExecutionEventMapper(),
+    )
+
+    session.on_price(Decimal("299"))
+    session.on_price(Decimal("298"))
+    session.on_price(Decimal("298.10"))
+
+    assert trade_capital_service.reservation_manager.get_reserved_total() > Decimal("0")
+
+    session.poll_executions()
+
+    assert trade_capital_service.reservation_manager.get_reserved_total() == Decimal("0")

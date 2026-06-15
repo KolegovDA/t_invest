@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from application.trade_capital_service import TradeCapitalService
 from domain.commands import (
     PlaceBuyLimitCommand,
     PlaceSellAllLimitCommand,
@@ -7,6 +8,7 @@ from domain.commands import (
     TradingCommand,
 )
 from domain.order_execution import OrderExecutor, PlacedOrder
+from notifications.notifier import Notifier
 
 
 @dataclass(slots=True)
@@ -19,6 +21,8 @@ class LiveOrderRecord:
 class LiveOrderManager:
     account_id: str
     order_executor: OrderExecutor
+    trade_capital_service: TradeCapitalService | None = None
+    notifier: Notifier | None = None
     active_orders: dict[str, LiveOrderRecord] = field(default_factory=dict)
 
     def submit_commands(
@@ -64,11 +68,29 @@ class LiveOrderManager:
                 order_id=order_id,
             )
 
+    def release_reserved_capital_after_buy_execution(
+        self,
+        instrument_id: str,
+        level_index: int,
+    ) -> None:
+        if self.trade_capital_service is None:
+            return
+
+        self.trade_capital_service.release_after_buy_execution(
+            instrument_id=instrument_id,
+            level_index=level_index,
+        )
+
     def _submit_command(
         self,
         command: TradingCommand,
     ) -> PlacedOrder | None:
         if isinstance(command, PlaceBuyLimitCommand):
+            if not self._reserve_for_buy(
+                command=command,
+            ):
+                return None
+
             return self.order_executor.place_limit_buy(
                 account_id=self.account_id,
                 instrument_id=command.instrument_id,
@@ -93,3 +115,41 @@ class LiveOrderManager:
             )
 
         return None
+
+    def _reserve_for_buy(
+        self,
+        command: PlaceBuyLimitCommand,
+    ) -> bool:
+        if self.trade_capital_service is None:
+            return True
+
+        success = self.trade_capital_service.reserve_for_buy(
+            instrument_id=command.instrument_id,
+            level_index=command.level_index,
+            quantity=command.quantity,
+            price=command.price,
+            commission_percent=command.commission_percent,
+        )
+
+        if not success:
+            required_amount = (
+                self.trade_capital_service.calculate_required_buy_amount(
+                    quantity=command.quantity,
+                    price=command.price,
+                    commission_percent=command.commission_percent,
+                )
+            )
+
+            message = (
+                f"Недостаточно средств для покупки: "
+                f"{command.instrument_id} level={command.level_index}, "
+                f"требуется {required_amount}. "
+                f"Ордер не отправлен брокеру."
+            )
+
+            if self.notifier is not None:
+                self.notifier.notify(message)
+            else:
+                print(message)
+
+        return success
