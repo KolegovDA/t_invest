@@ -4,7 +4,9 @@ from time import sleep
 from application.grid_session_config import GridSessionConfig
 from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
-from domain.commands import PlaceBuyLimitCommand
+from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
+from infrastructure.tinvest.client_factory import TInvestClientFactory
+from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 
 
 def main() -> None:
@@ -28,6 +30,14 @@ def main() -> None:
 
     context = factory.create_sandbox_session(
         config=config,
+    )
+
+    token = settings.tinvest_sandbox_token or settings.tinvest_token
+
+    price_provider = TInvestLastPriceProvider(
+        client_factory=TInvestClientFactory(
+            token=token,
+        )
     )
 
     print("Sandbox account:", context.sandbox_account_id)
@@ -63,6 +73,15 @@ def main() -> None:
         print("BUY events:", buy_events)
         print("Open positions:", context.session.grid_engine.open_positions)
 
+        real_price_after_buy = price_provider.get_last_price(
+            context.instrument_id,
+        )
+
+        context.portfolio_manager.update_market_price(
+            instrument_id=context.instrument_id,
+            price=real_price_after_buy,
+        )
+
         position = context.session.grid_engine.open_positions[1]
 
         print("Hard take profit:", position.hard_take_profit_price)
@@ -74,12 +93,13 @@ def main() -> None:
             Decimal("0.01")
         )
 
-        no_sell_orders = context.session.on_price(
-            price=price_above_take_profit,
-        )
-
         print("Price above take profit:", price_above_take_profit)
-        print("SELL orders immediately after TP:", no_sell_orders)
+        print(
+            "SELL orders immediately after TP:",
+            context.session.on_price(
+                price=price_above_take_profit,
+            ),
+        )
 
         higher_price = (
             price_above_take_profit
@@ -88,12 +108,13 @@ def main() -> None:
             Decimal("0.01")
         )
 
-        no_sell_orders = context.session.on_price(
-            price=higher_price,
-        )
-
         print("Higher price:", higher_price)
-        print("SELL orders while growing:", no_sell_orders)
+        print(
+            "SELL orders while growing:",
+            context.session.on_price(
+                price=higher_price,
+            ),
+        )
 
         rollback_price = (
             higher_price
@@ -102,16 +123,44 @@ def main() -> None:
             Decimal("0.01")
         )
 
-        sell_orders = context.session.on_price(
+        strategy_sell_orders = context.session.on_price(
             price=rollback_price,
         )
 
         print("Rollback price:", rollback_price)
-        print("SELL orders after rollback:", sell_orders)
+        print("Strategy SELL orders after rollback:", strategy_sell_orders)
 
-        if not sell_orders:
-            print("SELL order was not created")
+        if not strategy_sell_orders:
+            print("Strategy SELL order was not created")
             return
+
+        context.session.live_order_manager.cancel_all_orders()
+
+        real_price_before_sell = price_provider.get_last_price(
+            context.instrument_id,
+        )
+
+        marketable_sell_price = (
+            real_price_before_sell
+            * Decimal("0.95")
+        ).quantize(
+            Decimal("0.01")
+        )
+
+        sell_command = PlaceSellLimitCommand(
+            instrument_id=context.instrument_id,
+            level_index=1,
+            quantity=1,
+            price=marketable_sell_price,
+        )
+
+        sell_orders = context.session.live_order_manager.submit_commands(
+            commands=[sell_command],
+        )
+
+        print("Market price before SELL:", real_price_before_sell)
+        print("Marketable SELL price:", marketable_sell_price)
+        print("Marketable SELL orders:", sell_orders)
 
         sleep(2)
 
@@ -120,6 +169,15 @@ def main() -> None:
         print("SELL events:", sell_events)
         print("Open positions after SELL:", context.session.grid_engine.open_positions)
         print("Grid realized profit:", context.session.grid_engine.realized_profit)
+
+        real_price_after_sell = price_provider.get_last_price(
+            context.instrument_id,
+        )
+
+        context.portfolio_manager.update_market_price(
+            instrument_id=context.instrument_id,
+            price=real_price_after_sell,
+        )
 
         portfolio = context.portfolio_manager.portfolio
 
