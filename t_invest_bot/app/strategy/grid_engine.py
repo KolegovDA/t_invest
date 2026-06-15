@@ -95,11 +95,17 @@ class GridEngine:
                 entry_price=event.price,
             )
 
+            buy_commission = self._calculate_buy_commission(
+                price=event.price,
+                quantity=event.quantity,
+                actual_commission=event.commission,
+            )
+
             self.open_positions[event.level_index] = OpenLevelPosition(
                 level_index=event.level_index,
                 entry_price=event.price,
                 quantity=event.quantity,
-                buy_commission=event.commission,
+                buy_commission=buy_commission,
                 expected_sell_commission_percent=self.config.fallback_sell_commission_percent,
                 hard_take_profit_price=hard_take_profit_price,
             )
@@ -111,9 +117,19 @@ class GridEngine:
             position = self.open_positions.pop(event.level_index, None)
 
             if position is not None:
+                buy_commission = position.buy_commission
+
+                sell_commission = self._calculate_sell_commission(
+                    price=event.price,
+                    quantity=event.quantity,
+                    actual_commission=event.commission,
+                )
+
                 sell_total = event.price * event.quantity
                 buy_total = position.entry_price * position.quantity
-                profit = sell_total - event.commission - buy_total - position.buy_commission
+
+                profit = sell_total - sell_commission - buy_total - buy_commission
+
                 self.realized_profit += profit
 
             level.status = GridLevelStatus.WAITING_PRICE
@@ -237,6 +253,38 @@ class GridEngine:
         )
 
         return entry_price * required_rate / (Decimal("1") - sell_commission_rate)
+
+    def _calculate_buy_commission(
+        self,
+        price: Decimal,
+        quantity: int,
+        actual_commission: Decimal | None,
+    ) -> Decimal:
+        if actual_commission is not None:
+            return actual_commission
+
+        return (
+            price
+            * quantity
+            * self.config.fallback_buy_commission_percent
+            / Decimal("100")
+        )
+
+    def _calculate_sell_commission(
+        self,
+        price: Decimal,
+        quantity: int,
+        actual_commission: Decimal | None,
+    ) -> Decimal:
+        if actual_commission is not None:
+            return actual_commission
+
+        return (
+            price
+            * quantity
+            * self.config.fallback_sell_commission_percent
+            / Decimal("100")
+        )
 
     def _get_level_by_index(self, level_index: int) -> GridLevel | None:
         for level in self.levels:
