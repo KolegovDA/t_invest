@@ -1,0 +1,68 @@
+from decimal import Decimal
+
+from application.grid_session_config import (
+    GridSessionConfig,
+)
+from application.sandbox_bot_runner import (
+    SandboxBotRunner,
+)
+from application.trading_session_factory import (
+    TradingSessionFactory,
+)
+from config.settings import load_settings
+from infrastructure.tinvest.client_factory import (
+    TInvestClientFactory,
+)
+from infrastructure.tinvest.last_price_provider import (
+    TInvestLastPriceProvider,
+)
+
+
+def main() -> None:
+    settings = load_settings()
+
+    factory = TradingSessionFactory(
+        settings=settings,
+    )
+
+    config = GridSessionConfig(
+        ticker="SBER",
+        levels_count=20,
+        quantity=1,
+        sandbox_deposit=Decimal("100000"),
+    )
+
+    context = factory.create_sandbox_session(
+        config=config,
+    )
+
+    token = (
+        settings.tinvest_sandbox_token
+        or settings.tinvest_token
+    )
+
+    price_provider = TInvestLastPriceProvider(
+        client_factory=TInvestClientFactory(
+            token=token,
+        )
+    )
+
+    runner = SandboxBotRunner(
+        session=context.session,
+        instrument_id=context.instrument_id,
+        price_provider=price_provider,
+        polling_interval_seconds=5,
+    )
+
+    try:
+        runner.run(
+            iterations=10,
+        )
+
+    finally:
+        context.close()
+        print("Sandbox closed")
+
+
+if __name__ == "__main__":
+    main()

@@ -17,6 +17,7 @@ def main() -> None:
         levels_count=5,
         quantity=1,
         sandbox_deposit=Decimal("100000"),
+        history_years=3,
         entry_rebound_percent=Decimal("0.01"),
         entry_limit_offset_percent=Decimal("0.01"),
     )
@@ -29,6 +30,11 @@ def main() -> None:
     print("Ticker:", context.ticker)
     print("Current price:", context.current_price)
     print("Sandbox balance:", context.sandbox_balance)
+    print("Price range:", context.price_range)
+
+    print("Levels:")
+    for level in context.levels:
+        print(level)
 
     prices = [
         context.current_price,

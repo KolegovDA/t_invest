@@ -11,6 +11,9 @@ class GridSessionConfig:
     quantity: int
     sandbox_deposit: Decimal
 
+    history_years: int = 3
+    exclude_first_days: int = 7
+
     entry_rebound_percent: Decimal = Decimal("0.15")
     entry_limit_offset_percent: Decimal = Decimal("0.15")
     exit_limit_offset_percent: Decimal = Decimal("0.15")

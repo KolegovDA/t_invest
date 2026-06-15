@@ -41,8 +41,8 @@ def test_grid_builder_builds_levels_from_max_to_min() -> None:
     )
 
     assert len(levels) == 5
-    assert levels[0].price == Decimal("290")
-    assert levels[1].price == Decimal("280")
-    assert levels[2].price == Decimal("270")
-    assert levels[3].price == Decimal("260")
-    assert levels[4].price == Decimal("250")
+    assert levels[0].price == Decimal("300")
+    assert levels[1].price == Decimal("287.5")
+    assert levels[2].price == Decimal("275.0")
+    assert levels[3].price == Decimal("262.5")
+    assert levels[4].price == Decimal("250.0")

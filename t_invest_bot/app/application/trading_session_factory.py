@@ -1,11 +1,16 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from application.grid_session_config import GridSessionConfig
 from application.sandbox_trading_session import SandboxTradingSession
 from broker.live_order_manager import LiveOrderManager
+from broker.order_execution_event_mapper import OrderExecutionEventMapper
+from broker.order_state_tracker import OrderStateTracker
 from config.settings import Settings
+from infrastructure.tinvest.candles_mapper import TInvestCandlesMapper
 from infrastructure.tinvest.client_factory import TInvestClientFactory
+from infrastructure.tinvest.history_provider import TInvestHistoryProvider
 from infrastructure.tinvest.instrument_mapper import TInvestInstrumentMapper
 from infrastructure.tinvest.instrument_provider import TInvestInstrumentProvider
 from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
@@ -16,8 +21,12 @@ from infrastructure.tinvest.sandbox_account_provider import (
 from infrastructure.tinvest.sandbox_order_executor import (
     TInvestSandboxOrderExecutor,
 )
+from infrastructure.tinvest.sandbox_order_state_provider import (
+    TInvestSandboxOrderStateProvider,
+)
 from strategy.grid_builder import GridBuilder
-from strategy.grid_engine import GridEngine
+from strategy.grid_engine import GridEngine, GridLevel
+from strategy.history_analyzer import HistoryAnalyzer, PriceRange
 
 
 @dataclass(slots=True)
@@ -29,6 +38,8 @@ class SandboxTradingSessionContext:
     ticker: str
     current_price: Decimal
     sandbox_balance: Decimal
+    price_range: PriceRange
+    levels: list[GridLevel]
 
     def close(self) -> None:
         self.session.stop()
@@ -67,6 +78,11 @@ class TradingSessionFactory:
             client_factory=client_factory,
         )
 
+        history_provider = TInvestHistoryProvider(
+            client_factory=client_factory,
+            mapper=TInvestCandlesMapper(),
+        )
+
         sandbox_account_provider = TInvestSandboxAccountProvider(
             client_factory=client_factory,
         )
@@ -87,11 +103,28 @@ class TradingSessionFactory:
             instrument_uid=instrument.id,
         )
 
+        date_to = datetime.now(timezone.utc)
+        date_from = date_to - timedelta(
+            days=365 * config.history_years,
+        )
+
+        candles = history_provider.get_daily_candles(
+            instrument_id=instrument.id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+        price_range = HistoryAnalyzer(
+            exclude_first_days=config.exclude_first_days,
+        ).calculate_range(
+            candles=candles,
+        )
+
         levels = GridBuilder(
             levels_count=config.levels_count,
         ).build_from_range(
-            min_price=current_price * Decimal("0.90"),
-            max_price=current_price * Decimal("1.01"),
+            min_price=price_range.min_price,
+            max_price=price_range.max_price,
         )
 
         sandbox_account_id = sandbox_account_provider.open_account()
@@ -112,9 +145,21 @@ class TradingSessionFactory:
             order_executor=order_executor,
         )
 
+        order_state_provider = TInvestSandboxOrderStateProvider(
+            client_factory=client_factory,
+        )
+
+        order_state_tracker = OrderStateTracker(
+            account_id=sandbox_account_id,
+            live_order_manager=live_order_manager,
+            order_state_provider=order_state_provider,
+        )
+
         session = SandboxTradingSession(
             grid_engine=grid_engine,
             live_order_manager=live_order_manager,
+            order_state_tracker=order_state_tracker,
+            execution_event_mapper=OrderExecutionEventMapper(),
         )
 
         return SandboxTradingSessionContext(
@@ -125,4 +170,6 @@ class TradingSessionFactory:
             ticker=instrument.ticker,
             current_price=current_price,
             sandbox_balance=sandbox_balance,
+            price_range=price_range,
+            levels=levels,
         )

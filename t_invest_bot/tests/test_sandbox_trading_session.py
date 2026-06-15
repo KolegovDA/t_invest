@@ -5,6 +5,11 @@ from broker.live_order_manager import LiveOrderManager
 from domain.order_execution import PlacedOrder
 from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
 
+from broker.order_execution_event_mapper import OrderExecutionEventMapper
+from broker.order_state_tracker import OrderStateTracker
+from domain.order_state import OrderExecutionState
+
+
 
 class FakeOrderExecutor:
     def __init__(self) -> None:
@@ -127,3 +132,66 @@ def test_sandbox_trading_session_stop_cancels_orders() -> None:
     session.stop()
 
     assert len(executor.canceled_orders) == 1
+
+
+ 
+class FakeExecutedStateProvider:
+    def get_order_state(
+        self,
+        account_id: str,
+        order_id: str,
+    ) -> OrderExecutionState:
+        return OrderExecutionState(
+            order_id=order_id,
+            is_executed=True,
+            executed_quantity=1,
+            executed_price=Decimal("298.10"),
+        )
+
+
+def test_sandbox_trading_session_polls_executions_and_updates_grid() -> None:
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("300"),
+            )
+        ],
+        config=GridEngineConfig(
+            quantity=1,
+            entry_rebound_percent=Decimal("0.01"),
+            entry_limit_offset_percent=Decimal("0.01"),
+        ),
+    )
+
+    executor = FakeOrderExecutor()
+
+    live_order_manager = LiveOrderManager(
+        account_id="account-1",
+        order_executor=executor,
+    )
+
+    tracker = OrderStateTracker(
+        account_id="account-1",
+        live_order_manager=live_order_manager,
+        order_state_provider=FakeExecutedStateProvider(),
+    )
+
+    session = SandboxTradingSession(
+        grid_engine=grid,
+        live_order_manager=live_order_manager,
+        order_state_tracker=tracker,
+        execution_event_mapper=OrderExecutionEventMapper(),
+    )
+
+    session.on_price(Decimal("299"))
+    session.on_price(Decimal("298"))
+    session.on_price(Decimal("298.10"))
+
+    events = session.poll_executions()
+
+    assert len(events) == 1
+    assert events[0].side == "BUY"
+    assert len(session.executed_events) == 1
+    assert live_order_manager.active_orders == {}
