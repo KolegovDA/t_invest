@@ -4,8 +4,6 @@ from application.grid_session_config import GridSessionConfig
 from application.sandbox_bot_runner import SandboxBotRunner
 from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
-from infrastructure.tinvest.client_factory import TInvestClientFactory
-from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 
 
 def main() -> None:
@@ -36,21 +34,10 @@ def main() -> None:
     for level in context.levels:
         print(level)
 
-    token = (
-        settings.tinvest_sandbox_token
-        or settings.tinvest_token
-    )
-
-    price_provider = TInvestLastPriceProvider(
-        client_factory=TInvestClientFactory(
-            token=token,
-        )
-    )
-
     runner = SandboxBotRunner(
         session=context.session,
         instrument_id=context.instrument_id,
-        price_provider=price_provider,
+        price_provider=context.price_provider,
         portfolio_manager=context.portfolio_manager,
         trade_capital_service=context.trade_capital_service,
         polling_interval_seconds=5,

@@ -56,11 +56,7 @@ class PortfolioManager:
         self.portfolio.cash -= buy_amount
 
         old_quantity = instrument.position_quantity
-
-        new_quantity = (
-            old_quantity
-            + quantity
-        )
+        new_quantity = old_quantity + quantity
 
         if old_quantity == 0:
             instrument.average_price = price
@@ -74,6 +70,7 @@ class PortfolioManager:
             ) / new_quantity
 
         instrument.position_quantity = new_quantity
+        instrument.buy_commission_total += commission
 
     def on_sell(
         self,
@@ -82,6 +79,7 @@ class PortfolioManager:
         price: Decimal,
         profit: Decimal,
         commission: Decimal = Decimal("0"),
+        buy_commission_to_close: Decimal = Decimal("0"),
     ) -> None:
         instrument = self.get_or_create(
             instrument_id,
@@ -95,8 +93,9 @@ class PortfolioManager:
         self.portfolio.cash += sell_amount
 
         instrument.position_quantity -= quantity
-
         instrument.realized_profit += profit
+        instrument.buy_commission_total -= buy_commission_to_close
 
         if instrument.position_quantity == 0:
             instrument.average_price = Decimal("0")
+            instrument.buy_commission_total = Decimal("0")

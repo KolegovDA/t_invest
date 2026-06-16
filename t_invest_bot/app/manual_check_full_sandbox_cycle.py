@@ -2,11 +2,10 @@ from decimal import Decimal
 from time import sleep
 
 from application.grid_session_config import GridSessionConfig
+from application.session_reporter import SessionReporter
 from application.trading_session_factory import TradingSessionFactory
 from config.settings import load_settings
 from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
-from infrastructure.tinvest.client_factory import TInvestClientFactory
-from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 
 
 def main() -> None:
@@ -32,12 +31,9 @@ def main() -> None:
         config=config,
     )
 
-    token = settings.tinvest_sandbox_token or settings.tinvest_token
-
-    price_provider = TInvestLastPriceProvider(
-        client_factory=TInvestClientFactory(
-            token=token,
-        )
+    reporter = SessionReporter(
+        portfolio_manager=context.portfolio_manager,
+        trade_capital_service=context.trade_capital_service,
     )
 
     print("Sandbox account:", context.sandbox_account_id)
@@ -73,7 +69,7 @@ def main() -> None:
         print("BUY events:", buy_events)
         print("Open positions:", context.session.grid_engine.open_positions)
 
-        real_price_after_buy = price_provider.get_last_price(
+        real_price_after_buy = context.price_provider.get_last_price(
             context.instrument_id,
         )
 
@@ -136,7 +132,7 @@ def main() -> None:
 
         context.session.live_order_manager.cancel_all_orders()
 
-        real_price_before_sell = price_provider.get_last_price(
+        real_price_before_sell = context.price_provider.get_last_price(
             context.instrument_id,
         )
 
@@ -170,7 +166,7 @@ def main() -> None:
         print("Open positions after SELL:", context.session.grid_engine.open_positions)
         print("Grid realized profit:", context.session.grid_engine.realized_profit)
 
-        real_price_after_sell = price_provider.get_last_price(
+        real_price_after_sell = context.price_provider.get_last_price(
             context.instrument_id,
         )
 
@@ -179,22 +175,7 @@ def main() -> None:
             price=real_price_after_sell,
         )
 
-        portfolio = context.portfolio_manager.portfolio
-
-        print("PORTFOLIO:")
-        print("Cash:", portfolio.cash)
-        print("Market value:", portfolio.market_value)
-        print("Equity:", portfolio.equity)
-        print("Realized profit:", portfolio.realized_profit)
-        print("Unrealized profit:", portfolio.unrealized_profit)
-
-        reservation_manager = (
-            context.trade_capital_service.reservation_manager
-        )
-
-        print("CAPITAL RESERVATION:")
-        print("Available cash:", reservation_manager.available_cash)
-        print("Reserved total:", reservation_manager.get_reserved_total())
+        reporter.print_all()
 
     finally:
         context.close()

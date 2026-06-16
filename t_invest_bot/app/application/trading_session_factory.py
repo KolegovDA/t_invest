@@ -39,6 +39,7 @@ class SandboxTradingSessionContext:
     session: SandboxTradingSession
     portfolio_manager: PortfolioManager
     trade_capital_service: TradeCapitalService
+    price_provider: TInvestLastPriceProvider
     sandbox_account_provider: TInvestSandboxAccountProvider
     sandbox_account_id: str
     instrument_id: str
@@ -190,6 +191,7 @@ class TradingSessionFactory:
             session=session,
             portfolio_manager=portfolio_manager,
             trade_capital_service=trade_capital_service,
+            price_provider=price_provider,
             sandbox_account_provider=sandbox_account_provider,
             sandbox_account_id=sandbox_account_id,
             instrument_id=instrument.id,

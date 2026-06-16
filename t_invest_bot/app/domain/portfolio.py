@@ -7,13 +7,12 @@ class InstrumentPortfolio:
     instrument_id: str
 
     position_quantity: int = 0
-
     average_price: Decimal = Decimal("0")
 
+    buy_commission_total: Decimal = Decimal("0")
     realized_profit: Decimal = Decimal("0")
 
     reserved_capital: Decimal = Decimal("0")
-
     last_price: Decimal = Decimal("0")
 
     @property
@@ -71,7 +70,4 @@ class Portfolio:
 
     @property
     def equity(self) -> Decimal:
-        return (
-            self.cash
-            + self.market_value
-        )
+        return self.cash + self.market_value
