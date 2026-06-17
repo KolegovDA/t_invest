@@ -5,6 +5,9 @@ from application.multi_instrument_session_config import (
     InstrumentConfig,
     MultiInstrumentSessionConfig,
 )
+from application.portfolio_capital_calculator import (
+    PortfolioCapitalCalculator,
+)
 
 
 @dataclass(slots=True)
@@ -44,24 +47,32 @@ class PortfolioStartPlan:
 
 @dataclass(slots=True)
 class PortfolioOrchestrator:
-    fallback_commission_percent: Decimal = Decimal("0.30")
+    capital_calculator: PortfolioCapitalCalculator = field(
+        default_factory=PortfolioCapitalCalculator,
+    )
 
     def build_start_plan(
         self,
         config: MultiInstrumentSessionConfig,
+        price_ranges_by_ticker: dict[
+            str,
+            tuple[Decimal, Decimal],
+        ],
         prices_by_ticker: dict[str, Decimal],
         available_cash: Decimal,
     ) -> PortfolioStartPlan:
         instruments: list[InstrumentCapitalPlan] = []
 
         for instrument_config in config.instruments:
-            last_price = prices_by_ticker[
+            min_price, max_price = price_ranges_by_ticker[
                 instrument_config.ticker
             ]
 
-            required_deposit = self._calculate_required_deposit(
-                instrument_config=instrument_config,
-                last_price=last_price,
+            required_deposit = self.capital_calculator.calculate(
+                min_price=min_price,
+                max_price=max_price,
+                levels_count=instrument_config.levels_count,
+                base_quantity=instrument_config.quantity,
             )
 
             instruments.append(
@@ -69,7 +80,9 @@ class PortfolioOrchestrator:
                     ticker=instrument_config.ticker,
                     levels_count=instrument_config.levels_count,
                     quantity=instrument_config.quantity,
-                    last_price=last_price,
+                    last_price=prices_by_ticker[
+                        instrument_config.ticker
+                    ],
                     required_deposit=required_deposit,
                 )
             )
@@ -78,22 +91,3 @@ class PortfolioOrchestrator:
             instruments=instruments,
             available_cash=available_cash,
         )
-
-    def _calculate_required_deposit(
-        self,
-        instrument_config: InstrumentConfig,
-        last_price: Decimal,
-    ) -> Decimal:
-        gross = (
-            last_price
-            * instrument_config.quantity
-            * instrument_config.levels_count
-        )
-
-        commission = (
-            gross
-            * self.fallback_commission_percent
-            / Decimal("100")
-        )
-
-        return gross + commission
