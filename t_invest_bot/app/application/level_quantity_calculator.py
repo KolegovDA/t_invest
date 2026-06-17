@@ -35,10 +35,7 @@ class LevelQuantityCalculator:
                 base_quantity=base_quantity,
             )
 
-            quantity_with_remainder = (
-                target_quantity
-                + accumulated_remainder
-            )
+            quantity_with_remainder = target_quantity + accumulated_remainder
 
             actual_quantity = int(
                 quantity_with_remainder.to_integral_value(
@@ -69,18 +66,15 @@ class LevelQuantityCalculator:
     ) -> Decimal:
         multiplier = (
             Decimal("1")
-            + self.increase_percent_per_level / Decimal("100")
-        ) ** Decimal(level_index - 1)
-
-        max_quantity = (
-            Decimal(base_quantity)
-            * self.max_multiplier
+            + (
+                self.increase_percent_per_level
+                / Decimal("100")
+                * Decimal(level_index - 1)
+            )
         )
 
-        target_quantity = (
-            Decimal(base_quantity)
-            * multiplier
-        )
+        target_quantity = Decimal(base_quantity) * multiplier
+        max_quantity = Decimal(base_quantity) * self.max_multiplier
 
         if target_quantity > max_quantity:
             return max_quantity

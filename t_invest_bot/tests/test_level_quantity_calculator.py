@@ -3,19 +3,20 @@ from decimal import Decimal
 from application.level_quantity_calculator import LevelQuantityCalculator
 
 
-def test_level_quantity_calculator_increases_quantity_by_5_percent() -> None:
+def test_level_quantity_calculator_increases_quantity_linearly_by_5_percent() -> None:
     calculator = LevelQuantityCalculator(
         increase_percent_per_level=Decimal("5"),
     )
 
     quantities = calculator.calculate(
-        levels_count=3,
+        levels_count=4,
         base_quantity=10,
     )
 
-    assert quantities[0].target_quantity == Decimal("10")
+    assert quantities[0].target_quantity == Decimal("10.00")
     assert quantities[1].target_quantity == Decimal("10.50")
-    assert quantities[2].target_quantity == Decimal("11.0250")
+    assert quantities[2].target_quantity == Decimal("11.00")
+    assert quantities[3].target_quantity == Decimal("11.50")
 
 
 def test_level_quantity_calculator_accumulates_remainder() -> None:
@@ -24,7 +25,7 @@ def test_level_quantity_calculator_accumulates_remainder() -> None:
     )
 
     quantities = calculator.calculate(
-        levels_count=10,
+        levels_count=12,
         base_quantity=1,
     )
 
@@ -42,8 +43,10 @@ def test_level_quantity_calculator_accumulates_remainder() -> None:
         1,
         2,
         1,
+        1,
         2,
         1,
+        2,
     ]
 
 
