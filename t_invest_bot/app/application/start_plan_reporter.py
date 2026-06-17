@@ -20,11 +20,18 @@ class StartPlanReporter:
         print(f"Available cash: {plan.available_cash}")
         print(f"Required cash: {plan.total_required_deposit}")
         print(f"Remaining cash: {plan.remaining_cash}")
+        print(f"Missing cash: {plan.missing_cash}")
         print(
             f"Capital utilization: "
             f"{plan.capital_utilization_percent:.2f}%"
         )
         print(f"Can start: {plan.can_start}")
+        print(f"Can start forced: {plan.can_start_forced}")
+
+        if plan.warning_message:
+            print()
+            print("WARNING:")
+            print(plan.warning_message)
 
         print()
         print("PORTFOLIO ALLOCATION")

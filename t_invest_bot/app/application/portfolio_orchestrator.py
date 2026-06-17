@@ -43,8 +43,15 @@ class PortfolioStartPlan:
         return self.available_cash - self.total_required_deposit
 
     @property
+    def missing_cash(self) -> Decimal:
+        if self.remaining_cash >= Decimal("0"):
+            return Decimal("0")
+
+        return abs(self.remaining_cash)
+
+    @property
     def capital_utilization_percent(self) -> Decimal:
-        if self.available_cash <= 0:
+        if self.available_cash <= Decimal("0"):
             return Decimal("0")
 
         return (
@@ -56,6 +63,22 @@ class PortfolioStartPlan:
     @property
     def can_start(self) -> bool:
         return self.available_cash >= self.total_required_deposit
+
+    @property
+    def can_start_forced(self) -> bool:
+        return True
+
+    @property
+    def warning_message(self) -> str:
+        if self.can_start:
+            return ""
+
+        return (
+            "Недостаточно капитала для полного покрытия сетки. "
+            f"Не хватает: {self.missing_cash}. "
+            "Пользователь может запустить стратегию принудительно, "
+            "но часть будущих заявок может не пройти резервирование."
+        )
 
 
 @dataclass(slots=True)
