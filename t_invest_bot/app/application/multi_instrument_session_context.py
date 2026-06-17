@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 
 from application.multi_instrument_sandbox_session import (
     MultiInstrumentSandboxSession,
@@ -21,6 +22,7 @@ class MultiInstrumentSessionContext:
 
     sandbox_account_provider: TInvestSandboxAccountProvider
     sandbox_account_id: str
+    sandbox_balance: Decimal
 
     instrument_ids_by_ticker: dict[str, str]
     tickers_by_instrument_id: dict[str, str]
