@@ -10,9 +10,6 @@ from application.multi_instrument_session_config import (
 from application.multi_instrument_session_context import (
     MultiInstrumentSessionContext,
 )
-from infrastructure.tinvest.last_price_provider import (
-    TInvestLastPriceProvider,
-)
 from application.portfolio_manager import PortfolioManager
 from application.sandbox_trading_session import SandboxTradingSession
 from application.trade_capital_service import TradeCapitalService
@@ -27,6 +24,7 @@ from infrastructure.tinvest.client_factory import TInvestClientFactory
 from infrastructure.tinvest.history_provider import TInvestHistoryProvider
 from infrastructure.tinvest.instrument_mapper import TInvestInstrumentMapper
 from infrastructure.tinvest.instrument_provider import TInvestInstrumentProvider
+from infrastructure.tinvest.last_price_provider import TInvestLastPriceProvider
 from infrastructure.tinvest.quotation_mapper import TInvestQuotationMapper
 from infrastructure.tinvest.sandbox_account_provider import (
     TInvestSandboxAccountProvider,
@@ -66,6 +64,10 @@ class MultiInstrumentTradingSessionFactory:
         instrument_provider = TInvestInstrumentProvider(
             client_factory=client_factory,
             mapper=TInvestInstrumentMapper(),
+        )
+
+        price_provider = TInvestLastPriceProvider(
+            client_factory=client_factory,
         )
 
         history_provider = TInvestHistoryProvider(
@@ -126,7 +128,7 @@ class MultiInstrumentTradingSessionFactory:
 
                 date_to = datetime.now(timezone.utc)
                 date_from = date_to - timedelta(
-                    days=365 * 3,
+                    days=365 * instrument_config.history_years,
                 )
 
                 candles = history_provider.get_daily_candles(
@@ -136,7 +138,7 @@ class MultiInstrumentTradingSessionFactory:
                 )
 
                 price_range = HistoryAnalyzer(
-                    exclude_first_days=7,
+                    exclude_first_days=instrument_config.exclude_first_days,
                 ).calculate_range(
                     candles=candles,
                 )
@@ -151,6 +153,7 @@ class MultiInstrumentTradingSessionFactory:
                 grid_engine = GridEngine(
                     instrument_id=instrument.id,
                     levels=levels,
+                    config=instrument_config.to_grid_engine_config(),
                 )
 
                 live_order_manager = LiveOrderManager(
@@ -181,9 +184,7 @@ class MultiInstrumentTradingSessionFactory:
                 ),
                 portfolio_manager=portfolio_manager,
                 trade_capital_service=trade_capital_service,
-                price_provider=TInvestLastPriceProvider(
-                    client_factory=client_factory,
-                ),
+                price_provider=price_provider,
                 sandbox_account_provider=sandbox_account_provider,
                 sandbox_account_id=sandbox_account_id,
                 instrument_ids_by_ticker=instrument_ids_by_ticker,
