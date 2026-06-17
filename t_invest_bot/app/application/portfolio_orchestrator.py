@@ -2,12 +2,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from application.multi_instrument_session_config import (
-    InstrumentConfig,
     MultiInstrumentSessionConfig,
 )
 from application.portfolio_capital_calculator import (
     PortfolioCapitalCalculator,
 )
+from application.portfolio_capital_plan import CapitalPlan
 
 
 @dataclass(slots=True)
@@ -17,6 +17,7 @@ class InstrumentCapitalPlan:
     quantity: int
     last_price: Decimal
     required_deposit: Decimal
+    capital_plan: CapitalPlan
 
 
 @dataclass(slots=True)
@@ -39,10 +40,7 @@ class PortfolioStartPlan:
 
     @property
     def can_start(self) -> bool:
-        return (
-            self.available_cash
-            >= self.total_required_deposit
-        )
+        return self.available_cash >= self.total_required_deposit
 
 
 @dataclass(slots=True)
@@ -54,10 +52,7 @@ class PortfolioOrchestrator:
     def build_start_plan(
         self,
         config: MultiInstrumentSessionConfig,
-        price_ranges_by_ticker: dict[
-            str,
-            tuple[Decimal, Decimal],
-        ],
+        price_ranges_by_ticker: dict[str, tuple[Decimal, Decimal]],
         prices_by_ticker: dict[str, Decimal],
         available_cash: Decimal,
     ) -> PortfolioStartPlan:
@@ -68,7 +63,7 @@ class PortfolioOrchestrator:
                 instrument_config.ticker
             ]
 
-            required_deposit = self.capital_calculator.calculate(
+            capital_plan = self.capital_calculator.calculate_plan(
                 min_price=min_price,
                 max_price=max_price,
                 levels_count=instrument_config.levels_count,
@@ -83,7 +78,8 @@ class PortfolioOrchestrator:
                     last_price=prices_by_ticker[
                         instrument_config.ticker
                     ],
-                    required_deposit=required_deposit,
+                    required_deposit=capital_plan.total_amount,
+                    capital_plan=capital_plan,
                 )
             )
 
