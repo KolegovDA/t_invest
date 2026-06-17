@@ -7,6 +7,12 @@ from application.multi_instrument_session_config import (
 from application.portfolio_orchestrator import (
     PortfolioOrchestrator,
 )
+from application.portfolio_orchestrator import (
+    InstrumentCapitalPlan,
+    PortfolioOrchestrator,
+    PortfolioStartPlan,
+)
+from application.portfolio_capital_plan import CapitalPlan
 
 
 def test_portfolio_orchestrator_builds_start_plan() -> None:
@@ -110,3 +116,31 @@ def test_portfolio_orchestrator_capital_plan_has_required_deposit() -> None:
     )
     assert instrument_plan.capital_plan.gross_amount > Decimal("0")
     assert instrument_plan.capital_plan.commission_amount > Decimal("0")
+
+def test_portfolio_start_plan_calculates_remaining_cash_and_utilization() -> None:
+    plan = PortfolioStartPlan(
+        available_cash=Decimal("100000"),
+        instruments=[
+            InstrumentCapitalPlan(
+                ticker="SBER",
+                levels_count=20,
+                quantity=1,
+                last_price=Decimal("300"),
+                required_deposit=Decimal("25000"),
+                capital_plan=CapitalPlan(),
+            ),
+            InstrumentCapitalPlan(
+                ticker="GAZP",
+                levels_count=20,
+                quantity=1,
+                last_price=Decimal("100"),
+                required_deposit=Decimal("15000"),
+                capital_plan=CapitalPlan(),
+            ),
+        ],
+    )
+
+    assert plan.total_required_deposit == Decimal("40000")
+    assert plan.remaining_cash == Decimal("60000")
+    assert plan.capital_utilization_percent == Decimal("40.0")
+    assert plan.can_start is True

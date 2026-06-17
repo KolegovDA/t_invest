@@ -84,9 +84,7 @@ def main() -> None:
         print("INSTRUMENTS:")
 
         for ticker, instrument_id in context.instrument_ids_by_ticker.items():
-            print(
-                f"{ticker}: {instrument_id}"
-            )
+            print(f"{ticker}: {instrument_id}")
 
         print()
 

@@ -39,6 +39,21 @@ class PortfolioStartPlan:
         )
 
     @property
+    def remaining_cash(self) -> Decimal:
+        return self.available_cash - self.total_required_deposit
+
+    @property
+    def capital_utilization_percent(self) -> Decimal:
+        if self.available_cash <= 0:
+            return Decimal("0")
+
+        return (
+            self.total_required_deposit
+            / self.available_cash
+            * Decimal("100")
+        )
+
+    @property
     def can_start(self) -> bool:
         return self.available_cash >= self.total_required_deposit
 

@@ -187,9 +187,9 @@ class MultiInstrumentTradingSessionFactory:
                 price_provider=price_provider,
                 sandbox_account_provider=sandbox_account_provider,
                 sandbox_account_id=sandbox_account_id,
+                sandbox_balance=sandbox_balance,
                 instrument_ids_by_ticker=instrument_ids_by_ticker,
                 tickers_by_instrument_id=tickers_by_instrument_id,
-                sandbox_balance=sandbox_balance,
             )
 
         except Exception:
