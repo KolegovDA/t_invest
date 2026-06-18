@@ -147,7 +147,9 @@ class MultiInstrumentTradingSessionFactory:
                     levels_count=instrument_config.levels_count,
                 ).build_from_range(
                     min_price=price_range.min_price,
-                    max_price=price_range.max_price,
+                    current_price=price_provider.get_last_price(
+                        instrument_uid=instrument.id,
+                    ),
                 )
 
                 grid_engine = GridEngine(

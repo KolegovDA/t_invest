@@ -8,7 +8,7 @@ from application.portfolio_capital_calculator import (
 def test_capital_calculator_returns_positive_amount() -> None:
     capital = PortfolioCapitalCalculator().calculate(
         min_price=Decimal("100"),
-        max_price=Decimal("200"),
+        current_price=Decimal("200"),
         levels_count=20,
         base_quantity=1,
     )

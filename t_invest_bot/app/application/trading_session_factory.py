@@ -132,7 +132,7 @@ class TradingSessionFactory:
             levels_count=config.levels_count,
         ).build_from_range(
             min_price=price_range.min_price,
-            max_price=price_range.max_price,
+            current_price=current_price,
         )
 
         sandbox_account_id = sandbox_account_provider.open_account()

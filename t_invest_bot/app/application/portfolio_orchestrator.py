@@ -97,13 +97,17 @@ class PortfolioOrchestrator:
         instruments: list[InstrumentCapitalPlan] = []
 
         for instrument_config in config.instruments:
-            min_price, max_price = price_ranges_by_ticker[
+            min_price, _max_price = price_ranges_by_ticker[
+                instrument_config.ticker
+            ]
+
+            current_price = prices_by_ticker[
                 instrument_config.ticker
             ]
 
             capital_plan = self.capital_calculator.calculate_plan(
                 min_price=min_price,
-                max_price=max_price,
+                current_price=current_price,
                 levels_count=instrument_config.levels_count,
                 base_quantity=instrument_config.quantity,
             )
@@ -113,9 +117,7 @@ class PortfolioOrchestrator:
                     ticker=instrument_config.ticker,
                     levels_count=instrument_config.levels_count,
                     quantity=instrument_config.quantity,
-                    last_price=prices_by_ticker[
-                        instrument_config.ticker
-                    ],
+                    last_price=current_price,
                     required_deposit=capital_plan.total_amount,
                     capital_plan=capital_plan,
                 )
