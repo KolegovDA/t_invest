@@ -38,6 +38,8 @@ def test_start_plan_reporter_prints_without_error() -> None:
                     commission_amount=Decimal("1"),
                     total_amount=Decimal("301"),
                 ),
+                historical_min_price=Decimal("0"),
+                historical_max_price=Decimal("0"),
             )
         ],
     )

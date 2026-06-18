@@ -10,13 +10,25 @@ class StartPlanReporter:
         print("START PLAN")
         print("=" * 100)
 
-        print(f"Available cash: {plan.available_cash}")
-        print(f"Required cash: {plan.total_required_deposit}")
-        print(f"Remaining cash: {plan.remaining_cash}")
-        print(f"Missing cash: {plan.missing_cash}")
-        print(f"Capital utilization: {plan.capital_utilization_percent:.2f}%")
-        print(f"Can start: {plan.can_start}")
-        print(f"Can start forced: {plan.can_start_forced}")
+        print("SUMMARY")
+        print("-" * 100)
+
+        for instrument in plan.instruments:
+            print(
+                f"{instrument.ticker:<10} "
+                f"Levels={instrument.levels_count:<3} "
+                f"BaseQty={instrument.quantity:<4} "
+                f"Required={instrument.required_deposit}"
+            )
+
+        print("-" * 100)
+        print(f"TOTAL REQUIRED: {plan.total_required_deposit}")
+        print(f"AVAILABLE CASH: {plan.available_cash}")
+        print(f"REMAINING CASH: {plan.remaining_cash}")
+        print(f"MISSING CASH: {plan.missing_cash}")
+        print(f"CAPITAL UTILIZATION: {plan.capital_utilization_percent:.2f}%")
+        print(f"CAN START: {plan.can_start}")
+        print(f"CAN START FORCED: {plan.can_start_forced}")
 
         if plan.warning_message:
             print()
@@ -46,6 +58,12 @@ class StartPlanReporter:
             print(f"Levels: {instrument.levels_count}")
             print(f"Base quantity: {instrument.quantity}")
             print(f"Current price: {instrument.last_price}")
+            print(f"Historical min price: {instrument.historical_min_price}")
+            print(f"Historical max price: {instrument.historical_max_price}")
+            print(f"Range to min: {instrument.price_range_percent:.2f}%")
+            print(f"Max level quantity: {instrument.max_level_quantity}")
+            print(f"Max position quantity: {instrument.max_position_quantity}")
+            print(f"Required deposit: {instrument.required_deposit}")
             print()
 
             for level in instrument.capital_plan.levels:

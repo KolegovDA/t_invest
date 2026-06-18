@@ -19,6 +19,37 @@ class InstrumentCapitalPlan:
     required_deposit: Decimal
     capital_plan: CapitalPlan
 
+    historical_min_price: Decimal
+    historical_max_price: Decimal
+
+    @property
+    def price_range_percent(self) -> Decimal:
+        if self.last_price <= Decimal("0"):
+            return Decimal("0")
+
+        return (
+            (self.historical_min_price - self.last_price)
+            / self.last_price
+            * Decimal("100")
+        )
+
+    @property
+    def max_level_quantity(self) -> int:
+        if not self.capital_plan.levels:
+            return 0
+
+        return max(
+            level.quantity
+            for level in self.capital_plan.levels
+        )
+
+    @property
+    def max_position_quantity(self) -> int:
+        return sum(
+            level.quantity
+            for level in self.capital_plan.levels
+        )
+
 
 @dataclass(slots=True)
 class PortfolioStartPlan:
@@ -97,7 +128,7 @@ class PortfolioOrchestrator:
         instruments: list[InstrumentCapitalPlan] = []
 
         for instrument_config in config.instruments:
-            min_price, _max_price = price_ranges_by_ticker[
+            min_price, max_price = price_ranges_by_ticker[
                 instrument_config.ticker
             ]
 
@@ -120,6 +151,8 @@ class PortfolioOrchestrator:
                     last_price=current_price,
                     required_deposit=capital_plan.total_amount,
                     capital_plan=capital_plan,
+                    historical_min_price=min_price,
+                    historical_max_price=max_price,
                 )
             )
 

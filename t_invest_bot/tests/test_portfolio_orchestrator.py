@@ -126,6 +126,8 @@ def test_portfolio_start_plan_calculates_remaining_cash_and_utilization() -> Non
                 last_price=Decimal("300"),
                 required_deposit=Decimal("25000"),
                 capital_plan=CapitalPlan(),
+                historical_min_price=Decimal("200"),
+                historical_max_price=Decimal("350"),
             ),
             InstrumentCapitalPlan(
                 ticker="GAZP",
@@ -134,6 +136,8 @@ def test_portfolio_start_plan_calculates_remaining_cash_and_utilization() -> Non
                 last_price=Decimal("100"),
                 required_deposit=Decimal("15000"),
                 capital_plan=CapitalPlan(),
+                historical_min_price=Decimal("80"),
+                historical_max_price=Decimal("180"),
             ),
         ],
     )
@@ -158,6 +162,8 @@ def test_portfolio_start_plan_warns_when_cash_is_not_enough() -> None:
                 last_price=Decimal("4500"),
                 required_deposit=Decimal("120000"),
                 capital_plan=CapitalPlan(),
+                historical_min_price=Decimal("3000"),
+                historical_max_price=Decimal("6000"),
             ),
         ],
     )
@@ -167,3 +173,37 @@ def test_portfolio_start_plan_warns_when_cash_is_not_enough() -> None:
     assert plan.remaining_cash == Decimal("-20000")
     assert plan.missing_cash == Decimal("20000")
     assert "Недостаточно капитала" in plan.warning_message
+
+
+def test_instrument_capital_plan_exposes_diagnostics() -> None:
+    config = MultiInstrumentSessionConfig(
+        instruments=[
+            InstrumentConfig(
+                ticker="SBER",
+                levels_count=20,
+                quantity=1,
+            ),
+        ]
+    )
+
+    plan = PortfolioOrchestrator().build_start_plan(
+        config=config,
+        price_ranges_by_ticker={
+            "SBER": (
+                Decimal("200"),
+                Decimal("350"),
+            ),
+        },
+        prices_by_ticker={
+            "SBER": Decimal("300"),
+        },
+        available_cash=Decimal("100000"),
+    )
+
+    instrument = plan.instruments[0]
+
+    assert instrument.historical_min_price == Decimal("200")
+    assert instrument.historical_max_price == Decimal("350")
+    assert instrument.price_range_percent == Decimal("-33.33333333333333333333333333")
+    assert instrument.max_level_quantity >= 1
+    assert instrument.max_position_quantity >= instrument.max_level_quantity

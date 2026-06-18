@@ -21,6 +21,8 @@ def test_allocation_analyzer_returns_percentages() -> None:
                 last_price=Decimal("300"),
                 required_deposit=Decimal("10000"),
                 capital_plan=CapitalPlan(),
+                historical_min_price=Decimal("0"),
+                   historical_max_price=Decimal("0"),
             ),
             InstrumentCapitalPlan(
                 ticker="GAZP",
@@ -29,6 +31,8 @@ def test_allocation_analyzer_returns_percentages() -> None:
                 last_price=Decimal("100"),
                 required_deposit=Decimal("5000"),
                 capital_plan=CapitalPlan(),
+                historical_min_price=Decimal("0"),
+                historical_max_price=Decimal("0"),
             ),
         ],
     )
