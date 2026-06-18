@@ -72,6 +72,51 @@ class SQLiteSessionRepository:
                 ],
             )
 
+    def load_session(
+        self,
+        session_id: str,
+    ):
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    account_id,
+                    ticker,
+                    instrument_id,
+                    status,
+                    created_at
+                FROM sessions
+                WHERE id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+
+        if row is None:
+            raise ValueError(
+                f"Session not found: {session_id}"
+            )
+
+        return row
+
+    def load_all_sessions(self):
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    account_id,
+                    ticker,
+                    instrument_id,
+                    status,
+                    created_at
+                FROM sessions
+                ORDER BY created_at
+                """
+            ).fetchall()
+
+        return rows
+
     def load_levels(
         self,
         session_id: str,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 
 from application.recovered_session_state import (
     RecoveredSessionState,
@@ -27,7 +28,7 @@ class RecoveryManager:
     def recover(
         self,
         session_id: str,
-        available_cash,
+        available_cash: Decimal,
     ) -> RecoveredSessionState:
         session = self.session_repository.load_session(
             session_id=session_id,
@@ -40,10 +41,10 @@ class RecoveryManager:
             instrument_id=session["instrument_id"],
             status=session["status"],
             levels=self.session_repository.load_levels(
-                session_id,
+                session_id=session_id,
             ),
             positions=self.position_repository.load_positions(
-                session_id,
+                session_id=session_id,
             ),
             portfolio=self.portfolio_repository.load_portfolio(
                 cash=available_cash,
@@ -52,3 +53,17 @@ class RecoveryManager:
                 available_cash=available_cash,
             ),
         )
+
+    def recover_all(
+        self,
+        available_cash: Decimal,
+    ) -> list[RecoveredSessionState]:
+        sessions = self.session_repository.load_all_sessions()
+
+        return [
+            self.recover(
+                session_id=session["id"],
+                available_cash=available_cash,
+            )
+            for session in sessions
+        ]

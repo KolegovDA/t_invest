@@ -19,9 +19,7 @@ class RecoveredSessionState:
     status: str
 
     levels: list[GridLevel]
-
     positions: dict[int, OpenLevelPosition]
 
     portfolio: Portfolio
-
     reservation_manager: CapitalReservationManager
