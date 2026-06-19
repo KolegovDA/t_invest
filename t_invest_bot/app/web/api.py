@@ -1,5 +1,14 @@
+from decimal import Decimal
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from application.multi_instrument_session_config import (
+    InstrumentConfig,
+    MultiInstrumentSessionConfig,
+)
+from application.portfolio_orchestrator import PortfolioOrchestrator
 
 APP_VERSION = "1.0.0-mvp"
 
@@ -17,33 +26,144 @@ app.add_middleware(
 )
 
 
+class StartPlanInstrumentRequest(BaseModel):
+    ticker: str
+    levels: int
+    quantity: int
+
+
+class StartPlanRequest(BaseModel):
+    available_cash: Decimal
+    instruments: list[StartPlanInstrumentRequest]
+
+
 @app.get("/api/health")
-def health() -> dict[str, str]:
+def health():
     return {
         "status": "ok",
     }
 
 
 @app.get("/api/version")
-def version() -> dict[str, str]:
+def version():
     return {
         "version": APP_VERSION,
-        "stage": "mvp",
     }
 
 
-@app.get("/api/accounts")
-def accounts() -> dict[str, list[dict[str, str]]]:
+@app.get("/api/dashboard")
+def dashboard():
     return {
-        "accounts": [],
+        "accounts": 1,
+        "capital": 100000,
+        "active_positions": 0,
+        "profit": 0,
+        "instruments": [
+            "SBER",
+            "GAZP",
+            "LKOH",
+        ],
     }
 
 
-@app.get("/")
-def root() -> dict[str, str]:
+@app.get("/api/instruments")
+def instruments():
     return {
-        "service": "T-Invest Bot API",
-        "health": "/api/health",
-        "version": "/api/version",
-        "accounts": "/api/accounts",
+        "instruments": [
+            {
+                "ticker": "SBER",
+                "levels": 20,
+                "price": 317,
+                "required_capital": 7774,
+            },
+            {
+                "ticker": "GAZP",
+                "levels": 20,
+                "price": 107,
+                "required_capital": 3080,
+            },
+            {
+                "ticker": "LKOH",
+                "levels": 20,
+                "price": 4453,
+                "required_capital": 128540,
+            },
+        ],
     }
+
+
+@app.post("/api/start-plan")
+def start_plan(
+    request: StartPlanRequest,
+):
+    config = MultiInstrumentSessionConfig(
+        instruments=[
+            InstrumentConfig(
+                ticker=instrument.ticker.upper(),
+                levels_count=instrument.levels,
+                quantity=instrument.quantity,
+            )
+            for instrument in request.instruments
+        ]
+    )
+
+    prices_by_ticker: dict[str, Decimal] = {}
+    price_ranges_by_ticker: dict[str, tuple[Decimal, Decimal]] = {}
+
+    for instrument in request.instruments:
+        ticker = instrument.ticker.upper()
+
+        current_price = _get_mock_price(
+            ticker=ticker,
+        )
+
+        prices_by_ticker[ticker] = current_price
+        price_ranges_by_ticker[ticker] = (
+            current_price * Decimal("0.70"),
+            current_price * Decimal("1.10"),
+        )
+
+    plan = PortfolioOrchestrator().build_start_plan(
+        config=config,
+        price_ranges_by_ticker=price_ranges_by_ticker,
+        prices_by_ticker=prices_by_ticker,
+        available_cash=request.available_cash,
+    )
+
+    return {
+        "available_cash": str(plan.available_cash),
+        "total_required": str(plan.total_required_deposit),
+        "remaining_cash": str(plan.remaining_cash),
+        "missing_cash": str(plan.missing_cash),
+        "can_start": plan.can_start,
+        "can_start_forced": plan.can_start_forced,
+        "capital_utilization_percent": str(
+            plan.capital_utilization_percent,
+        ),
+        "instruments": [
+            {
+                "ticker": instrument.ticker,
+                "levels": instrument.levels_count,
+                "quantity": instrument.quantity,
+                "last_price": str(instrument.last_price),
+                "required_deposit": str(instrument.required_deposit),
+            }
+            for instrument in plan.instruments
+        ],
+    }
+
+
+def _get_mock_price(
+    ticker: str,
+) -> Decimal:
+    prices = {
+        "SBER": Decimal("317"),
+        "GAZP": Decimal("107"),
+        "LKOH": Decimal("4453"),
+        "VTBR": Decimal("0.09"),
+    }
+
+    return prices.get(
+        ticker,
+        Decimal("100"),
+    )

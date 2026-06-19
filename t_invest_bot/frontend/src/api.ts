@@ -1,14 +1,40 @@
-export async function getHealth() {
+const API_BASE_URL = "http://localhost:8000"
+
+export async function getDashboard() {
     const response = await fetch(
-        "http://localhost:8000/api/health"
+        `${API_BASE_URL}/api/dashboard`
     )
 
     return response.json()
 }
 
-export async function getVersion() {
+export async function getInstruments() {
     const response = await fetch(
-        "http://localhost:8000/api/version"
+        `${API_BASE_URL}/api/instruments`
+    )
+
+    return response.json()
+}
+
+export async function calculateStartPlan(
+    instruments: {
+        ticker: string
+        levels: number
+        quantity: number
+    }[]
+) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/start-plan`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                available_cash: 100000,
+                instruments,
+            }),
+        }
     )
 
     return response.json()

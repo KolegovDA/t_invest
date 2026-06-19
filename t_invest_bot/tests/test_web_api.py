@@ -20,15 +20,26 @@ def test_version_endpoint_returns_version() -> None:
     response = client.get("/api/version")
 
     assert response.status_code == 200
-    assert response.json()["stage"] == "mvp"
+    assert response.json()["version"] == "1.0.0-mvp"
 
 
-def test_accounts_endpoint_returns_empty_accounts() -> None:
+def test_dashboard_endpoint_returns_dashboard() -> None:
     client = TestClient(app)
 
-    response = client.get("/api/accounts")
+    response = client.get("/api/dashboard")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "accounts": [],
-    }
+    assert response.json()["accounts"] == 1
+
+
+def test_instruments_endpoint_returns_instruments() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/instruments")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["instruments"]) == 3
+    assert data["instruments"][0]["ticker"] == "SBER"
