@@ -3,12 +3,20 @@ import {
     calculateStartPlan,
     getDashboard,
     getInstruments,
+    getSessions,
+    startSandbox,
 } from "./api"
 import { AddInstrumentForm } from "./components/AddInstrumentForm"
 import { DashboardCard } from "./components/DashboardCard"
 import { InstrumentCard } from "./components/InstrumentCard"
+import { SessionsCard } from "./components/SessionsCard"
 import { StartPlanCard } from "./components/StartPlanCard"
-import type { Dashboard, Instrument, StartPlan } from "./types"
+import type {
+    ActiveSession,
+    Dashboard,
+    Instrument,
+    StartPlan,
+} from "./types"
 
 export default function App() {
     const [dashboard, setDashboard] =
@@ -19,6 +27,9 @@ export default function App() {
 
     const [startPlan, setStartPlan] =
         useState<StartPlan | null>(null)
+
+    const [sessions, setSessions] =
+        useState<ActiveSession[]>([])
 
     const [isAdding, setIsAdding] = useState(false)
     const [newTicker, setNewTicker] = useState("")
@@ -31,7 +42,8 @@ export default function App() {
     const [editQuantity, setEditQuantity] = useState("1")
 
     useEffect(() => {
-        getDashboard().then(setDashboard)
+        refreshDashboard()
+        refreshSessions()
 
         getInstruments().then(data => {
             setInstruments(
@@ -42,6 +54,16 @@ export default function App() {
             )
         })
     }, [])
+
+    function refreshDashboard() {
+        getDashboard().then(setDashboard)
+    }
+
+    function refreshSessions() {
+        getSessions().then(data => {
+            setSessions(data.sessions)
+        })
+    }
 
     function addInstrument() {
         const ticker = newTicker.trim().toUpperCase()
@@ -117,6 +139,24 @@ export default function App() {
         ).then(setStartPlan)
     }
 
+    function startStrategy() {
+        if (!startPlan) {
+            return
+        }
+
+        startSandbox(
+            !startPlan.can_start,
+            startPlan.instruments.map(instrument => ({
+                ticker: instrument.ticker,
+                levels: instrument.levels,
+                quantity: instrument.quantity,
+            }))
+        ).then(() => {
+            refreshDashboard()
+            refreshSessions()
+        })
+    }
+
     if (!dashboard) {
         return <div style={{ padding: 20 }}>Загрузка...</div>
     }
@@ -135,11 +175,14 @@ export default function App() {
 
                 <DashboardCard dashboard={dashboard} />
 
+                <SessionsCard sessions={sessions} />
+
                 <div
                     style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        marginTop: 16,
                         marginBottom: 12,
                     }}
                 >
@@ -205,7 +248,10 @@ export default function App() {
                 </button>
 
                 {startPlan && (
-                    <StartPlanCard startPlan={startPlan} />
+                    <StartPlanCard
+                        startPlan={startPlan}
+                        onStart={startStrategy}
+                    />
                 )}
             </div>
         </div>

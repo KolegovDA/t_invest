@@ -2,9 +2,10 @@ import type { StartPlan } from "../types"
 
 type Props = {
     startPlan: StartPlan
+    onStart: () => void
 }
 
-export function StartPlanCard({ startPlan }: Props) {
+export function StartPlanCard({ startPlan, onStart }: Props) {
     return (
         <div
             style={{
@@ -19,30 +20,22 @@ export function StartPlanCard({ startPlan }: Props) {
 
             <p>
                 Требуется всего:{" "}
-                <b>
-                    {Number(startPlan.total_required).toLocaleString()} ₽
-                </b>
+                <b>{Number(startPlan.total_required).toLocaleString()} ₽</b>
             </p>
 
             <p>
                 Доступно:{" "}
-                <b>
-                    {Number(startPlan.available_cash).toLocaleString()} ₽
-                </b>
+                <b>{Number(startPlan.available_cash).toLocaleString()} ₽</b>
             </p>
 
             <p>
                 Остаток:{" "}
-                <b>
-                    {Number(startPlan.remaining_cash).toLocaleString()} ₽
-                </b>
+                <b>{Number(startPlan.remaining_cash).toLocaleString()} ₽</b>
             </p>
 
             <p>
                 Не хватает:{" "}
-                <b>
-                    {Number(startPlan.missing_cash).toLocaleString()} ₽
-                </b>
+                <b>{Number(startPlan.missing_cash).toLocaleString()} ₽</b>
             </p>
 
             <p>
@@ -97,6 +90,7 @@ export function StartPlanCard({ startPlan }: Props) {
             ))}
 
             <button
+                onClick={onStart}
                 style={{
                     width: "100%",
                     padding: 16,

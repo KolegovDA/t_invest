@@ -30,3 +30,12 @@ export type StartPlan = {
         required_deposit: string
     }[]
 }
+
+export type ActiveSession = {
+    ticker: string
+    levels: number
+    quantity: number
+    status: string
+    positions: number
+    profit: number
+}

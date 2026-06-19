@@ -43,3 +43,60 @@ def test_instruments_endpoint_returns_instruments() -> None:
 
     assert len(data["instruments"]) == 3
     assert data["instruments"][0]["ticker"] == "SBER"
+
+
+def test_start_sandbox_endpoint_starts_sessions() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/start-sandbox",
+        json={
+            "force": True,
+            "instruments": [
+                {
+                    "ticker": "SBER",
+                    "levels": 20,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["status"] == "started"
+    assert data["mode"] == "sandbox"
+    assert data["sessions"][0]["ticker"] == "SBER"
+
+
+def test_sessions_endpoint_returns_sessions() -> None:
+    client = TestClient(app)
+
+    client.post(
+        "/api/start-sandbox",
+        json={
+            "force": False,
+            "instruments": [
+                {
+                    "ticker": "GAZP",
+                    "levels": 10,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    response = client.get("/api/sessions")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    tickers = {
+        session["ticker"]
+        for session in data["sessions"]
+    }
+
+    assert "GAZP" in tickers

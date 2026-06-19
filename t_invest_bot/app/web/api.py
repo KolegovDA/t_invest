@@ -9,6 +9,7 @@ from application.multi_instrument_session_config import (
     MultiInstrumentSessionConfig,
 )
 from application.portfolio_orchestrator import PortfolioOrchestrator
+from web.session_registry import session_registry
 
 APP_VERSION = "1.0.0-mvp"
 
@@ -37,32 +38,31 @@ class StartPlanRequest(BaseModel):
     instruments: list[StartPlanInstrumentRequest]
 
 
+class StartSandboxRequest(BaseModel):
+    force: bool = False
+    instruments: list[StartPlanInstrumentRequest]
+
+
 @app.get("/api/health")
 def health():
-    return {
-        "status": "ok",
-    }
+    return {"status": "ok"}
 
 
 @app.get("/api/version")
 def version():
-    return {
-        "version": APP_VERSION,
-    }
+    return {"version": APP_VERSION}
 
 
 @app.get("/api/dashboard")
 def dashboard():
+    sessions = session_registry.get_sessions()
+
     return {
         "accounts": 1,
         "capital": 100000,
-        "active_positions": 0,
-        "profit": 0,
-        "instruments": [
-            "SBER",
-            "GAZP",
-            "LKOH",
-        ],
+        "active_positions": sum(session.positions for session in sessions),
+        "profit": sum(session.profit for session in sessions),
+        "instruments": [session.ticker for session in sessions],
     }
 
 
@@ -92,10 +92,25 @@ def instruments():
     }
 
 
+@app.get("/api/sessions")
+def sessions():
+    return {
+        "sessions": [
+            {
+                "ticker": session.ticker,
+                "levels": session.levels,
+                "quantity": session.quantity,
+                "status": session.status,
+                "positions": session.positions,
+                "profit": session.profit,
+            }
+            for session in session_registry.get_sessions()
+        ],
+    }
+
+
 @app.post("/api/start-plan")
-def start_plan(
-    request: StartPlanRequest,
-):
+def start_plan(request: StartPlanRequest):
     config = MultiInstrumentSessionConfig(
         instruments=[
             InstrumentConfig(
@@ -112,10 +127,7 @@ def start_plan(
 
     for instrument in request.instruments:
         ticker = instrument.ticker.upper()
-
-        current_price = _get_mock_price(
-            ticker=ticker,
-        )
+        current_price = _get_mock_price(ticker=ticker)
 
         prices_by_ticker[ticker] = current_price
         price_ranges_by_ticker[ticker] = (
@@ -153,9 +165,36 @@ def start_plan(
     }
 
 
-def _get_mock_price(
-    ticker: str,
-) -> Decimal:
+@app.post("/api/start-sandbox")
+def start_sandbox(request: StartSandboxRequest):
+    started_sessions = [
+        session_registry.start_session(
+            ticker=instrument.ticker,
+            levels=instrument.levels,
+            quantity=instrument.quantity,
+        )
+        for instrument in request.instruments
+    ]
+
+    return {
+        "status": "started",
+        "mode": "sandbox",
+        "force": request.force,
+        "sessions": [
+            {
+                "ticker": session.ticker,
+                "levels": session.levels,
+                "quantity": session.quantity,
+                "status": session.status,
+                "positions": session.positions,
+                "profit": session.profit,
+            }
+            for session in started_sessions
+        ],
+    }
+
+
+def _get_mock_price(ticker: str) -> Decimal:
     prices = {
         "SBER": Decimal("317"),
         "GAZP": Decimal("107"),
@@ -163,7 +202,4 @@ def _get_mock_price(
         "VTBR": Decimal("0.09"),
     }
 
-    return prices.get(
-        ticker,
-        Decimal("100"),
-    )
+    return prices.get(ticker, Decimal("100"))
