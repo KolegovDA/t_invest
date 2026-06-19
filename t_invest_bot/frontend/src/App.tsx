@@ -4,39 +4,11 @@ import {
     getDashboard,
     getInstruments,
 } from "./api"
-
-type Dashboard = {
-    accounts: number
-    capital: number
-    active_positions: number
-    profit: number
-    instruments: string[]
-}
-
-type Instrument = {
-    ticker: string
-    levels: number
-    price: number
-    required_capital: number
-    quantity?: number
-}
-
-type StartPlan = {
-    available_cash: string
-    total_required: string
-    remaining_cash: string
-    missing_cash: string
-    can_start: boolean
-    can_start_forced: boolean
-    capital_utilization_percent: string
-    instruments: {
-        ticker: string
-        levels: number
-        quantity: number
-        last_price: string
-        required_deposit: string
-    }[]
-}
+import { AddInstrumentForm } from "./components/AddInstrumentForm"
+import { DashboardCard } from "./components/DashboardCard"
+import { InstrumentCard } from "./components/InstrumentCard"
+import { StartPlanCard } from "./components/StartPlanCard"
+import type { Dashboard, Instrument, StartPlan } from "./types"
 
 export default function App() {
     const [dashboard, setDashboard] =
@@ -51,7 +23,12 @@ export default function App() {
     const [isAdding, setIsAdding] = useState(false)
     const [newTicker, setNewTicker] = useState("")
     const [newLevels, setNewLevels] = useState(20)
-    const [newBaseQuantity, setNewBaseQuantity] = useState(1)
+    const [newBaseQuantity, setNewBaseQuantity] = useState("1")
+
+    const [editingTicker, setEditingTicker] =
+        useState<string | null>(null)
+    const [editLevels, setEditLevels] = useState(20)
+    const [editQuantity, setEditQuantity] = useState("1")
 
     useEffect(() => {
         getDashboard().then(setDashboard)
@@ -78,7 +55,7 @@ export default function App() {
             {
                 ticker,
                 levels: newLevels,
-                quantity: newBaseQuantity,
+                quantity: Math.max(1, Number(newBaseQuantity || "1")),
                 price: 0,
                 required_capital: 0,
             },
@@ -86,7 +63,7 @@ export default function App() {
 
         setNewTicker("")
         setNewLevels(20)
-        setNewBaseQuantity(1)
+        setNewBaseQuantity("1")
         setIsAdding(false)
         setStartPlan(null)
     }
@@ -97,6 +74,36 @@ export default function App() {
                 instrument => instrument.ticker !== ticker
             )
         )
+        setStartPlan(null)
+    }
+
+    function startEdit(instrument: Instrument) {
+        setEditingTicker(instrument.ticker)
+        setEditLevels(instrument.levels)
+        setEditQuantity(String(instrument.quantity ?? 1))
+    }
+
+    function saveEdit() {
+        if (!editingTicker) {
+            return
+        }
+
+        setInstruments(
+            instruments.map(instrument =>
+                instrument.ticker === editingTicker
+                    ? {
+                        ...instrument,
+                        levels: editLevels,
+                        quantity: Math.max(
+                            1,
+                            Number(editQuantity || "1")
+                        ),
+                    }
+                    : instrument
+            )
+        )
+
+        setEditingTicker(null)
         setStartPlan(null)
     }
 
@@ -126,24 +133,7 @@ export default function App() {
             <div style={{ maxWidth: 520, margin: "0 auto" }}>
                 <h1>T-Invest Bot</h1>
 
-                <div
-                    style={{
-                        background: "white",
-                        borderRadius: 16,
-                        padding: 16,
-                        marginBottom: 16,
-                        boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
-                    }}
-                >
-                    <p>Счетов: {dashboard.accounts}</p>
-                    <p>
-                        Капитал: {dashboard.capital.toLocaleString()} ₽
-                    </p>
-                    <p>
-                        Активных позиций: {dashboard.active_positions}
-                    </p>
-                    <p>Прибыль: {dashboard.profit} ₽</p>
-                </div>
+                <DashboardCard dashboard={dashboard} />
 
                 <div
                     style={{
@@ -170,181 +160,32 @@ export default function App() {
                 </div>
 
                 {isAdding && (
-                    <div
-                        style={{
-                            background: "white",
-                            borderRadius: 16,
-                            padding: 16,
-                            marginBottom: 12,
-                            boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
-                        }}
-                    >
-                        <h3 style={{ marginTop: 0 }}>Новый инструмент</h3>
-
-                        <label>Тикер</label>
-
-                        <input
-                            value={newTicker}
-                            onChange={event =>
-                                setNewTicker(event.target.value)
-                            }
-                            placeholder="SBER"
-                            style={{
-                                width: "100%",
-                                padding: 12,
-                                marginTop: 6,
-                                marginBottom: 12,
-                                borderRadius: 10,
-                                border: "1px solid #ddd",
-                                boxSizing: "border-box",
-                                fontSize: 16,
-                            }}
-                        />
-
-                        <label>Количество уровней</label>
-
-                        <div
-                            style={{
-                                display: "flex",
-                                gap: 8,
-                                marginTop: 8,
-                                marginBottom: 12,
-                            }}
-                        >
-                            {[10, 20, 30].map(level => (
-                                <button
-                                    key={level}
-                                    onClick={() => setNewLevels(level)}
-                                    style={{
-                                        flex: 1,
-                                        padding: 12,
-                                        borderRadius: 10,
-                                        border:
-                                            newLevels === level
-                                                ? "2px solid #111827"
-                                                : "1px solid #ddd",
-                                        background:
-                                            newLevels === level
-                                                ? "#eef2ff"
-                                                : "white",
-                                    }}
-                                >
-                                    {level}
-                                </button>
-                            ))}
-                        </div>
-
-                        <label>Базовый лот</label>
-
-                        <input
-                            type="number"
-                            min={1}
-                            value={newBaseQuantity}
-                            onChange={event =>
-                                setNewBaseQuantity(
-                                    Number(event.target.value)
-                                )
-                            }
-                            style={{
-                                width: "100%",
-                                padding: 12,
-                                marginTop: 6,
-                                marginBottom: 12,
-                                borderRadius: 10,
-                                border: "1px solid #ddd",
-                                boxSizing: "border-box",
-                                fontSize: 16,
-                            }}
-                        />
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                                onClick={addInstrument}
-                                style={{
-                                    flex: 1,
-                                    padding: 12,
-                                    borderRadius: 10,
-                                    border: "none",
-                                    background: "#16a34a",
-                                    color: "white",
-                                }}
-                            >
-                                Сохранить
-                            </button>
-
-                            <button
-                                onClick={() => setIsAdding(false)}
-                                style={{
-                                    flex: 1,
-                                    padding: 12,
-                                    borderRadius: 10,
-                                    border: "1px solid #ddd",
-                                    background: "white",
-                                }}
-                            >
-                                Отмена
-                            </button>
-                        </div>
-                    </div>
+                    <AddInstrumentForm
+                        newTicker={newTicker}
+                        newLevels={newLevels}
+                        newBaseQuantity={newBaseQuantity}
+                        onTickerChange={setNewTicker}
+                        onLevelsChange={setNewLevels}
+                        onBaseQuantityChange={setNewBaseQuantity}
+                        onSave={addInstrument}
+                        onCancel={() => setIsAdding(false)}
+                    />
                 )}
 
                 {instruments.map(instrument => (
-                    <div
+                    <InstrumentCard
                         key={instrument.ticker}
-                        style={{
-                            background: "white",
-                            borderRadius: 16,
-                            padding: 16,
-                            marginBottom: 12,
-                            boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
-                        }}
-                    >
-                        <h3 style={{ marginTop: 0 }}>
-                            {instrument.ticker}
-                        </h3>
-
-                        <p>Уровней: {instrument.levels}</p>
-                        <p>Базовый лот: {instrument.quantity ?? 1}</p>
-
-                        <p>
-                            Текущая цена:{" "}
-                            {instrument.price.toLocaleString()} ₽
-                        </p>
-
-                        <p>
-                            Требуется капитал:{" "}
-                            {instrument.required_capital.toLocaleString()} ₽
-                        </p>
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                                style={{
-                                    flex: 1,
-                                    padding: 12,
-                                    borderRadius: 10,
-                                    border: "1px solid #ddd",
-                                    background: "white",
-                                }}
-                            >
-                                Настроить
-                            </button>
-
-                            <button
-                                onClick={() =>
-                                    removeInstrument(instrument.ticker)
-                                }
-                                style={{
-                                    flex: 1,
-                                    padding: 12,
-                                    borderRadius: 10,
-                                    border: "1px solid #ddd",
-                                    background: "white",
-                                }}
-                            >
-                                Удалить
-                            </button>
-                        </div>
-                    </div>
+                        instrument={instrument}
+                        isEditing={editingTicker === instrument.ticker}
+                        editLevels={editLevels}
+                        editQuantity={editQuantity}
+                        onStartEdit={startEdit}
+                        onRemove={removeInstrument}
+                        onEditLevelsChange={setEditLevels}
+                        onEditQuantityChange={setEditQuantity}
+                        onSaveEdit={saveEdit}
+                        onCancelEdit={() => setEditingTicker(null)}
+                    />
                 ))}
 
                 <button
@@ -364,105 +205,7 @@ export default function App() {
                 </button>
 
                 {startPlan && (
-                    <div
-                        style={{
-                            background: "white",
-                            borderRadius: 16,
-                            padding: 16,
-                            marginTop: 16,
-                            boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
-                        }}
-                    >
-                        <h2>Стартовый расчет</h2>
-
-                        <p>
-                            Требуется всего:{" "}
-                            <b>{Number(startPlan.total_required).toLocaleString()} ₽</b>
-                        </p>
-
-                        <p>
-                            Доступно:{" "}
-                            <b>{Number(startPlan.available_cash).toLocaleString()} ₽</b>
-                        </p>
-
-                        <p>
-                            Остаток:{" "}
-                            <b>{Number(startPlan.remaining_cash).toLocaleString()} ₽</b>
-                        </p>
-
-                        <p>
-                            Не хватает:{" "}
-                            <b>{Number(startPlan.missing_cash).toLocaleString()} ₽</b>
-                        </p>
-
-                        <p>
-                            Использование капитала:{" "}
-                            <b>
-                                {Number(
-                                    startPlan.capital_utilization_percent
-                                ).toFixed(2)}
-                                %
-                            </b>
-                        </p>
-
-                        <p>
-                            Можно запустить:{" "}
-                            <b>{startPlan.can_start ? "да" : "нет"}</b>
-                        </p>
-
-                        <p>
-                            Принудительный запуск:{" "}
-                            <b>
-                                {startPlan.can_start_forced ? "разрешен" : "запрещен"}
-                            </b>
-                        </p>
-
-                        <h3>По инструментам</h3>
-
-                        {startPlan.instruments.map(instrument => (
-                            <div
-                                key={instrument.ticker}
-                                style={{
-                                    borderTop: "1px solid #eee",
-                                    paddingTop: 10,
-                                    marginTop: 10,
-                                }}
-                            >
-                                <b>{instrument.ticker}</b>
-                                <p>Уровней: {instrument.levels}</p>
-                                <p>Базовый лот: {instrument.quantity}</p>
-                                <p>
-                                    Цена:{" "}
-                                    {Number(instrument.last_price).toLocaleString()} ₽
-                                </p>
-                                <p>
-                                    Нужно:{" "}
-                                    {Number(
-                                        instrument.required_deposit
-                                    ).toLocaleString()} ₽
-                                </p>
-                            </div>
-                        ))}
-
-                        <button
-                            style={{
-                                width: "100%",
-                                padding: 16,
-                                marginTop: 12,
-                                fontSize: 18,
-                                borderRadius: 14,
-                                border: "none",
-                                background: startPlan.can_start
-                                    ? "#16a34a"
-                                    : "#f97316",
-                                color: "white",
-                            }}
-                        >
-                            {startPlan.can_start
-                                ? "Запустить стратегию"
-                                : "Запустить принудительно"}
-                        </button>
-                    </div>
+                    <StartPlanCard startPlan={startPlan} />
                 )}
             </div>
         </div>
