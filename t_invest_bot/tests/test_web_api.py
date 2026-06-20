@@ -100,3 +100,58 @@ def test_sessions_endpoint_returns_sessions() -> None:
     }
 
     assert "GAZP" in tickers
+
+
+def test_session_detail_endpoint_returns_session() -> None:
+    client = TestClient(app)
+
+    client.post(
+        "/api/start-sandbox",
+        json={
+            "force": False,
+            "instruments": [
+                {
+                    "ticker": "LKOH",
+                    "levels": 20,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    response = client.get("/api/session/LKOH")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["ticker"] == "LKOH"
+    assert data["status"] == "ACTIVE"
+    assert data["current_price"] == 4453
+
+
+def test_stop_session_endpoint_stops_session() -> None:
+    client = TestClient(app)
+
+    client.post(
+        "/api/start-sandbox",
+        json={
+            "force": False,
+            "instruments": [
+                {
+                    "ticker": "VTBR",
+                    "levels": 20,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    response = client.post("/api/stop-session/VTBR")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["ticker"] == "VTBR"
+    assert data["status"] == "STOPPED"

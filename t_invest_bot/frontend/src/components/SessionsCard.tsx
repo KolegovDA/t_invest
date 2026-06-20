@@ -2,9 +2,13 @@ import type { ActiveSession } from "../types"
 
 type Props = {
     sessions: ActiveSession[]
+    onOpen: (ticker: string) => void
 }
 
-export function SessionsCard({ sessions }: Props) {
+export function SessionsCard({
+    sessions,
+    onOpen,
+}: Props) {
     if (sessions.length === 0) {
         return null
     }
@@ -35,7 +39,20 @@ export function SessionsCard({ sessions }: Props) {
                     <p>Уровней: {session.levels}</p>
                     <p>Базовый лот: {session.quantity}</p>
                     <p>Позиции: {session.positions}</p>
-                    <p>Прибыль: {session.profit} ₽</p>
+                    <p>Прибыль: {session.total_profit} ₽</p>
+
+                    <button
+                        onClick={() => onOpen(session.ticker)}
+                        style={{
+                            width: "100%",
+                            padding: 12,
+                            borderRadius: 10,
+                            border: "1px solid #ddd",
+                            background: "white",
+                        }}
+                    >
+                        Открыть
+                    </button>
                 </div>
             ))}
         </div>

@@ -3,12 +3,15 @@ import {
     calculateStartPlan,
     getDashboard,
     getInstruments,
+    getSession,
     getSessions,
     startSandbox,
+    stopSession,
 } from "./api"
 import { AddInstrumentForm } from "./components/AddInstrumentForm"
 import { DashboardCard } from "./components/DashboardCard"
 import { InstrumentCard } from "./components/InstrumentCard"
+import { SessionDetailCard } from "./components/SessionDetailCard"
 import { SessionsCard } from "./components/SessionsCard"
 import { StartPlanCard } from "./components/StartPlanCard"
 import type {
@@ -30,6 +33,9 @@ export default function App() {
 
     const [sessions, setSessions] =
         useState<ActiveSession[]>([])
+
+    const [selectedSession, setSelectedSession] =
+        useState<ActiveSession | null>(null)
 
     const [isAdding, setIsAdding] = useState(false)
     const [newTicker, setNewTicker] = useState("")
@@ -157,6 +163,22 @@ export default function App() {
         })
     }
 
+    function openSession(
+        ticker: string,
+    ) {
+        getSession(ticker).then(setSelectedSession)
+    }
+
+    function stopSelectedSession(
+        ticker: string,
+    ) {
+        stopSession(ticker).then(session => {
+            setSelectedSession(session)
+            refreshDashboard()
+            refreshSessions()
+        })
+    }
+
     if (!dashboard) {
         return <div style={{ padding: 20 }}>Загрузка...</div>
     }
@@ -175,7 +197,16 @@ export default function App() {
 
                 <DashboardCard dashboard={dashboard} />
 
-                <SessionsCard sessions={sessions} />
+                <SessionsCard
+                    sessions={sessions}
+                    onOpen={openSession}
+                />
+
+                <SessionDetailCard
+                    session={selectedSession}
+                    onClose={() => setSelectedSession(null)}
+                    onStop={stopSelectedSession}
+                />
 
                 <div
                     style={{

@@ -15,6 +15,29 @@ export async function getSessions() {
     return response.json()
 }
 
+export async function getSession(
+    ticker: string
+) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/session/${ticker}`
+    )
+
+    return response.json()
+}
+
+export async function stopSession(
+    ticker: string
+) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/stop-session/${ticker}`,
+        {
+            method: "POST",
+        }
+    )
+
+    return response.json()
+}
+
 export async function calculateStartPlan(
     instruments: {
         ticker: string

@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -9,7 +9,7 @@ from application.multi_instrument_session_config import (
     MultiInstrumentSessionConfig,
 )
 from application.portfolio_orchestrator import PortfolioOrchestrator
-from web.session_registry import session_registry
+from web.session_registry import WebSession, session_registry
 
 APP_VERSION = "1.0.0-mvp"
 
@@ -45,12 +45,16 @@ class StartSandboxRequest(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+    }
 
 
 @app.get("/api/version")
 def version():
-    return {"version": APP_VERSION}
+    return {
+        "version": APP_VERSION,
+    }
 
 
 @app.get("/api/dashboard")
@@ -60,9 +64,18 @@ def dashboard():
     return {
         "accounts": 1,
         "capital": 100000,
-        "active_positions": sum(session.positions for session in sessions),
-        "profit": sum(session.profit for session in sessions),
-        "instruments": [session.ticker for session in sessions],
+        "active_positions": sum(
+            session.positions
+            for session in sessions
+        ),
+        "profit": sum(
+            session.total_profit
+            for session in sessions
+        ),
+        "instruments": [
+            session.ticker
+            for session in sessions
+        ],
     }
 
 
@@ -96,21 +109,50 @@ def instruments():
 def sessions():
     return {
         "sessions": [
-            {
-                "ticker": session.ticker,
-                "levels": session.levels,
-                "quantity": session.quantity,
-                "status": session.status,
-                "positions": session.positions,
-                "profit": session.profit,
-            }
+            _session_to_dict(session)
             for session in session_registry.get_sessions()
         ],
     }
 
 
+@app.get("/api/session/{ticker}")
+def session_detail(
+    ticker: str,
+):
+    try:
+        session = session_registry.get_session(
+            ticker=ticker,
+        )
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session not found: {ticker.upper()}",
+        ) from error
+
+    return _session_to_dict(session)
+
+
+@app.post("/api/stop-session/{ticker}")
+def stop_session(
+    ticker: str,
+):
+    try:
+        session = session_registry.stop_session(
+            ticker=ticker,
+        )
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session not found: {ticker.upper()}",
+        ) from error
+
+    return _session_to_dict(session)
+
+
 @app.post("/api/start-plan")
-def start_plan(request: StartPlanRequest):
+def start_plan(
+    request: StartPlanRequest,
+):
     config = MultiInstrumentSessionConfig(
         instruments=[
             InstrumentConfig(
@@ -127,7 +169,9 @@ def start_plan(request: StartPlanRequest):
 
     for instrument in request.instruments:
         ticker = instrument.ticker.upper()
-        current_price = _get_mock_price(ticker=ticker)
+        current_price = _get_mock_price(
+            ticker=ticker,
+        )
 
         prices_by_ticker[ticker] = current_price
         price_ranges_by_ticker[ticker] = (
@@ -166,7 +210,9 @@ def start_plan(request: StartPlanRequest):
 
 
 @app.post("/api/start-sandbox")
-def start_sandbox(request: StartSandboxRequest):
+def start_sandbox(
+    request: StartSandboxRequest,
+):
     started_sessions = [
         session_registry.start_session(
             ticker=instrument.ticker,
@@ -181,20 +227,31 @@ def start_sandbox(request: StartSandboxRequest):
         "mode": "sandbox",
         "force": request.force,
         "sessions": [
-            {
-                "ticker": session.ticker,
-                "levels": session.levels,
-                "quantity": session.quantity,
-                "status": session.status,
-                "positions": session.positions,
-                "profit": session.profit,
-            }
+            _session_to_dict(session)
             for session in started_sessions
         ],
     }
 
 
-def _get_mock_price(ticker: str) -> Decimal:
+def _session_to_dict(
+    session: WebSession,
+):
+    return {
+        "ticker": session.ticker,
+        "levels": session.levels,
+        "quantity": session.quantity,
+        "status": session.status,
+        "positions": session.positions,
+        "current_price": session.current_price,
+        "realized_profit": session.realized_profit,
+        "unrealized_profit": session.unrealized_profit,
+        "total_profit": session.total_profit,
+    }
+
+
+def _get_mock_price(
+    ticker: str,
+) -> Decimal:
     prices = {
         "SBER": Decimal("317"),
         "GAZP": Decimal("107"),
@@ -202,4 +259,7 @@ def _get_mock_price(ticker: str) -> Decimal:
         "VTBR": Decimal("0.09"),
     }
 
-    return prices.get(ticker, Decimal("100"))
+    return prices.get(
+        ticker,
+        Decimal("100"),
+    )

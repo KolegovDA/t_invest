@@ -37,5 +37,8 @@ export type ActiveSession = {
     quantity: number
     status: string
     positions: number
-    profit: number
+    current_price: number
+    realized_profit: number
+    unrealized_profit: number
+    total_profit: number
 }
