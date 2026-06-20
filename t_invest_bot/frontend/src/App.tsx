@@ -169,11 +169,14 @@ export default function App() {
         getSession(ticker).then(setSelectedSession)
     }
 
-    function stopSelectedSession(
-        ticker: string,
-    ) {
-        stopSession(ticker).then(session => {
-            setSelectedSession(session)
+    function stopSelectedSession(ticker: string) {
+        stopSession(ticker).then(result => {
+            if (result.removed) {
+                setSelectedSession(null)
+            } else {
+                setSelectedSession(result)
+            }
+
             refreshDashboard()
             refreshSessions()
         })

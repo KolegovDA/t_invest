@@ -130,7 +130,7 @@ def test_session_detail_endpoint_returns_session() -> None:
     assert data["current_price"] == 4453
 
 
-def test_stop_session_endpoint_stops_session() -> None:
+def test_stop_session_endpoint_removes_session_when_positions_are_zero() -> None:
     client = TestClient(app)
 
     client.post(
@@ -154,4 +154,15 @@ def test_stop_session_endpoint_stops_session() -> None:
     data = response.json()
 
     assert data["ticker"] == "VTBR"
-    assert data["status"] == "STOPPED"
+    assert data["status"] == "REMOVED"
+    assert data["removed"] is True
+
+    sessions_response = client.get("/api/sessions")
+    sessions_data = sessions_response.json()
+
+    tickers = {
+        session["ticker"]
+        for session in sessions_data["sessions"]
+    }
+
+    assert "VTBR" not in tickers

@@ -8,12 +8,8 @@ class SQLiteDatabase:
     database_path: Path
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            self.database_path,
-        )
-
+        connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
-
         return connection
 
     def initialize(self) -> None:
@@ -69,6 +65,27 @@ class SQLiteDatabase:
                     level_index INTEGER NOT NULL,
                     amount TEXT NOT NULL,
                     PRIMARY KEY (instrument_id, level_index)
+                );
+
+                CREATE TABLE IF NOT EXISTS web_sessions (
+                    ticker TEXT PRIMARY KEY,
+                    levels INTEGER NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    positions INTEGER NOT NULL,
+                    current_price REAL NOT NULL,
+                    realized_profit REAL NOT NULL,
+                    unrealized_profit REAL NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS api_usage_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    weight INTEGER NOT NULL,
+                    session_id TEXT,
+                    ticker TEXT
                 );
                 """
             )
