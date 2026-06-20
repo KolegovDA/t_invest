@@ -42,3 +42,9 @@ export type ActiveSession = {
     unrealized_profit: number
     total_profit: number
 }
+
+export type ApiUsage = {
+    total_weight: number
+    events_count: number
+    by_operation: Record<string, number>
+}

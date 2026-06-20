@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import {
     calculateStartPlan,
+    getApiUsage,
     getDashboard,
     getInstruments,
     getSession,
@@ -9,6 +10,7 @@ import {
     stopSession,
 } from "./api"
 import { AddInstrumentForm } from "./components/AddInstrumentForm"
+import { ApiUsageCard } from "./components/ApiUsageCard"
 import { DashboardCard } from "./components/DashboardCard"
 import { InstrumentCard } from "./components/InstrumentCard"
 import { SessionDetailCard } from "./components/SessionDetailCard"
@@ -16,6 +18,7 @@ import { SessionsCard } from "./components/SessionsCard"
 import { StartPlanCard } from "./components/StartPlanCard"
 import type {
     ActiveSession,
+    ApiUsage,
     Dashboard,
     Instrument,
     StartPlan,
@@ -24,6 +27,9 @@ import type {
 export default function App() {
     const [dashboard, setDashboard] =
         useState<Dashboard | null>(null)
+
+    const [apiUsage, setApiUsage] =
+        useState<ApiUsage | null>(null)
 
     const [instruments, setInstruments] =
         useState<Instrument[]>([])
@@ -50,6 +56,7 @@ export default function App() {
     useEffect(() => {
         refreshDashboard()
         refreshSessions()
+        refreshApiUsage()
 
         getInstruments().then(data => {
             setInstruments(
@@ -63,6 +70,10 @@ export default function App() {
 
     function refreshDashboard() {
         getDashboard().then(setDashboard)
+    }
+
+    function refreshApiUsage() {
+        getApiUsage().then(setApiUsage)
     }
 
     function refreshSessions() {
@@ -142,7 +153,10 @@ export default function App() {
                 levels: instrument.levels,
                 quantity: instrument.quantity ?? 1,
             }))
-        ).then(setStartPlan)
+        ).then(plan => {
+            setStartPlan(plan)
+            refreshApiUsage()
+        })
     }
 
     function startStrategy() {
@@ -160,6 +174,7 @@ export default function App() {
         ).then(() => {
             refreshDashboard()
             refreshSessions()
+            refreshApiUsage()
         })
     }
 
@@ -169,7 +184,9 @@ export default function App() {
         getSession(ticker).then(setSelectedSession)
     }
 
-    function stopSelectedSession(ticker: string) {
+    function stopSelectedSession(
+        ticker: string,
+    ) {
         stopSession(ticker).then(result => {
             if (result.removed) {
                 setSelectedSession(null)
@@ -199,6 +216,8 @@ export default function App() {
                 <h1>T-Invest Bot</h1>
 
                 <DashboardCard dashboard={dashboard} />
+
+                <ApiUsageCard apiUsage={apiUsage} />
 
                 <SessionsCard
                     sessions={sessions}

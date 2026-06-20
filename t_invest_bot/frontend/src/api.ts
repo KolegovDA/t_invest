@@ -6,6 +6,11 @@ export async function getDashboard() {
     return response.json()
 }
 
+export async function getApiUsage() {
+    const response = await fetch(`${API_BASE_URL}/api/api-usage`)
+    return response.json()
+}
+
 export async function getInstruments() {
     const response = await fetch(`${API_BASE_URL}/api/instruments`)
     return response.json()

@@ -166,3 +166,16 @@ def test_stop_session_endpoint_removes_session_when_positions_are_zero() -> None
     }
 
     assert "VTBR" not in tickers
+
+def test_api_usage_endpoint_returns_summary() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/api-usage")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "total_weight" in data
+    assert "events_count" in data
+    assert "by_operation" in data

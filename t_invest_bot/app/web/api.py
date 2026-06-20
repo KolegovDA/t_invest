@@ -11,6 +11,9 @@ from application.multi_instrument_session_config import (
     MultiInstrumentSessionConfig,
 )
 from application.portfolio_orchestrator import PortfolioOrchestrator
+from infrastructure.sqlite.api_usage_repository import (
+    SQLiteApiUsageRepository,
+)
 from infrastructure.sqlite.sqlite_database import SQLiteDatabase
 from infrastructure.sqlite.web_session_repository import (
     SQLiteWebSessionRepository,
@@ -35,6 +38,10 @@ session_registry.repository = SQLiteWebSessionRepository(
     database=database,
 )
 session_registry.load_from_repository()
+
+api_usage_repository = SQLiteApiUsageRepository(
+    database=database,
+)
 
 app = FastAPI(
     title="T-Invest Bot API",
@@ -68,12 +75,16 @@ class StartSandboxRequest(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+    }
 
 
 @app.get("/api/version")
 def version():
-    return {"version": APP_VERSION}
+    return {
+        "version": APP_VERSION,
+    }
 
 
 @app.get("/api/dashboard")
@@ -83,9 +94,29 @@ def dashboard():
     return {
         "accounts": 1,
         "capital": 100000,
-        "active_positions": sum(session.positions for session in sessions),
-        "profit": sum(session.total_profit for session in sessions),
-        "instruments": [session.ticker for session in sessions],
+        "active_positions": sum(
+            session.positions
+            for session in sessions
+        ),
+        "profit": sum(
+            session.total_profit
+            for session in sessions
+        ),
+        "instruments": [
+            session.ticker
+            for session in sessions
+        ],
+    }
+
+
+@app.get("/api/api-usage")
+def api_usage():
+    summary = api_usage_repository.summarize()
+
+    return {
+        "total_weight": summary.total_weight,
+        "events_count": summary.events_count,
+        "by_operation": summary.by_operation,
     }
 
 
@@ -126,9 +157,13 @@ def sessions():
 
 
 @app.get("/api/session/{ticker}")
-def session_detail(ticker: str):
+def session_detail(
+    ticker: str,
+):
     try:
-        session = session_registry.get_session(ticker=ticker)
+        session = session_registry.get_session(
+            ticker=ticker,
+        )
     except KeyError as error:
         raise HTTPException(
             status_code=404,
@@ -139,9 +174,13 @@ def session_detail(ticker: str):
 
 
 @app.post("/api/stop-session/{ticker}")
-def stop_session(ticker: str):
+def stop_session(
+    ticker: str,
+):
     try:
-        session = session_registry.stop_session(ticker=ticker)
+        session = session_registry.stop_session(
+            ticker=ticker,
+        )
     except KeyError as error:
         raise HTTPException(
             status_code=404,
@@ -162,7 +201,15 @@ def stop_session(ticker: str):
 
 
 @app.post("/api/start-plan")
-def start_plan(request: StartPlanRequest):
+def start_plan(
+    request: StartPlanRequest,
+):
+    api_usage_repository.record(
+        source="web",
+        operation="start_plan",
+        weight=1,
+    )
+
     config = MultiInstrumentSessionConfig(
         instruments=[
             InstrumentConfig(
@@ -179,12 +226,21 @@ def start_plan(request: StartPlanRequest):
 
     for instrument in request.instruments:
         ticker = instrument.ticker.upper()
-        current_price = _get_mock_price(ticker=ticker)
+        current_price = _get_mock_price(
+            ticker=ticker,
+        )
 
         prices_by_ticker[ticker] = current_price
         price_ranges_by_ticker[ticker] = (
             current_price * Decimal("0.70"),
             current_price * Decimal("1.10"),
+        )
+
+        api_usage_repository.record(
+            source="mock",
+            operation="get_last_price",
+            weight=1,
+            ticker=ticker,
         )
 
     plan = PortfolioOrchestrator().build_start_plan(
@@ -218,7 +274,15 @@ def start_plan(request: StartPlanRequest):
 
 
 @app.post("/api/start-sandbox")
-def start_sandbox(request: StartSandboxRequest):
+def start_sandbox(
+    request: StartSandboxRequest,
+):
+    api_usage_repository.record(
+        source="web",
+        operation="start_sandbox",
+        weight=1,
+    )
+
     started_sessions = [
         session_registry.start_session(
             ticker=instrument.ticker,
@@ -239,7 +303,9 @@ def start_sandbox(request: StartSandboxRequest):
     }
 
 
-def _session_to_dict(session: WebSession):
+def _session_to_dict(
+    session: WebSession,
+):
     return {
         "ticker": session.ticker,
         "levels": session.levels,
@@ -253,7 +319,9 @@ def _session_to_dict(session: WebSession):
     }
 
 
-def _get_mock_price(ticker: str) -> Decimal:
+def _get_mock_price(
+    ticker: str,
+) -> Decimal:
     prices = {
         "SBER": Decimal("317"),
         "GAZP": Decimal("107"),
@@ -261,4 +329,7 @@ def _get_mock_price(ticker: str) -> Decimal:
         "VTBR": Decimal("0.09"),
     }
 
-    return prices.get(ticker, Decimal("100"))
+    return prices.get(
+        ticker,
+        Decimal("100"),
+    )
