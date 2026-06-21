@@ -11,6 +11,10 @@ from application.multi_instrument_session_config import (
     MultiInstrumentSessionConfig,
 )
 from application.portfolio_orchestrator import PortfolioOrchestrator
+from application.sandbox_session_registry import (
+    SandboxSessionSnapshot,
+    sandbox_session_registry,
+)
 from infrastructure.sqlite.api_usage_repository import (
     SQLiteApiUsageRepository,
 )
@@ -89,21 +93,26 @@ def version():
 
 @app.get("/api/dashboard")
 def dashboard():
-    sessions = session_registry.get_sessions()
+    sessions = [
+        _build_display_session(
+            web_session=session,
+        )
+        for session in session_registry.get_sessions()
+    ]
 
     return {
         "accounts": 1,
         "capital": 100000,
         "active_positions": sum(
-            session.positions
+            session["positions"]
             for session in sessions
         ),
         "profit": sum(
-            session.total_profit
+            session["total_profit"]
             for session in sessions
         ),
         "instruments": [
-            session.ticker
+            session["ticker"]
             for session in sessions
         ],
     }
@@ -150,7 +159,9 @@ def instruments():
 def sessions():
     return {
         "sessions": [
-            _session_to_dict(session)
+            _build_display_session(
+                web_session=session,
+            )
             for session in session_registry.get_sessions()
         ],
     }
@@ -161,7 +172,7 @@ def session_detail(
     ticker: str,
 ):
     try:
-        session = session_registry.get_session(
+        web_session = session_registry.get_session(
             ticker=ticker,
         )
     except KeyError as error:
@@ -170,13 +181,19 @@ def session_detail(
             detail=f"Session not found: {ticker.upper()}",
         ) from error
 
-    return _session_to_dict(session)
+    return _build_display_session(
+        web_session=web_session,
+    )
 
 
 @app.post("/api/stop-session/{ticker}")
 def stop_session(
     ticker: str,
 ):
+    sandbox_session_registry.unregister(
+        ticker=ticker,
+    )
+
     try:
         session = session_registry.stop_session(
             ticker=ticker,
@@ -195,7 +212,9 @@ def stop_session(
         }
 
     return {
-        **_session_to_dict(session),
+        **_build_display_session(
+            web_session=session,
+        ),
         "removed": False,
     }
 
@@ -297,13 +316,50 @@ def start_sandbox(
         "mode": "sandbox",
         "force": request.force,
         "sessions": [
-            _session_to_dict(session)
+            _build_display_session(
+                web_session=session,
+            )
             for session in started_sessions
         ],
     }
 
 
-def _session_to_dict(
+def _build_display_session(
+    web_session: WebSession,
+):
+    snapshot = sandbox_session_registry.build_snapshot(
+        ticker=web_session.ticker,
+    )
+
+    if snapshot is not None:
+        return _snapshot_to_dict(
+            snapshot=snapshot,
+            web_session=web_session,
+        )
+
+    return _web_session_to_dict(
+        session=web_session,
+    )
+
+
+def _snapshot_to_dict(
+    snapshot: SandboxSessionSnapshot,
+    web_session: WebSession,
+):
+    return {
+        "ticker": snapshot.ticker,
+        "levels": web_session.levels,
+        "quantity": snapshot.quantity,
+        "status": snapshot.status,
+        "positions": snapshot.positions,
+        "current_price": float(snapshot.current_price),
+        "realized_profit": float(snapshot.realized_profit),
+        "unrealized_profit": float(snapshot.unrealized_profit),
+        "total_profit": float(snapshot.total_profit),
+    }
+
+
+def _web_session_to_dict(
     session: WebSession,
 ):
     return {
