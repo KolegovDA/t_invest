@@ -26,6 +26,11 @@ class FakeSandboxSession:
     unrealized_profit: Decimal = Decimal("0")
 
 
+@dataclass(slots=True)
+class FakeMultiInstrumentSandboxSession:
+    sessions: dict[str, FakeSandboxSession]
+
+
 def test_sandbox_session_registry_registers_session() -> None:
     registry = SandboxSessionRegistry()
 
@@ -97,3 +102,81 @@ def test_sandbox_session_registry_unregisters_session() -> None:
     )
 
     assert registry.has("SBER") is False
+
+
+def test_sandbox_session_registry_builds_snapshot_from_multi_session() -> None:
+    registry = SandboxSessionRegistry()
+
+    sber_session = FakeSandboxSession(
+        current_price=Decimal("333"),
+        grid_engine=FakeGridEngine(
+            open_positions={
+                1: FakePosition(quantity=10),
+            },
+            realized_profit=Decimal("12"),
+        ),
+        unrealized_profit=Decimal("5"),
+    )
+
+    gazp_session = FakeSandboxSession(
+        current_price=Decimal("111"),
+        grid_engine=FakeGridEngine(
+            open_positions={
+                1: FakePosition(quantity=20),
+                2: FakePosition(quantity=30),
+            },
+            realized_profit=Decimal("30"),
+        ),
+        unrealized_profit=Decimal("7"),
+    )
+
+    multi_session = FakeMultiInstrumentSandboxSession(
+        sessions={
+            "SBER_ID": sber_session,
+            "GAZP_ID": gazp_session,
+        }
+    )
+
+    registry.register_multi_session(
+        session=multi_session,
+        instrument_ids_by_ticker={
+            "SBER": "SBER_ID",
+            "GAZP": "GAZP_ID",
+        },
+    )
+
+    sber_snapshot = registry.build_snapshot("SBER")
+    gazp_snapshot = registry.build_snapshot("GAZP")
+
+    assert sber_snapshot is not None
+    assert sber_snapshot.current_price == Decimal("333")
+    assert sber_snapshot.positions == 1
+    assert sber_snapshot.quantity == 10
+    assert sber_snapshot.total_profit == Decimal("17")
+
+    assert gazp_snapshot is not None
+    assert gazp_snapshot.current_price == Decimal("111")
+    assert gazp_snapshot.positions == 2
+    assert gazp_snapshot.quantity == 50
+    assert gazp_snapshot.total_profit == Decimal("37")
+
+
+def test_sandbox_session_registry_unregisters_multi_session_ticker() -> None:
+    registry = SandboxSessionRegistry()
+
+    multi_session = FakeMultiInstrumentSandboxSession(
+        sessions={},
+    )
+
+    registry.register_multi_session(
+        session=multi_session,
+        instrument_ids_by_ticker={
+            "SBER": "SBER_ID",
+        },
+    )
+
+    registry.unregister("SBER")
+
+    assert registry.has("SBER") is False
+    assert "SBER" not in registry.instrument_ids_by_ticker
+    assert "SBER_ID" not in registry.tickers_by_instrument_id

@@ -21,6 +21,8 @@ class SandboxSessionSnapshot:
 @dataclass(slots=True)
 class SandboxSessionRegistry:
     sessions: dict[str, Any] = field(default_factory=dict)
+    tickers_by_instrument_id: dict[str, str] = field(default_factory=dict)
+    instrument_ids_by_ticker: dict[str, str] = field(default_factory=dict)
 
     def register(
         self,
@@ -29,12 +31,36 @@ class SandboxSessionRegistry:
     ) -> None:
         self.sessions[ticker.upper()] = session
 
+    def register_multi_session(
+        self,
+        session: Any,
+        instrument_ids_by_ticker: dict[str, str],
+    ) -> None:
+        for ticker, instrument_id in instrument_ids_by_ticker.items():
+            normalized_ticker = ticker.upper()
+            self.sessions[normalized_ticker] = session
+            self.instrument_ids_by_ticker[normalized_ticker] = instrument_id
+            self.tickers_by_instrument_id[instrument_id] = normalized_ticker
+
     def unregister(
         self,
         ticker: str,
     ) -> None:
+        normalized_ticker = ticker.upper()
+
+        instrument_id = self.instrument_ids_by_ticker.pop(
+            normalized_ticker,
+            None,
+        )
+
+        if instrument_id is not None:
+            self.tickers_by_instrument_id.pop(
+                instrument_id,
+                None,
+            )
+
         self.sessions.pop(
-            ticker.upper(),
+            normalized_ticker,
             None,
         )
 
@@ -59,19 +85,51 @@ class SandboxSessionRegistry:
         self,
         ticker: str,
     ) -> SandboxSessionSnapshot | None:
-        session = self.get(ticker)
+        normalized_ticker = ticker.upper()
+        session = self.get(normalized_ticker)
 
         if session is None:
             return None
 
+        inner_session = self._resolve_inner_session(
+            ticker=normalized_ticker,
+            session=session,
+        )
+
         return SandboxSessionSnapshot(
-            ticker=ticker.upper(),
+            ticker=normalized_ticker,
             status="ACTIVE",
-            current_price=self._extract_current_price(session),
-            positions=self._extract_positions_count(session),
-            quantity=self._extract_total_quantity(session),
-            realized_profit=self._extract_realized_profit(session),
-            unrealized_profit=self._extract_unrealized_profit(session),
+            current_price=self._extract_current_price(inner_session),
+            positions=self._extract_positions_count(inner_session),
+            quantity=self._extract_total_quantity(inner_session),
+            realized_profit=self._extract_realized_profit(inner_session),
+            unrealized_profit=self._extract_unrealized_profit(inner_session),
+        )
+
+    def _resolve_inner_session(
+        self,
+        ticker: str,
+        session: Any,
+    ) -> Any:
+        instrument_id = self.instrument_ids_by_ticker.get(
+            ticker,
+        )
+
+        if instrument_id is None:
+            return session
+
+        sessions = getattr(
+            session,
+            "sessions",
+            None,
+        )
+
+        if sessions is None:
+            return session
+
+        return sessions.get(
+            instrument_id,
+            session,
         )
 
     def _extract_current_price(
