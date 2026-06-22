@@ -23,6 +23,7 @@ class SandboxSessionRegistry:
     sessions: dict[str, Any] = field(default_factory=dict)
     tickers_by_instrument_id: dict[str, str] = field(default_factory=dict)
     instrument_ids_by_ticker: dict[str, str] = field(default_factory=dict)
+    current_prices_by_ticker: dict[str, Decimal] = field(default_factory=dict)
 
     def register(
         self,
@@ -42,6 +43,13 @@ class SandboxSessionRegistry:
             self.instrument_ids_by_ticker[normalized_ticker] = instrument_id
             self.tickers_by_instrument_id[instrument_id] = normalized_ticker
 
+    def set_current_price(
+        self,
+        ticker: str,
+        price: Decimal,
+    ) -> None:
+        self.current_prices_by_ticker[ticker.upper()] = price
+
     def unregister(
         self,
         ticker: str,
@@ -58,6 +66,11 @@ class SandboxSessionRegistry:
                 instrument_id,
                 None,
             )
+
+        self.current_prices_by_ticker.pop(
+            normalized_ticker,
+            None,
+        )
 
         self.sessions.pop(
             normalized_ticker,
@@ -99,7 +112,10 @@ class SandboxSessionRegistry:
         return SandboxSessionSnapshot(
             ticker=normalized_ticker,
             status="ACTIVE",
-            current_price=self._extract_current_price(inner_session),
+            current_price=self._extract_current_price(
+                ticker=normalized_ticker,
+                session=inner_session,
+            ),
             positions=self._extract_positions_count(inner_session),
             quantity=self._extract_total_quantity(inner_session),
             realized_profit=self._extract_realized_profit(inner_session),
@@ -134,8 +150,12 @@ class SandboxSessionRegistry:
 
     def _extract_current_price(
         self,
+        ticker: str,
         session: Any,
     ) -> Decimal:
+        if ticker in self.current_prices_by_ticker:
+            return self.current_prices_by_ticker[ticker]
+
         if hasattr(session, "current_price"):
             return Decimal(str(session.current_price))
 
@@ -198,14 +218,6 @@ class SandboxSessionRegistry:
     ) -> Decimal:
         if hasattr(session, "unrealized_profit"):
             return Decimal(str(session.unrealized_profit))
-
-        portfolio_manager = getattr(session, "portfolio_manager", None)
-
-        if portfolio_manager is not None:
-            portfolio = getattr(portfolio_manager, "portfolio", None)
-
-            if portfolio is not None and hasattr(portfolio, "unrealized_profit"):
-                return Decimal(str(portfolio.unrealized_profit))
 
         return Decimal("0")
 
