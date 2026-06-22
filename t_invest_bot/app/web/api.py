@@ -10,11 +10,17 @@ from application.multi_instrument_session_config import (
     InstrumentConfig,
     MultiInstrumentSessionConfig,
 )
+from application.multi_instrument_trading_session_factory import (
+    MultiInstrumentTradingSessionFactory,
+)
 from application.portfolio_orchestrator import PortfolioOrchestrator
 from application.sandbox_session_registry import (
     SandboxSessionSnapshot,
     sandbox_session_registry,
 )
+from application.web_runner_registry import web_runner_registry
+from application.web_runner_service import WebRunnerService
+from config.settings import Settings
 from infrastructure.sqlite.api_usage_repository import (
     SQLiteApiUsageRepository,
 )
@@ -26,10 +32,12 @@ from web.session_registry import WebSession, session_registry
 
 APP_VERSION = "1.0.0-mvp"
 
+settings = Settings.from_env()
+
 database_path = Path(
     os.getenv(
         "T_INVEST_DB_PATH",
-        "data/t_invest_bot.db",
+        settings.db_path,
     )
 )
 
@@ -81,6 +89,7 @@ class StartSandboxRequest(BaseModel):
 def health():
     return {
         "status": "ok",
+        "real_sandbox_enabled": _is_real_sandbox_enabled(),
     }
 
 
@@ -190,6 +199,10 @@ def session_detail(
 def stop_session(
     ticker: str,
 ):
+    web_runner_registry.stop_by_ticker(
+        ticker=ticker,
+    )
+
     sandbox_session_registry.unregister(
         ticker=ticker,
     )
@@ -229,15 +242,8 @@ def start_plan(
         weight=1,
     )
 
-    config = MultiInstrumentSessionConfig(
-        instruments=[
-            InstrumentConfig(
-                ticker=instrument.ticker.upper(),
-                levels_count=instrument.levels,
-                quantity=instrument.quantity,
-            )
-            for instrument in request.instruments
-        ]
+    config = _build_multi_instrument_config(
+        instruments=request.instruments,
     )
 
     prices_by_ticker: dict[str, Decimal] = {}
@@ -311,9 +317,17 @@ def start_sandbox(
         for instrument in request.instruments
     ]
 
+    real_sandbox_status = "disabled"
+
+    if _is_real_sandbox_enabled():
+        real_sandbox_status = _try_start_real_sandbox(
+            request=request,
+        )
+
     return {
         "status": "started",
         "mode": "sandbox",
+        "real_sandbox_status": real_sandbox_status,
         "force": request.force,
         "sessions": [
             _build_display_session(
@@ -322,6 +336,75 @@ def start_sandbox(
             for session in started_sessions
         ],
     }
+
+
+def _try_start_real_sandbox(
+    request: StartSandboxRequest,
+) -> str:
+    try:
+        config = _build_multi_instrument_config(
+            instruments=request.instruments,
+        )
+
+        context = MultiInstrumentTradingSessionFactory(
+            settings=settings,
+        ).create_sandbox_session(
+            config=config,
+        )
+
+        runner = WebRunnerService(
+            context=context,
+            api_usage_repository=api_usage_repository,
+            polling_interval_seconds=10,
+        )
+
+        web_runner_registry.start(
+            runner=runner,
+        )
+
+        api_usage_repository.record(
+            source="runner",
+            operation="real_sandbox_started",
+            weight=1,
+        )
+
+        return "started"
+
+    except Exception as error:
+        api_usage_repository.record(
+            source="runner",
+            operation="real_sandbox_start_failed",
+            weight=1,
+        )
+
+        print(
+            "REAL SANDBOX START FAILED:",
+            repr(error),
+        )
+
+        return "fallback_mock"
+
+
+def _build_multi_instrument_config(
+    instruments: list[StartPlanInstrumentRequest],
+) -> MultiInstrumentSessionConfig:
+    return MultiInstrumentSessionConfig(
+        instruments=[
+            InstrumentConfig(
+                ticker=instrument.ticker.upper(),
+                levels_count=instrument.levels,
+                quantity=instrument.quantity,
+            )
+            for instrument in instruments
+        ]
+    )
+
+
+def _is_real_sandbox_enabled() -> bool:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return False
+
+    return settings.web_real_sandbox
 
 
 def _build_display_session(

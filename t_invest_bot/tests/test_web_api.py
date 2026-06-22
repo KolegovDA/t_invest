@@ -16,9 +16,11 @@ def test_health_endpoint_returns_ok() -> None:
     response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-    }
+
+    data = response.json()
+
+    assert data["status"] == "ok"
+    assert "real_sandbox_enabled" in data
 
 
 def test_version_endpoint_returns_version() -> None:
