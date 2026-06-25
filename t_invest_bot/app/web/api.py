@@ -129,14 +129,43 @@ def dashboard():
 
 @app.get("/api/api-usage")
 def api_usage():
-    summary = api_usage_repository.summarize()
+    summary = api_usage_repository.summarize(
+        active_sessions_count=web_runner_registry.get_active_count(),
+    )
 
     return {
         "total_weight": summary.total_weight,
         "events_count": summary.events_count,
         "by_operation": summary.by_operation,
+        "last_1s_weight": summary.last_1s_weight,
+        "last_60s_weight": summary.last_60s_weight,
+        "last_300s_weight": summary.last_300s_weight,
+        "active_sessions_count": summary.active_sessions_count,
+        "per_minute_per_session": summary.per_minute_per_session,
+        "forecast_5_sessions_per_minute": summary.forecast_5_sessions_per_minute,
+        "forecast_10_sessions_per_minute": summary.forecast_10_sessions_per_minute,
+        "forecast_20_sessions_per_minute": summary.forecast_20_sessions_per_minute,
     }
 
+@app.get("/api/runner-status")
+def runner_status():
+    return {
+        "runners": [
+            {
+                "is_running": status.is_running,
+                "last_tick_at": status.last_tick_at,
+                "last_error": status.last_error,
+                "ticks_count": status.ticks_count,
+                "prices_checked_total": status.prices_checked_total,
+                "orders_placed_total": status.orders_placed_total,
+                "executions_total": status.executions_total,
+            }
+            for status in [
+                runner.get_status()
+                for runner in web_runner_registry.get_all()
+            ]
+        ],
+    }
 
 @app.get("/api/instruments")
 def instruments():

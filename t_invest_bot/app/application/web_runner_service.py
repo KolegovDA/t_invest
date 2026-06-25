@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from decimal import Decimal
 from threading import Thread
 from time import sleep
@@ -18,15 +19,33 @@ class WebRunnerTickResult:
 
 
 @dataclass(slots=True)
+class WebRunnerStatus:
+    is_running: bool
+    last_tick_at: str | None
+    last_error: str | None
+    ticks_count: int
+    prices_checked_total: int
+    orders_placed_total: int
+    executions_total: int
+
+
+@dataclass(slots=True)
 class WebRunnerService:
     context: Any
     api_usage_repository: Any
     registry: SandboxSessionRegistry = field(
-        default_factory=lambda: sandbox_session_registry
+        default_factory=lambda: sandbox_session_registry,
     )
     polling_interval_seconds: int = 10
     is_running: bool = False
     thread: Thread | None = field(default=None, init=False)
+
+    last_tick_at: datetime | None = None
+    last_error: str | None = None
+    ticks_count: int = 0
+    prices_checked_total: int = 0
+    orders_placed_total: int = 0
+    executions_total: int = 0
 
     def start(self) -> None:
         if self.is_running:
@@ -51,12 +70,25 @@ class WebRunnerService:
         if hasattr(self.context.session, "stop"):
             self.context.session.stop()
 
-        for ticker in list(
-            self.context.instrument_ids_by_ticker.keys()
-        ):
+        for ticker in list(self.context.instrument_ids_by_ticker.keys()):
             self.registry.unregister(
                 ticker=ticker,
             )
+
+    def get_status(self) -> WebRunnerStatus:
+        return WebRunnerStatus(
+            is_running=self.is_running,
+            last_tick_at=(
+                self.last_tick_at.isoformat()
+                if self.last_tick_at is not None
+                else None
+            ),
+            last_error=self.last_error,
+            ticks_count=self.ticks_count,
+            prices_checked_total=self.prices_checked_total,
+            orders_placed_total=self.orders_placed_total,
+            executions_total=self.executions_total,
+        )
 
     def tick_once(self) -> WebRunnerTickResult:
         self.api_usage_repository.record(
@@ -127,11 +159,26 @@ class WebRunnerService:
 
         result.executions = len(executed_events)
 
+        self.last_tick_at = datetime.now(timezone.utc)
+        self.last_error = None
+        self.ticks_count += 1
+        self.prices_checked_total += result.prices_checked
+        self.orders_placed_total += result.orders_placed
+        self.executions_total += result.executions
+
         return result
 
     def _run_loop(self) -> None:
         while self.is_running:
-            self.tick_once()
+            try:
+                self.tick_once()
+            except Exception as error:
+                self.last_error = repr(error)
+                self.api_usage_repository.record(
+                    source="runner",
+                    operation="runner_error",
+                    weight=1,
+                )
 
             sleep(
                 self.polling_interval_seconds,

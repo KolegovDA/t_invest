@@ -6,7 +6,7 @@ from application.web_runner_service import WebRunnerService
 @dataclass(slots=True)
 class WebRunnerRegistry:
     runners_by_ticker: dict[str, WebRunnerService] = field(
-        default_factory=dict
+        default_factory=dict,
     )
 
     def register(
@@ -33,6 +33,17 @@ class WebRunnerRegistry:
             ticker.upper(),
         )
 
+    def get_all(self) -> list[WebRunnerService]:
+        unique_runners = {
+            id(runner): runner
+            for runner in self.runners_by_ticker.values()
+        }
+
+        return list(unique_runners.values())
+
+    def get_active_count(self) -> int:
+        return len(self.runners_by_ticker)
+
     def stop_by_ticker(
         self,
         ticker: str,
@@ -56,12 +67,7 @@ class WebRunnerRegistry:
             )
 
     def clear(self) -> None:
-        unique_runners = {
-            id(runner): runner
-            for runner in self.runners_by_ticker.values()
-        }.values()
-
-        for runner in unique_runners:
+        for runner in self.get_all():
             runner.stop()
 
         self.runners_by_ticker.clear()
