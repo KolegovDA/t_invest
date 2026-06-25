@@ -429,10 +429,15 @@ def _snapshot_to_dict(
     snapshot: SandboxSessionSnapshot,
     web_session: WebSession,
 ):
+    display_quantity = snapshot.quantity
+
+    if display_quantity == 0:
+        display_quantity = web_session.quantity
+
     return {
         "ticker": snapshot.ticker,
         "levels": web_session.levels,
-        "quantity": snapshot.quantity,
+        "quantity": display_quantity,
         "status": snapshot.status,
         "positions": snapshot.positions,
         "current_price": float(snapshot.current_price),

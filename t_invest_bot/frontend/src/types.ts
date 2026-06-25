@@ -48,3 +48,11 @@ export type ApiUsage = {
     events_count: number
     by_operation: Record<string, number>
 }
+
+export type StartSandboxResult = {
+    status: string
+    mode: string
+    real_sandbox_status: string
+    force: boolean
+    sessions: ActiveSession[]
+}

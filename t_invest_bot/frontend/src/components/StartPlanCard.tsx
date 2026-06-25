@@ -1,11 +1,16 @@
-import type { StartPlan } from "../types"
+import type { StartPlan, StartSandboxResult } from "../types"
 
 type Props = {
     startPlan: StartPlan
+    startResult: StartSandboxResult | null
     onStart: () => void
 }
 
-export function StartPlanCard({ startPlan, onStart }: Props) {
+export function StartPlanCard({
+    startPlan,
+    startResult,
+    onStart,
+}: Props) {
     return (
         <div
             style={{
@@ -108,6 +113,31 @@ export function StartPlanCard({ startPlan, onStart }: Props) {
                     ? "Запустить стратегию"
                     : "Запустить принудительно"}
             </button>
+
+            {startResult && (
+                <div
+                    style={{
+                        marginTop: 12,
+                        padding: 12,
+                        borderRadius: 12,
+                        background:
+                            startResult.real_sandbox_status === "started"
+                                ? "#dcfce7"
+                                : "#ffedd5",
+                    }}
+                >
+                    <p>
+                        Статус запуска: <b>{startResult.status}</b>
+                    </p>
+                    <p>
+                        Режим: <b>{startResult.mode}</b>
+                    </p>
+                    <p>
+                        Реальный sandbox:{" "}
+                        <b>{startResult.real_sandbox_status}</b>
+                    </p>
+                </div>
+            )}
         </div>
     )
 }

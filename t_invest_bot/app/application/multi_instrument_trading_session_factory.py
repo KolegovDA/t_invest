@@ -88,7 +88,13 @@ class MultiInstrumentTradingSessionFactory:
             client_factory=client_factory,
         )
 
-        sandbox_account_id = sandbox_account_provider.open_account()
+        created_sandbox_account = False
+
+        sandbox_account_id = self.settings.tinvest_account_id
+
+        if sandbox_account_id is None:
+            sandbox_account_id = sandbox_account_provider.open_account()
+            created_sandbox_account = True
 
         sandbox_balance = sandbox_account_provider.pay_in(
             account_id=sandbox_account_id,
@@ -143,13 +149,15 @@ class MultiInstrumentTradingSessionFactory:
                     candles=candles,
                 )
 
+                current_price = price_provider.get_last_price(
+                    instrument_uid=instrument.id,
+                )
+
                 levels = GridBuilder(
                     levels_count=instrument_config.levels_count,
                 ).build_from_range(
                     min_price=price_range.min_price,
-                    current_price=price_provider.get_last_price(
-                        instrument_uid=instrument.id,
-                    ),
+                    current_price=current_price,
                 )
 
                 grid_engine = GridEngine(
@@ -195,7 +203,9 @@ class MultiInstrumentTradingSessionFactory:
             )
 
         except Exception:
-            sandbox_account_provider.close_account(
-                account_id=sandbox_account_id,
-            )
+            if created_sandbox_account:
+                sandbox_account_provider.close_account(
+                    account_id=sandbox_account_id,
+                )
+
             raise

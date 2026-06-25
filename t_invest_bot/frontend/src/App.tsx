@@ -22,6 +22,7 @@ import type {
     Dashboard,
     Instrument,
     StartPlan,
+    StartSandboxResult,
 } from "./types"
 
 export default function App() {
@@ -42,6 +43,9 @@ export default function App() {
 
     const [selectedSession, setSelectedSession] =
         useState<ActiveSession | null>(null)
+
+    const [startResult, setStartResult] =
+        useState<StartSandboxResult | null>(null)
 
     const [isAdding, setIsAdding] = useState(false)
     const [newTicker, setNewTicker] = useState("")
@@ -155,10 +159,10 @@ export default function App() {
             }))
         ).then(plan => {
             setStartPlan(plan)
+            setStartResult(null)
             refreshApiUsage()
         })
     }
-
     function startStrategy() {
         if (!startPlan) {
             return
@@ -171,7 +175,8 @@ export default function App() {
                 levels: instrument.levels,
                 quantity: instrument.quantity,
             }))
-        ).then(() => {
+        ).then(result => {
+            setStartResult(result)
             refreshDashboard()
             refreshSessions()
             refreshApiUsage()
@@ -303,6 +308,7 @@ export default function App() {
                 {startPlan && (
                     <StartPlanCard
                         startPlan={startPlan}
+                        startResult={startResult}
                         onStart={startStrategy}
                     />
                 )}

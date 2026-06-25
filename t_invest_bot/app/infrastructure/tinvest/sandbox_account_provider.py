@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from t_tech.invest import MoneyValue
 
@@ -9,6 +10,12 @@ from infrastructure.tinvest.client_factory import TInvestClientFactory
 @dataclass(slots=True)
 class TInvestSandboxAccountProvider:
     client_factory: TInvestClientFactory
+
+    def get_accounts(self) -> list[Any]:
+        with self.client_factory.create_client() as client:
+            response = client.sandbox.get_sandbox_accounts()
+
+        return list(response.accounts)
 
     def open_account(
         self,
