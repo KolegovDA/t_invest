@@ -279,3 +279,5 @@ def test_runner_status_endpoint_returns_runners_list() -> None:
 
     assert "runners" in data
     assert isinstance(data["runners"], list)
+
+
