@@ -10,6 +10,10 @@ from application.live_account_service import (
     LiveAccountService,
 )
 
+from application.trading_mode_guard import (
+    TradingModeGuard,
+)
+
 from application.multi_instrument_session_config import (
     InstrumentConfig,
     MultiInstrumentSessionConfig,
@@ -88,12 +92,135 @@ class StartSandboxRequest(BaseModel):
     force: bool = False
     instruments: list[StartPlanInstrumentRequest]
 
+@app.post("/api/start-live")
+def start_live(
+    request: StartSandboxRequest,
+):
+    api_usage_repository.record(
+        source="web",
+        operation="start_live",
+        weight=1,
+    )
+
+    guard = TradingModeGuard(
+        settings=settings,
+    )
+
+    try:
+        guard.ensure_live_order_allowed()
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=403,
+            detail=str(error),
+        ) from error
+
+    if not request.instruments:
+        raise HTTPException(
+            status_code=400,
+            detail="No instruments selected",
+        )
+
+    config = _build_multi_instrument_config(
+        instruments=request.instruments,
+    )
+
+    try:
+        context = (
+            MultiInstrumentTradingSessionFactory(
+                settings=settings,
+            ).create_live_session(
+                config=config,
+            )
+        )
+
+        runner = WebRunnerService(
+            context=context,
+            api_usage_repository=(
+                api_usage_repository
+            ),
+            polling_interval_seconds=10,
+        )
+
+        web_runner_registry.start(
+            runner=runner,
+        )
+
+    except Exception as error:
+        api_usage_repository.record(
+            source="runner",
+            operation="live_start_failed",
+            weight=1,
+        )
+
+        print(
+            "LIVE START FAILED:",
+            repr(error),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Live trading session "
+                f"failed: {error!r}"
+            ),
+        ) from error
+
+    started_sessions = []
+
+    try:
+        for instrument in request.instruments:
+            session = (
+                session_registry.start_session(
+                    ticker=instrument.ticker,
+                    levels=instrument.levels,
+                    quantity=instrument.quantity,
+                )
+            )
+
+            started_sessions.append(
+                session
+            )
+
+        api_usage_repository.record(
+            source="runner",
+            operation="live_started",
+            weight=1,
+        )
+
+    except Exception:
+        runner.stop()
+        raise
+
+    return {
+        "status": "started",
+        "mode": "live",
+        "execution_status": "started",
+        "force": request.force,
+        "account_id": (
+            settings.tinvest_live_account_id
+        ),
+        "sessions": [
+            _build_display_session(
+                web_session=session,
+            )
+            for session in started_sessions
+        ],
+    }
+
 
 @app.get("/api/health")
 def health():
     return {
         "status": "ok",
-        "real_sandbox_enabled": _is_real_sandbox_enabled(),
+        "trading_mode": (
+            settings.trading_mode
+        ),
+        "live_trading_enabled": (
+            settings.live_trading_enabled
+        ),
+        "real_sandbox_enabled": (
+            _is_real_sandbox_enabled()
+        ),
     }
 
 

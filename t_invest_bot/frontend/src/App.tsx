@@ -9,6 +9,7 @@ import {
     getRunnerStatus,
     getSession,
     getSessions,
+    startLive,
     startSandbox,
     stopSession,
 } from "./api"
@@ -89,6 +90,12 @@ export default function App() {
         null
     )
 
+    const [startError, setStartError] =
+        useState<string | null>(null)
+
+    const [isStarting, setIsStarting] =
+        useState(false)
+
     const [newTicker, setNewTicker] =
         useState("")
 
@@ -112,6 +119,15 @@ export default function App() {
         editQuantity,
         setEditQuantity,
     ] = useState("1")
+
+
+    const tradingMode =
+        liveStatus?.trading_mode === "live"
+            ? "live"
+            : "sandbox"
+
+    const liveTradingEnabled =
+        liveStatus?.live_trading_enabled === true
 
 
     useEffect(() => {
@@ -213,8 +229,11 @@ export default function App() {
         setNewTicker("")
         setNewLevels(20)
         setNewBaseQuantity("1")
+
         setStartPlan(null)
         setStartResult(null)
+        setStartError(null)
+
         setModal(null)
     }
 
@@ -231,6 +250,7 @@ export default function App() {
 
         setStartPlan(null)
         setStartResult(null)
+        setStartError(null)
     }
 
 
@@ -283,6 +303,8 @@ export default function App() {
 
         setStartPlan(null)
         setStartResult(null)
+        setStartError(null)
+
         setModal(null)
     }
 
@@ -290,6 +312,7 @@ export default function App() {
     function openStartModal() {
         setStartPlan(null)
         setStartResult(null)
+        setStartError(null)
 
         setModal(
             "start-strategy"
@@ -298,6 +321,8 @@ export default function App() {
 
 
     function calculatePlan() {
+        setStartError(null)
+
         calculateStartPlan(
             instruments.map(
                 instrument => ({
@@ -310,21 +335,43 @@ export default function App() {
                         1,
                 })
             )
-        ).then(plan => {
-            setStartPlan(plan)
-            setStartResult(null)
-            refreshApiUsage()
-        })
+        )
+            .then(plan => {
+                setStartPlan(plan)
+                setStartResult(null)
+                refreshApiUsage()
+            })
+            .catch(error => {
+                setStartError(
+                    error instanceof Error
+                        ? error.message
+                        : String(error)
+                )
+            })
     }
 
 
-    function startStrategy() {
+    async function startStrategy() {
         if (!startPlan) {
             return
         }
 
-        startSandbox(
-            !startPlan.can_start,
+        if (
+            tradingMode === "live"
+            && !liveTradingEnabled
+        ) {
+            setStartError(
+                "Live trading отключен. " +
+                "LIVE_TRADING_ENABLED=0"
+            )
+
+            return
+        }
+
+        const force =
+            !startPlan.can_start
+
+        const startInstruments =
             startPlan.instruments.map(
                 instrument => ({
                     ticker:
@@ -335,23 +382,70 @@ export default function App() {
                         instrument.quantity,
                 })
             )
-        ).then(result => {
-            setStartResult(result)
+
+        setIsStarting(true)
+        setStartError(null)
+        setStartResult(null)
+
+        try {
+            const result =
+                tradingMode === "live"
+                    ? await startLive(
+                        force,
+                        startInstruments
+                    )
+                    : await startSandbox(
+                        force,
+                        startInstruments
+                    )
+
+            setStartResult(
+                result
+            )
 
             refreshAll()
+            refreshLiveStatus()
 
-            if (
-                result.real_sandbox_status ===
-                "started"
-            ) {
-                setTimeout(() => {
-                    setModal(null)
-                    setActiveTab(
-                        "sessions"
+            const started =
+                tradingMode === "live"
+                    ? (
+                        result.status ===
+                        "started"
                     )
-                }, 1200)
+                    : (
+                        result.real_sandbox_status ===
+                        "started"
+                        || result.status ===
+                        "started"
+                    )
+
+            if (started) {
+                window.setTimeout(
+                    () => {
+                        setModal(null)
+
+                        setActiveTab(
+                            "sessions"
+                        )
+                    },
+                    1200
+                )
             }
-        })
+
+        } catch (error) {
+            console.error(
+                "Strategy start error:",
+                error
+            )
+
+            setStartError(
+                error instanceof Error
+                    ? error.message
+                    : String(error)
+            )
+        } finally {
+            setIsStarting(false)
+        }
     }
 
 
@@ -441,6 +535,9 @@ export default function App() {
                             sessionsCount={
                                 sessions.length
                             }
+                            tradingMode={
+                                tradingMode
+                            }
                             onStart={
                                 openStartModal
                             }
@@ -479,7 +576,12 @@ export default function App() {
                             ) : (
                                 <EmptyState
                                     title="Нет активных сессий"
-                                    text="Запусти первую стратегию"
+                                    text={
+                                        tradingMode ===
+                                            "live"
+                                            ? "Запусти торговлю на боевом счёте"
+                                            : "Запусти первую стратегию"
+                                    }
                                     button="Запустить"
                                     onClick={
                                         openStartModal
@@ -547,7 +649,10 @@ export default function App() {
                                             : 1,
                                 }}
                             >
-                                Запустить стратегию
+                                {tradingMode ===
+                                    "live"
+                                    ? "Запустить торговлю"
+                                    : "Запустить Sandbox"}
                             </button>
                         </>
                     )}
@@ -691,11 +796,93 @@ export default function App() {
             {modal ===
                 "start-strategy" && (
                     <AppModal
-                        title="Запуск стратегии"
+                        title={
+                            tradingMode === "live"
+                                ? "Запуск торговли"
+                                : "Запуск стратегии"
+                        }
                         onClose={() =>
                             setModal(null)
                         }
                     >
+                        <div
+                            style={
+                                modeCardStyle
+                            }
+                        >
+                            <span
+                                style={{
+                                    color:
+                                        "#6b7280",
+                                }}
+                            >
+                                Режим
+                            </span>
+
+                            <b
+                                style={{
+                                    color:
+                                        tradingMode ===
+                                            "live"
+                                            ? "#dc2626"
+                                            : "#2563eb",
+                                }}
+                            >
+                                {tradingMode ===
+                                    "live"
+                                    ? "Боевой счёт"
+                                    : "Sandbox"}
+                            </b>
+                        </div>
+
+                        {tradingMode === "live" &&
+                            liveStatus && (
+                                <div
+                                    style={{
+                                        ...modeCardStyle,
+                                        marginTop: 8,
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            color:
+                                                "#6b7280",
+                                        }}
+                                    >
+                                        Счёт
+                                    </span>
+
+                                    <b>
+                                        {liveStatus
+                                            .selected_account_id ??
+                                            "Не выбран"}
+                                    </b>
+                                </div>
+                            )}
+
+                        {tradingMode === "live" &&
+                            !liveTradingEnabled && (
+                                <div
+                                    style={
+                                        warningStyle
+                                    }
+                                >
+                                    Live execution
+                                    отключен в
+                                    конфигурации.
+                                </div>
+                            )}
+
+                        {startError && (
+                            <div
+                                style={
+                                    errorStyle
+                                }
+                            >
+                                {startError}
+                            </div>
+                        )}
+
                         {!startPlan ? (
                             <div
                                 style={{
@@ -703,6 +890,7 @@ export default function App() {
                                         "white",
                                     borderRadius: 18,
                                     padding: 16,
+                                    marginTop: 12,
                                 }}
                             >
                                 <p>
@@ -730,25 +918,66 @@ export default function App() {
                                     onClick={
                                         calculatePlan
                                     }
-                                    style={
-                                        primaryButton
+                                    disabled={
+                                        instruments.length ===
+                                        0
                                     }
+                                    style={{
+                                        ...primaryButton,
+                                        opacity:
+                                            instruments.length ===
+                                                0
+                                                ? 0.5
+                                                : 1,
+                                    }}
                                 >
                                     Рассчитать капитал
                                 </button>
                             </div>
                         ) : (
-                            <StartPlanCard
-                                startPlan={
-                                    startPlan
-                                }
-                                startResult={
-                                    startResult
-                                }
-                                onStart={
-                                    startStrategy
-                                }
-                            />
+                            <>
+                                <StartPlanCard
+                                    startPlan={
+                                        startPlan
+                                    }
+                                    startResult={
+                                        startResult
+                                    }
+                                    onStart={
+                                        startStrategy
+                                    }
+                                />
+
+                                {tradingMode === "live" &&
+                                    !liveTradingEnabled && (
+                                        <div
+                                            style={{
+                                                color:
+                                                    "#dc2626",
+                                                fontSize: 13,
+                                                marginTop: 8,
+                                            }}
+                                        >
+                                            Запуск будет
+                                            заблокирован до
+                                            LIVE_TRADING_ENABLED=1.
+                                        </div>
+                                    )}
+
+                                {isStarting && (
+                                    <div
+                                        style={{
+                                            marginTop: 10,
+                                            textAlign:
+                                                "center",
+                                            color:
+                                                "#6b7280",
+                                        }}
+                                    >
+                                        Запуск...
+                                    </div>
+                                )}
+                            </>
                         )}
                     </AppModal>
                 )}
@@ -861,10 +1090,12 @@ function SectionTitle({
 
 function QuickActions({
     sessionsCount,
+    tradingMode,
     onStart,
     onSessions,
 }: {
     sessionsCount: number
+    tradingMode: "sandbox" | "live"
     onStart: () => void
     onSessions: () => void
 }) {
@@ -882,7 +1113,9 @@ function QuickActions({
                 onClick={onStart}
                 style={primaryButton}
             >
-                + Запустить
+                {tradingMode === "live"
+                    ? "+ Торговать"
+                    : "+ Запустить"}
             </button>
 
             <button
@@ -1049,4 +1282,35 @@ const smallPrimaryButton = {
     color: "white",
     fontWeight: 600,
     cursor: "pointer",
+}
+
+
+const modeCardStyle = {
+    background: "white",
+    borderRadius: 14,
+    padding: 13,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+}
+
+
+const warningStyle = {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 12,
+    background: "#fff7ed",
+    color: "#9a3412",
+    fontSize: 14,
+}
+
+
+const errorStyle = {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontSize: 14,
+    wordBreak: "break-word" as const,
 }

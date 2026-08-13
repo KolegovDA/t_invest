@@ -135,9 +135,52 @@ export async function startSandbox(
 }
 
 
+export async function startLive(
+    force: boolean,
+    instruments: {
+        ticker: string
+        levels: number
+        quantity: number
+    }[]
+) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/start-live`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                force,
+                instruments,
+            }),
+        }
+    )
+
+    return parseJsonResponse(response)
+}
+
+
 export async function getLiveStatus() {
     const response = await fetch(
         `${API_BASE_URL}/api/live/status`
+    )
+
+    return parseJsonResponse(response)
+}
+
+
+export interface HealthResponse {
+    status: string
+    trading_mode: string
+    live_trading_enabled: boolean
+    real_sandbox_enabled: boolean
+}
+
+
+export async function getHealth(): Promise<HealthResponse> {
+    const response = await fetch(
+        `${API_BASE_URL}/api/health`
     )
 
     return parseJsonResponse(response)
