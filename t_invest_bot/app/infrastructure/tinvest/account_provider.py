@@ -64,3 +64,24 @@ class TInvestAccountProvider:
         nano = Decimal(str(getattr(money, "nano", 0)))
 
         return units + nano / Decimal("1000000000")
+
+
+@dataclass(slots=True)
+class TInvestAccountProvider:
+    client_factory: TInvestClientFactory
+
+    def get_accounts(self) -> list[Any]:
+        with self.client_factory.create_client() as client:
+            response = client.users.get_accounts()
+
+        return list(response.accounts)
+
+    def get_account(
+        self,
+        account_id: str,
+    ) -> Any | None:
+        for account in self.get_accounts():
+            if account.id == account_id:
+                return account
+
+        return None
