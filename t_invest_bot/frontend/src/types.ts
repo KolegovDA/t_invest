@@ -56,3 +56,33 @@ export type StartSandboxResult = {
     force: boolean
     sessions: ActiveSession[]
 }
+
+export type LiveAccount = {
+    account_id: string
+    name: string
+    status: string
+    account_type: string
+    selected: boolean
+}
+
+export type LivePortfolio = {
+    total_amount_shares: string
+    total_amount_bonds: string
+    total_amount_etf: string
+    total_amount_currencies: string
+    expected_yield: string
+    positions_count: number
+}
+
+export type LiveStatus = {
+    token_configured: boolean
+    selected_account_id: string | null
+    account_found: boolean
+    live_trading_enabled: boolean
+    trading_mode: string
+    accounts: LiveAccount[]
+    portfolio: LivePortfolio | null
+    unary_limits_count: number
+    stream_limits_count: number
+    error: string | null
+}

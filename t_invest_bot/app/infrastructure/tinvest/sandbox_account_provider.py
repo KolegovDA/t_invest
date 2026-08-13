@@ -4,7 +4,9 @@ from typing import Any
 
 from t_tech.invest import MoneyValue
 
-from infrastructure.tinvest.client_factory import TInvestClientFactory
+from infrastructure.tinvest.client_factory import (
+    TInvestClientFactory,
+)
 
 
 @dataclass(slots=True)
@@ -12,18 +14,26 @@ class TInvestSandboxAccountProvider:
     client_factory: TInvestClientFactory
 
     def get_accounts(self) -> list[Any]:
-        with self.client_factory.create_client() as client:
-            response = client.sandbox.get_sandbox_accounts()
+        with self.client_factory.create_sandbox_client() as client:
+            response = (
+                client.sandbox
+                .get_sandbox_accounts()
+            )
 
-        return list(response.accounts)
+        return list(
+            response.accounts
+        )
 
     def open_account(
         self,
         name: str = "T-Invest Bot Sandbox",
     ) -> str:
-        with self.client_factory.create_client() as client:
-            response = client.sandbox.open_sandbox_account(
-                name=name,
+        with self.client_factory.create_sandbox_client() as client:
+            response = (
+                client.sandbox
+                .open_sandbox_account(
+                    name=name,
+                )
             )
 
         return response.account_id
@@ -39,10 +49,13 @@ class TInvestSandboxAccountProvider:
             currency=currency,
         )
 
-        with self.client_factory.create_client() as client:
-            response = client.sandbox.sandbox_pay_in(
-                account_id=account_id,
-                amount=money,
+        with self.client_factory.create_sandbox_client() as client:
+            response = (
+                client.sandbox
+                .sandbox_pay_in(
+                    account_id=account_id,
+                    amount=money,
+                )
             )
 
         return self._money_value_to_decimal(
@@ -53,7 +66,7 @@ class TInvestSandboxAccountProvider:
         self,
         account_id: str,
     ) -> None:
-        with self.client_factory.create_client() as client:
+        with self.client_factory.create_sandbox_client() as client:
             client.sandbox.close_sandbox_account(
                 account_id=account_id,
             )
@@ -64,8 +77,13 @@ class TInvestSandboxAccountProvider:
         currency: str,
     ) -> MoneyValue:
         units = int(amount)
+
         nano = int(
-            (amount - Decimal(units)) * Decimal("1000000000")
+            (
+                amount
+                - Decimal(units)
+            )
+            * Decimal("1000000000")
         )
 
         return MoneyValue(
@@ -80,5 +98,6 @@ class TInvestSandboxAccountProvider:
     ) -> Decimal:
         return (
             Decimal(str(money.units))
-            + Decimal(str(money.nano)) / Decimal("1000000000")
+            + Decimal(str(money.nano))
+            / Decimal("1000000000")
         )

@@ -1,4 +1,5 @@
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,12 @@ def _load_dotenv_if_available() -> None:
 
     current_file = Path(__file__).resolve()
 
+    executable_directory = Path(
+        sys.executable
+    ).resolve().parent
+
     possible_env_paths = [
+        executable_directory / ".env",
         current_file.parents[2] / ".env",
         current_file.parents[3] / ".env",
         Path.cwd() / ".env",

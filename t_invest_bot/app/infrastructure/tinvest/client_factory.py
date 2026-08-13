@@ -1,27 +1,33 @@
 from dataclasses import dataclass
 
-import certifi
-
 from t_tech.invest import Client
+
+
+LIVE_TARGET = "invest-public-api.tbank.ru:443"
+SANDBOX_TARGET = "sandbox-invest-public-api.tbank.ru:443"
 
 
 @dataclass(slots=True)
 class TInvestClientFactory:
     token: str
 
-    def create_client(self) -> Client:
-        options = [
-            (
-                "grpc.ssl_target_name_override",
-                "invest-public-api.tinkoff.ru",
-            ),
-            (
-                "grpc.default_ssl_roots_file_path",
-                certifi.where(),
-            ),
-        ]
-
+    def create_live_client(self) -> Client:
         return Client(
-            self.token,
-            options=options,
+            token=self.token,
+            target=LIVE_TARGET,
         )
+
+    def create_sandbox_client(self) -> Client:
+        return Client(
+            token=self.token,
+            target=SANDBOX_TARGET,
+        )
+
+    def create_client(self) -> Client:
+        """
+        Compatibility method.
+
+        Старый код, который читает market data/instruments,
+        пока использует production-контур.
+        """
+        return self.create_live_client()

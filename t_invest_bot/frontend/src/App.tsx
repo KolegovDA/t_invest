@@ -5,6 +5,7 @@ import {
     getApiUsage,
     getDashboard,
     getInstruments,
+    getLiveStatus,
     getRunnerStatus,
     getSession,
     getSessions,
@@ -22,6 +23,7 @@ import {
 import { DashboardCard } from "./components/DashboardCard"
 import { InstrumentCard } from "./components/InstrumentCard"
 import { InstrumentSettingsForm } from "./components/InstrumentSettingsForm"
+import { LiveStatusCard } from "./components/LiveStatusCard"
 import { RunnerStatusCard } from "./components/RunnerStatusCard"
 import { SessionDetailCard } from "./components/SessionDetailCard"
 import { SessionsCard } from "./components/SessionsCard"
@@ -32,6 +34,7 @@ import type {
     ApiUsage,
     Dashboard,
     Instrument,
+    LiveStatus,
     RunnerStatus,
     StartPlan,
     StartSandboxResult,
@@ -61,6 +64,9 @@ export default function App() {
 
     const [runners, setRunners] =
         useState<RunnerStatus[]>([])
+
+    const [liveStatus, setLiveStatus] =
+        useState<LiveStatus | null>(null)
 
     const [instruments, setInstruments] =
         useState<Instrument[]>([])
@@ -110,6 +116,7 @@ export default function App() {
 
     useEffect(() => {
         refreshAll()
+        refreshLiveStatus()
 
         getInstruments().then(data => {
             setInstruments(
@@ -164,6 +171,18 @@ export default function App() {
         getRunnerStatus().then(data => {
             setRunners(data.runners)
         })
+    }
+
+
+    function refreshLiveStatus() {
+        getLiveStatus()
+            .then(setLiveStatus)
+            .catch(error => {
+                console.error(
+                    "Live status error:",
+                    error
+                )
+            })
     }
 
 
@@ -448,8 +467,7 @@ export default function App() {
                                 subtitle={`${sessions.length} активных`}
                             />
 
-                            {sessions.length >
-                                0 ? (
+                            {sessions.length > 0 ? (
                                 <SessionsCard
                                     sessions={
                                         sessions
@@ -563,12 +581,33 @@ export default function App() {
                                 subtitle="T-Invest Bot v1.0"
                             />
 
+                            <LiveStatusCard
+                                status={
+                                    liveStatus
+                                }
+                            />
+
+                            <button
+                                onClick={
+                                    refreshLiveStatus
+                                }
+                                style={{
+                                    ...primaryButton,
+                                    marginBottom: 16,
+                                }}
+                            >
+                                Обновить боевой счёт
+                            </button>
+
                             <SettingsCard
                                 realSandbox={
                                     runners.some(
                                         runner =>
                                             runner.is_running
                                     )
+                                }
+                                liveStatus={
+                                    liveStatus
                                 }
                             />
                         </>
@@ -906,8 +945,10 @@ function EmptyState({
 
 function SettingsCard({
     realSandbox,
+    liveStatus,
 }: {
     realSandbox: boolean
+    liveStatus: LiveStatus | null
 }) {
     return (
         <div
@@ -919,15 +960,36 @@ function SettingsCard({
         >
             <SettingRow
                 label="Режим"
-                value="Sandbox"
+                value={
+                    liveStatus?.trading_mode ??
+                    "sandbox"
+                }
             />
 
             <SettingRow
-                label="Runner"
+                label="Sandbox Runner"
                 value={
                     realSandbox
                         ? "Запущен"
                         : "Остановлен"
+                }
+            />
+
+            <SettingRow
+                label="Live execution"
+                value={
+                    liveStatus?.live_trading_enabled
+                        ? "Включен"
+                        : "Отключен"
+                }
+            />
+
+            <SettingRow
+                label="Боевой счёт"
+                value={
+                    liveStatus?.account_found
+                        ? "Подключен"
+                        : "Не выбран"
                 }
             />
 

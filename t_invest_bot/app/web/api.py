@@ -6,6 +6,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from application.live_account_service import (
+    LiveAccountService,
+)
+
 from application.multi_instrument_session_config import (
     InstrumentConfig,
     MultiInstrumentSessionConfig,
@@ -364,6 +368,65 @@ def start_sandbox(
             )
             for session in started_sessions
         ],
+    }
+
+@app.get("/api/live/status")
+def live_status():
+    status = LiveAccountService(
+        settings=settings,
+    ).get_status()
+
+    return {
+        "token_configured": status.token_configured,
+        "selected_account_id": status.selected_account_id,
+        "account_found": status.account_found,
+        "live_trading_enabled": status.live_trading_enabled,
+        "trading_mode": status.trading_mode,
+
+        "accounts": [
+            {
+                "account_id": account.account_id,
+                "name": account.name,
+                "status": account.status,
+                "account_type": account.account_type,
+                "selected": account.selected,
+            }
+            for account in status.accounts
+        ],
+
+        "portfolio": (
+            {
+                "total_amount_shares": str(
+                    status.portfolio.total_amount_shares
+                ),
+                "total_amount_bonds": str(
+                    status.portfolio.total_amount_bonds
+                ),
+                "total_amount_etf": str(
+                    status.portfolio.total_amount_etf
+                ),
+                "total_amount_currencies": str(
+                    status.portfolio.total_amount_currencies
+                ),
+                "expected_yield": str(
+                    status.portfolio.expected_yield
+                ),
+                "positions_count": (
+                    status.portfolio.positions_count
+                ),
+            }
+            if status.portfolio is not None
+            else None
+        ),
+
+        "unary_limits_count": (
+            status.unary_limits_count
+        ),
+        "stream_limits_count": (
+            status.stream_limits_count
+        ),
+
+        "error": status.error,
     }
 
 

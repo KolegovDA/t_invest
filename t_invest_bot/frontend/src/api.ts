@@ -1,5 +1,4 @@
-const API_HOST = window.location.hostname
-const API_BASE_URL = `http://${API_HOST}:8000`
+const API_BASE_URL = window.location.origin
 
 
 async function parseJsonResponse(response: Response) {
@@ -130,6 +129,15 @@ export async function startSandbox(
                 instruments,
             }),
         }
+    )
+
+    return parseJsonResponse(response)
+}
+
+
+export async function getLiveStatus() {
+    const response = await fetch(
+        `${API_BASE_URL}/api/live/status`
     )
 
     return parseJsonResponse(response)
