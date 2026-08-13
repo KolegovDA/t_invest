@@ -24,10 +24,4 @@ class TInvestClientFactory:
         )
 
     def create_client(self) -> Client:
-        """
-        Compatibility method.
-
-        Старый код, который читает market data/instruments,
-        пока использует production-контур.
-        """
         return self.create_live_client()
