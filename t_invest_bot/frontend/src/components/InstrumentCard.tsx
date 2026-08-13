@@ -1,167 +1,133 @@
 import type { Instrument } from "../types"
 
+
 type Props = {
     instrument: Instrument
-    isEditing: boolean
-    editLevels: number
-    editQuantity: string
-    onStartEdit: (instrument: Instrument) => void
+    onConfigure: (instrument: Instrument) => void
     onRemove: (ticker: string) => void
-    onEditLevelsChange: (value: number) => void
-    onEditQuantityChange: (value: string) => void
-    onSaveEdit: () => void
-    onCancelEdit: () => void
 }
+
 
 export function InstrumentCard({
     instrument,
-    isEditing,
-    editLevels,
-    editQuantity,
-    onStartEdit,
+    onConfigure,
     onRemove,
-    onEditLevelsChange,
-    onEditQuantityChange,
-    onSaveEdit,
-    onCancelEdit,
 }: Props) {
     return (
         <div
             style={{
                 background: "white",
-                borderRadius: 16,
+                borderRadius: 18,
                 padding: 16,
                 marginBottom: 12,
-                boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
+                boxShadow:
+                    "0 4px 14px rgba(0,0,0,0.05)",
             }}
         >
-            <h3 style={{ marginTop: 0 }}>{instrument.ticker}</h3>
-
-            <p>Уровней: {instrument.levels}</p>
-            <p>Базовый лот: {instrument.quantity ?? 1}</p>
-            <p>Текущая цена: {instrument.price.toLocaleString()} ₽</p>
-            <p>
-                Требуется капитал:{" "}
-                {instrument.required_capital.toLocaleString()} ₽
-            </p>
-
-            {isEditing && (
-                <div style={{ marginTop: 12 }}>
-                    <label>Количество уровней</label>
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                }}
+            >
+                <div>
+                    <h3
+                        style={{
+                            margin: 0,
+                            fontSize: 21,
+                        }}
+                    >
+                        {instrument.ticker}
+                    </h3>
 
                     <div
                         style={{
-                            display: "flex",
-                            gap: 8,
-                            marginTop: 8,
-                            marginBottom: 12,
+                            color: "#6b7280",
+                            marginTop: 5,
                         }}
                     >
-                        {[10, 20, 30].map(level => (
-                            <button
-                                key={level}
-                                onClick={() => onEditLevelsChange(level)}
-                                style={{
-                                    flex: 1,
-                                    padding: 12,
-                                    borderRadius: 10,
-                                    border:
-                                        editLevels === level
-                                            ? "2px solid #111827"
-                                            : "1px solid #ddd",
-                                    background:
-                                        editLevels === level
-                                            ? "#eef2ff"
-                                            : "white",
-                                }}
-                            >
-                                {level}
-                            </button>
-                        ))}
-                    </div>
-
-                    <label>Базовый лот</label>
-
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        value={editQuantity}
-                        onChange={event =>
-                            onEditQuantityChange(
-                                event.target.value.replace(/\D/g, "")
-                            )
-                        }
-                        style={{
-                            width: "100%",
-                            padding: 12,
-                            marginTop: 6,
-                            marginBottom: 12,
-                            borderRadius: 10,
-                            border: "1px solid #ddd",
-                            boxSizing: "border-box",
-                            fontSize: 16,
-                        }}
-                    />
-
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            marginBottom: 12,
-                        }}
-                    >
-                        <button
-                            onClick={onSaveEdit}
-                            style={{
-                                flex: 1,
-                                padding: 12,
-                                borderRadius: 10,
-                                border: "none",
-                                background: "#16a34a",
-                                color: "white",
-                            }}
-                        >
-                            Сохранить
-                        </button>
-
-                        <button
-                            onClick={onCancelEdit}
-                            style={{
-                                flex: 1,
-                                padding: 12,
-                                borderRadius: 10,
-                                border: "1px solid #ddd",
-                                background: "white",
-                            }}
-                        >
-                            Отмена
-                        </button>
+                        {instrument.levels} уровней
                     </div>
                 </div>
-            )}
 
-            <div style={{ display: "flex", gap: 8 }}>
+                <div
+                    style={{
+                        fontWeight: 700,
+                        fontSize: 18,
+                    }}
+                >
+                    {instrument.price > 0
+                        ? `${instrument.price.toLocaleString()} ₽`
+                        : "—"}
+                </div>
+            </div>
+
+            <div
+                style={{
+                    marginTop: 16,
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                    fontSize: 14,
+                }}
+            >
+                <div>
+                    <div style={{ color: "#9ca3af" }}>
+                        Базовый лот
+                    </div>
+
+                    <b>
+                        {instrument.quantity ?? 1}
+                    </b>
+                </div>
+
+                <div>
+                    <div style={{ color: "#9ca3af" }}>
+                        Капитал
+                    </div>
+
+                    <b>
+                        {instrument.required_capital.toLocaleString()} ₽
+                    </b>
+                </div>
+            </div>
+
+            <div
+                style={{
+                    display: "flex",
+                    gap: 8,
+                    marginTop: 16,
+                }}
+            >
                 <button
-                    onClick={() => onStartEdit(instrument)}
+                    onClick={() =>
+                        onConfigure(instrument)
+                    }
                     style={{
                         flex: 1,
                         padding: 12,
-                        borderRadius: 10,
-                        border: "1px solid #ddd",
+                        borderRadius: 11,
+                        border:
+                            "1px solid #d1d5db",
                         background: "white",
+                        fontWeight: 600,
                     }}
                 >
                     Настроить
                 </button>
 
                 <button
-                    onClick={() => onRemove(instrument.ticker)}
+                    onClick={() =>
+                        onRemove(instrument.ticker)
+                    }
                     style={{
-                        flex: 1,
-                        padding: 12,
-                        borderRadius: 10,
-                        border: "1px solid #ddd",
-                        background: "white",
+                        padding: "12px 16px",
+                        borderRadius: 11,
+                        border:
+                            "1px solid #fecaca",
+                        background: "#fff",
+                        color: "#dc2626",
                     }}
                 >
                     Удалить
