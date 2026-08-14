@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -6,37 +8,49 @@ from decimal import Decimal
 class OrderExecutionState:
     order_id: str
 
+    #
+    # Полное исполнение заявки.
+    #
     is_executed: bool
 
     #
-    # Количество исполненных лотов.
+    # Количество фактически
+    # исполненных лотов.
     #
     executed_quantity: int
 
-    #
-    # Средняя фактическая цена
-    # исполнения.
-    #
     executed_price: (
         Decimal | None
     ) = None
 
-    #
-    # Фактическая комиссия,
-    # полученная от брокера.
-    #
     executed_commission: (
         Decimal | None
     ) = None
 
-    #
-    # Фактическая сумма сделки
-    # без комиссии.
-    #
-    # Для live это значение
-    # является предпочтительным
-    # источником истины.
-    #
     total_order_amount: (
         Decimal | None
     ) = None
+
+    #
+    # Нормализованный статус брокера:
+    #
+    # NEW
+    # PARTIALLY_FILLED
+    # FILLED
+    # CANCELLED
+    # REJECTED
+    # UNKNOWN
+    #
+    status: str = "UNKNOWN"
+
+    is_cancelled: bool = False
+    is_rejected: bool = False
+
+    @property
+    def is_terminal_without_execution(
+        self,
+    ) -> bool:
+        return (
+            self.is_cancelled
+            or self.is_rejected
+        )

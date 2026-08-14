@@ -1,136 +1,314 @@
-from dataclasses import dataclass
 from decimal import Decimal
 
-from broker.live_order_manager import LiveOrderManager
-from broker.order_state_tracker import OrderStateTracker
-from domain.commands import PlaceBuyLimitCommand
-from domain.order_execution import PlacedOrder
-from domain.order_state import OrderExecutionState
+from broker.live_order_manager import (
+    LiveOrderManager,
+    LiveOrderRecord,
+)
+from broker.order_state_tracker import (
+    OrderStateTracker,
+)
+from domain.commands import (
+    PlaceBuyLimitCommand,
+)
+from domain.order_execution import (
+    PlacedOrder,
+)
+from domain.order_state import (
+    OrderExecutionState,
+)
 
 
 class FakeOrderExecutor:
-    def __init__(self) -> None:
-        self.counter = 0
-
-    def place_limit_buy(
-        self,
-        account_id: str,
-        instrument_id: str,
-        quantity: int,
-        price: Decimal,
-    ) -> PlacedOrder:
-        self.counter += 1
-
-        return PlacedOrder(
-            order_id=f"order-{self.counter}",
-            request_id=f"request-{self.counter}",
-        )
-
-    def place_limit_sell(
-        self,
-        account_id: str,
-        instrument_id: str,
-        quantity: int,
-        price: Decimal,
-    ) -> PlacedOrder:
-        self.counter += 1
-
-        return PlacedOrder(
-            order_id=f"order-{self.counter}",
-            request_id=f"request-{self.counter}",
-        )
-
     def cancel_order(
         self,
-        account_id: str,
-        order_id: str,
-    ) -> None:
+        **kwargs,
+    ):
         pass
 
 
-@dataclass
-class FakeOrderStateProvider:
-    executed_order_ids: set[str]
+class FakeStateProvider:
+    def __init__(
+        self,
+        state: OrderExecutionState,
+    ):
+        self.state = state
 
     def get_order_state(
         self,
         account_id: str,
         order_id: str,
     ) -> OrderExecutionState:
-        is_executed = order_id in self.executed_order_ids
+        return self.state
 
-        return OrderExecutionState(
-            order_id=order_id,
-            is_executed=is_executed,
-            executed_quantity=1 if is_executed else 0,
-            executed_price=Decimal("300") if is_executed else None,
+
+def create_manager(
+) -> LiveOrderManager:
+    manager = LiveOrderManager(
+        account_id="ACCOUNT",
+        order_executor=(
+            FakeOrderExecutor()
+        ),
+    )
+
+    manager.active_orders[
+        "order-1"
+    ] = LiveOrderRecord(
+        command=(
+            PlaceBuyLimitCommand(
+                instrument_id=(
+                    "SBER"
+                ),
+                level_index=1,
+                quantity=1,
+                price=Decimal(
+                    "300"
+                ),
+            )
+        ),
+
+        placed_order=(
+            PlacedOrder(
+                order_id="order-1",
+                request_id=(
+                    "request-1"
+                ),
+            )
+        ),
+    )
+
+    return manager
+
+
+def test_filled_order_is_returned_and_removed(
+) -> None:
+    manager = create_manager()
+
+    tracker = OrderStateTracker(
+        account_id="ACCOUNT",
+
+        live_order_manager=(
+            manager
+        ),
+
+        order_state_provider=(
+            FakeStateProvider(
+                OrderExecutionState(
+                    order_id="order-1",
+
+                    is_executed=True,
+
+                    executed_quantity=1,
+
+                    executed_price=Decimal(
+                        "300"
+                    ),
+
+                    status="FILLED",
+                )
+            )
+        ),
+    )
+
+    result = tracker.poll()
+
+    assert (
+        len(
+            result.executed_orders
         )
-
-
-def test_order_state_tracker_removes_executed_order_from_active_orders() -> None:
-    live_order_manager = LiveOrderManager(
-        account_id="account-1",
-        order_executor=FakeOrderExecutor(),
+        == 1
     )
 
-    placed_orders = live_order_manager.submit_commands(
-        commands=[
-            PlaceBuyLimitCommand(
-                instrument_id="SBER",
-                level_index=1,
-                quantity=1,
-                price=Decimal("300"),
-            )
-        ],
+    assert (
+        result.terminal_orders
+        == []
     )
 
-    provider = FakeOrderStateProvider(
-        executed_order_ids={
-            placed_orders[0].order_id,
-        }
+    assert (
+        manager.active_orders
+        == {}
     )
+
+
+def test_new_order_remains_active(
+) -> None:
+    manager = create_manager()
 
     tracker = OrderStateTracker(
-        account_id="account-1",
-        live_order_manager=live_order_manager,
-        order_state_provider=provider,
-    )
+        account_id="ACCOUNT",
 
-    executed = tracker.poll()
+        live_order_manager=manager,
 
-    assert len(executed) == 1
-    assert len(tracker.executed_orders) == 1
-    assert live_order_manager.active_orders == {}
+        order_state_provider=(
+            FakeStateProvider(
+                OrderExecutionState(
+                    order_id="order-1",
 
+                    is_executed=False,
 
-def test_order_state_tracker_keeps_not_executed_order_active() -> None:
-    live_order_manager = LiveOrderManager(
-        account_id="account-1",
-        order_executor=FakeOrderExecutor(),
-    )
+                    executed_quantity=0,
 
-    live_order_manager.submit_commands(
-        commands=[
-            PlaceBuyLimitCommand(
-                instrument_id="SBER",
-                level_index=1,
-                quantity=1,
-                price=Decimal("300"),
+                    status="NEW",
+                )
             )
-        ],
+        ),
     )
 
-    provider = FakeOrderStateProvider(
-        executed_order_ids=set(),
+    result = tracker.poll()
+
+    assert (
+        result.executed_orders
+        == []
     )
+
+    assert (
+        result.terminal_orders
+        == []
+    )
+
+    assert (
+        "order-1"
+        in manager.active_orders
+    )
+
+
+def test_cancelled_order_is_terminal_and_removed(
+) -> None:
+    manager = create_manager()
 
     tracker = OrderStateTracker(
-        account_id="account-1",
-        live_order_manager=live_order_manager,
-        order_state_provider=provider,
+        account_id="ACCOUNT",
+
+        live_order_manager=manager,
+
+        order_state_provider=(
+            FakeStateProvider(
+                OrderExecutionState(
+                    order_id="order-1",
+
+                    is_executed=False,
+
+                    executed_quantity=0,
+
+                    status="CANCELLED",
+
+                    is_cancelled=True,
+                )
+            )
+        ),
     )
 
-    executed = tracker.poll()
+    result = tracker.poll()
 
-    assert executed == []
-    assert len(live_order_manager.active_orders) == 1
+    assert (
+        result.executed_orders
+        == []
+    )
+
+    assert (
+        len(
+            result.terminal_orders
+        )
+        == 1
+    )
+
+    assert (
+        result
+        .terminal_orders[0]
+        .execution_state
+        .status
+        == "CANCELLED"
+    )
+
+    assert (
+        manager.active_orders
+        == {}
+    )
+
+
+def test_rejected_order_is_terminal_and_removed(
+) -> None:
+    manager = create_manager()
+
+    tracker = OrderStateTracker(
+        account_id="ACCOUNT",
+
+        live_order_manager=manager,
+
+        order_state_provider=(
+            FakeStateProvider(
+                OrderExecutionState(
+                    order_id="order-1",
+
+                    is_executed=False,
+
+                    executed_quantity=0,
+
+                    status="REJECTED",
+
+                    is_rejected=True,
+                )
+            )
+        ),
+    )
+
+    result = tracker.poll()
+
+    assert (
+        len(
+            result.terminal_orders
+        )
+        == 1
+    )
+
+    assert (
+        manager.active_orders
+        == {}
+    )
+
+
+def test_partial_fill_remains_active(
+) -> None:
+    manager = create_manager()
+
+    tracker = OrderStateTracker(
+        account_id="ACCOUNT",
+
+        live_order_manager=manager,
+
+        order_state_provider=(
+            FakeStateProvider(
+                OrderExecutionState(
+                    order_id="order-1",
+
+                    is_executed=False,
+
+                    executed_quantity=1,
+
+                    executed_price=Decimal(
+                        "300"
+                    ),
+
+                    status=(
+                        "PARTIALLY_FILLED"
+                    ),
+                )
+            )
+        ),
+    )
+
+    result = tracker.poll()
+
+    assert (
+        result.executed_orders
+        == []
+    )
+
+    assert (
+        result.terminal_orders
+        == []
+    )
+
+    assert (
+        "order-1"
+        in manager.active_orders
+    )

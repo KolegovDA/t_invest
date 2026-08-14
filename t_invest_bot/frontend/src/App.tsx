@@ -683,7 +683,7 @@ export default function App() {
                         <>
                             <SectionTitle
                                 title="Настройки"
-                                subtitle="T-Invest Bot v1.0"
+                                subtitle="ESM Trade System v.1.0.1"
                             />
 
                             <LiveStatusCard
@@ -1025,7 +1025,7 @@ function Header() {
                     fontWeight: 600,
                 }}
             >
-                T-INVEST BOT
+                ESM Trade System
             </div>
 
             <h1

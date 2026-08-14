@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -47,42 +49,53 @@ class TInvestLiveOrderStateProvider:
             )
         )
 
-        status = getattr(
+        raw_status = getattr(
             response,
             "execution_report_status",
             None,
         )
 
         is_executed = (
-            status
+            raw_status
             == OrderExecutionReportStatus
             .EXECUTION_REPORT_STATUS_FILL
         )
 
+        is_cancelled = (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_CANCELLED
+        )
+
+        is_rejected = (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_REJECTED
+        )
+
+        status = self._normalize_status(
+            raw_status=raw_status,
+        )
+
         executed_price = None
-
         executed_commission = None
-
         total_order_amount = None
 
         if is_executed:
             executed_price = (
-                self
-                ._extract_executed_price(
+                self._extract_executed_price(
                     response=response,
                 )
             )
 
             executed_commission = (
-                self
-                ._extract_commission(
+                self._extract_commission(
                     response=response,
                 )
             )
 
             total_order_amount = (
-                self
-                ._extract_total_amount(
+                self._extract_total_amount(
                     response=response,
                 )
             )
@@ -109,7 +122,58 @@ class TInvestLiveOrderStateProvider:
             total_order_amount=(
                 total_order_amount
             ),
+
+            status=status,
+
+            is_cancelled=(
+                is_cancelled
+            ),
+
+            is_rejected=(
+                is_rejected
+            ),
         )
+
+    def _normalize_status(
+        self,
+        raw_status,
+    ) -> str:
+        if (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_FILL
+        ):
+            return "FILLED"
+
+        if (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_PARTIALLYFILL
+        ):
+            return "PARTIALLY_FILLED"
+
+        if (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_CANCELLED
+        ):
+            return "CANCELLED"
+
+        if (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_REJECTED
+        ):
+            return "REJECTED"
+
+        if (
+            raw_status
+            == OrderExecutionReportStatus
+            .EXECUTION_REPORT_STATUS_NEW
+        ):
+            return "NEW"
+
+        return "UNKNOWN"
 
     def _extract_executed_price(
         self,
@@ -158,54 +222,54 @@ class TInvestLiveOrderStateProvider:
             )
         )
 
-        if trades:
-            total_quantity = 0
+        total_quantity = 0
+        weighted_amount = Decimal(
+            "0"
+        )
 
-            weighted_amount = Decimal(
-                "0"
+        for trade in trades:
+            quantity = int(
+                getattr(
+                    trade,
+                    "quantity",
+                    0,
+                )
             )
 
-            for trade in trades:
-                quantity = int(
+            price = (
+                self._money_to_decimal(
                     getattr(
                         trade,
-                        "quantity",
-                        0,
+                        "price",
+                        None,
                     )
                 )
+            )
 
-                price = (
-                    self
-                    ._money_to_decimal(
-                        getattr(
-                            trade,
-                            "price",
-                            None,
-                        )
-                    )
-                )
+            if (
+                quantity <= 0
+                or price <= 0
+            ):
+                continue
 
-                if quantity <= 0:
-                    continue
+            total_quantity += (
+                quantity
+            )
 
-                total_quantity += (
+            weighted_amount += (
+                price
+                * Decimal(
                     quantity
                 )
+            )
 
-                weighted_amount += (
-                    price
-                    * Decimal(
-                        quantity
-                    )
+        if total_quantity > 0:
+            return (
+                weighted_amount
+                / Decimal(
+                    total_quantity
                 )
-
-            if total_quantity > 0:
-                return (
-                    weighted_amount
-                    / Decimal(
-                        total_quantity
-                    )
-                )
+            )
 
         raise ValueError(
             "Executed order price "
@@ -216,10 +280,6 @@ class TInvestLiveOrderStateProvider:
         self,
         response,
     ) -> Decimal | None:
-        #
-        # Основное поле новых
-        # SDK/API.
-        #
         commission = getattr(
             response,
             "executed_commission",
@@ -233,10 +293,6 @@ class TInvestLiveOrderStateProvider:
                 )
             )
 
-        #
-        # Совместимость с другими
-        # версиями SDK.
-        #
         commission = getattr(
             response,
             "commission",
@@ -256,11 +312,6 @@ class TInvestLiveOrderStateProvider:
         self,
         response,
     ) -> Decimal | None:
-        #
-        # Предпочтительный вариант:
-        # брокер уже посчитал денежную
-        # сумму заявки.
-        #
         value = getattr(
             response,
             "total_order_amount",
@@ -277,9 +328,6 @@ class TInvestLiveOrderStateProvider:
             if result > 0:
                 return result
 
-        #
-        # Совместимость.
-        #
         value = getattr(
             response,
             "total_order_amount_currency",
@@ -296,10 +344,6 @@ class TInvestLiveOrderStateProvider:
             if result > 0:
                 return result
 
-        #
-        # Последний fallback —
-        # сумма фактических trades.
-        #
         trades = list(
             getattr(
                 response,
@@ -309,7 +353,6 @@ class TInvestLiveOrderStateProvider:
         )
 
         total = Decimal("0")
-
         found = False
 
         for trade in trades:
@@ -339,7 +382,9 @@ class TInvestLiveOrderStateProvider:
 
             total += (
                 price
-                * Decimal(quantity)
+                * Decimal(
+                    quantity
+                )
             )
 
             found = True

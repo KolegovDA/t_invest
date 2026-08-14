@@ -5794,6 +5794,13 @@ imported by:
  &#8226;   <a href="#anyio.streams.stapled">anyio.streams.stapled</a>
  &#8226;   <a href="#anyio.streams.tls">anyio.streams.tls</a>
  &#8226;   <a href="#anyio.to_thread">anyio.to_thread</a>
+ &#8226;   <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
+ &#8226;   <a href="#application.web_runner_registry">application.web_runner_registry</a>
+ &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
+ &#8226;   <a href="#broker.order_state_tracker">broker.order_state_tracker</a>
  &#8226;   <a href="#charset_normalizer">charset_normalizer</a>
  &#8226;   <a href="#charset_normalizer.api">charset_normalizer.api</a>
  &#8226;   <a href="#charset_normalizer.cd">charset_normalizer.cd</a>
@@ -5820,6 +5827,7 @@ imported by:
  &#8226;   <a href="#click.types">click.types</a>
  &#8226;   <a href="#click.utils">click.utils</a>
  &#8226;   <a href="#codeop">codeop</a>
+ &#8226;   <a href="#config.runtime_paths">config.runtime_paths</a>
  &#8226;   <a href="#contourpy">contourpy</a>
  &#8226;   <a href="#contourpy.array">contourpy.array</a>
  &#8226;   <a href="#contourpy.chunk">contourpy.chunk</a>
@@ -5831,6 +5839,8 @@ imported by:
  &#8226;   <a href="#cycler">cycler</a>
  &#8226;   <a href="#dateutil.parser._parser">dateutil.parser._parser</a>
  &#8226;   <a href="#doctest">doctest</a>
+ &#8226;   <a href="#domain.order_state">domain.order_state</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
  &#8226;   <a href="#fontTools.misc.textTools">fontTools.misc.textTools</a>
  &#8226;   <a href="#grpc._compression">grpc._compression</a>
  &#8226;   <a href="#grpc._observability">grpc._observability</a>
@@ -5886,6 +5896,9 @@ imported by:
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#importlib.metadata._meta">importlib.metadata._meta</a>
  &#8226;   <a href="#importlib.resources.readers">importlib.resources.readers</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.sandbox_order_state_provider">infrastructure.tinvest.sandbox_order_state_provider</a>
  &#8226;   <a href="#matplotlib._mathtext">matplotlib._mathtext</a>
  &#8226;   <a href="#matplotlib._mathtext_data">matplotlib._mathtext_data</a>
  &#8226;   <a href="#matplotlib._text_helpers">matplotlib._text_helpers</a>
@@ -6613,6 +6626,7 @@ imported by:
  &#8226;   <a href="#uvicorn.supervisors.statreload">uvicorn.supervisors.statreload</a>
  &#8226;   <a href="#uvicorn.supervisors.watchfilesreload">uvicorn.supervisors.watchfilesreload</a>
  &#8226;   <a href="#uvicorn.workers">uvicorn.workers</a>
+ &#8226;   <a href="#web.api">web.api</a>
 
   </div>
 
@@ -12451,8 +12465,10 @@ imported by:
 <span class="moduletype">Package</span>  <div class="import">
 imported by:
     <a href="#application.api_usage_recorder">application.api_usage_recorder</a>
+ &#8226;   <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
  &#8226;   <a href="#application.level_quantity_calculator">application.level_quantity_calculator</a>
  &#8226;   <a href="#application.live_account_service">application.live_account_service</a>
+ &#8226;   <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
  &#8226;   <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
  &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
  &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
@@ -12467,6 +12483,7 @@ imported by:
  &#8226;   <a href="#application.trade_capital_service">application.trade_capital_service</a>
  &#8226;   <a href="#application.trade_event_handler">application.trade_event_handler</a>
  &#8226;   <a href="#application.trading_mode_guard">application.trading_mode_guard</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#application.web_runner_registry">application.web_runner_registry</a>
  &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
 
@@ -12487,6 +12504,31 @@ imports:
   <div class="import">
 imported by:
     <a href="#infrastructure.sqlite.api_usage_repository">infrastructure.sqlite.api_usage_repository</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="application.grid_engine_state_mapper"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/grid_engine_state_mapper.py" type="text/plain"><tt>application.grid_engine_state_mapper</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
+ &#8226;   <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
+ &#8226;   <a href="#decimal">decimal</a>
+ &#8226;   <a href="#domain.positions">domain.positions</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
+ &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
+ &#8226;   <a href="#strategy.grid_risk_manager">strategy.grid_risk_manager</a>
+ &#8226;   <a href="#strategy.trailing_engine">strategy.trailing_engine</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
 
   </div>
 
@@ -12526,6 +12568,27 @@ imports:
   <div class="import">
 imported by:
     <a href="#web.api">web.api</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="application.live_order_manager_state_mapper"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/live_order_manager_state_mapper.py" type="text/plain"><tt>application.live_order_manager_state_mapper</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
+ &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
+ &#8226;   <a href="#domain.commands">domain.commands</a>
+ &#8226;   <a href="#domain.order_execution">domain.order_execution</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
 
   </div>
 
@@ -12612,6 +12675,7 @@ imports:
 imported by:
     <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
  &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
 
   </div>
 
@@ -12775,13 +12839,16 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/sandbox_trading_session.py" type="text/plain"><tt>application.sandbox_trading_session</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#application">application</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
  &#8226;   <a href="#application.trade_event_handler">application.trade_event_handler</a>
  &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
  &#8226;   <a href="#broker.order_execution_event_mapper">broker.order_execution_event_mapper</a>
  &#8226;   <a href="#broker.order_state_tracker">broker.order_state_tracker</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#decimal">decimal</a>
+ &#8226;   <a href="#domain.commands">domain.commands</a>
+ &#8226;   <a href="#domain.enums">domain.enums</a>
  &#8226;   <a href="#domain.events">domain.events</a>
  &#8226;   <a href="#domain.order_execution">domain.order_execution</a>
  &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
@@ -12858,11 +12925,37 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="application.trading_session_state_service"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/trading_session_state_service.py" type="text/plain"><tt>application.trading_session_state_service</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
+ &#8226;   <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#application.multi_instrument_session_context">application.multi_instrument_session_context</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#decimal">decimal</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
+ &#8226;   <a href="#portfolio.capital_reservation_manager">portfolio.capital_reservation_manager</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.web_runner_service">application.web_runner_service</a>
+ &#8226;   <a href="#web.api">web.api</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="application.web_runner_registry"></a>
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/web_runner_registry.py" type="text/plain"><tt>application.web_runner_registry</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#application">application</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
  &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
 
@@ -12880,8 +12973,10 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/web_runner_service.py" type="text/plain"><tt>application.web_runner_service</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#application">application</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application">application</a>
  &#8226;   <a href="#application.sandbox_session_registry">application.sandbox_session_registry</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#decimal">decimal</a>
@@ -14366,7 +14461,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
  &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
  &#8226;   <a href="#broker.order_state_tracker">broker.order_state_tracker</a>
 
@@ -14400,7 +14497,8 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/broker/order_state_tracker.py" type="text/plain"><tt>broker.order_state_tracker</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#broker">broker</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#broker">broker</a>
  &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
@@ -16232,7 +16330,27 @@ imported by:
   <a target="code" href="-" type="text/plain"><tt>config</tt></a>
 <span class="moduletype">NamespacePackage</span>  <div class="import">
 imported by:
-    <a href="#config.settings">config.settings</a>
+    <a href="#config.runtime_paths">config.runtime_paths</a>
+ &#8226;   <a href="#config.settings">config.settings</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="config.runtime_paths"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/config/runtime_paths.py" type="text/plain"><tt>config.runtime_paths</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#config">config</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#sys">sys</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#web.api">web.api</a>
 
   </div>
 
@@ -17312,6 +17430,7 @@ imported by:
  &#8226;   <a href="#application.trade_capital_service">application.trade_capital_service</a>
  &#8226;   <a href="#application.trade_event_handler">application.trade_event_handler</a>
  &#8226;   <a href="#application.trading_mode_guard">application.trading_mode_guard</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#application.web_runner_registry">application.web_runner_registry</a>
  &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
  &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
@@ -17325,6 +17444,7 @@ imported by:
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
  &#8226;   <a href="#domain.portfolio">domain.portfolio</a>
  &#8226;   <a href="#domain.positions">domain.positions</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
  &#8226;   <a href="#fastapi._compat.shared">fastapi._compat.shared</a>
  &#8226;   <a href="#fastapi._compat.v2">fastapi._compat.v2</a>
  &#8226;   <a href="#fastapi.dependencies.models">fastapi.dependencies.models</a>
@@ -17335,6 +17455,7 @@ imported by:
  &#8226;   <a href="#h11._events">h11._events</a>
  &#8226;   <a href="#infrastructure.sqlite.api_usage_repository">infrastructure.sqlite.api_usage_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.sqlite_database">infrastructure.sqlite.sqlite_database</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.web_session_repository">infrastructure.sqlite.web_session_repository</a>
  &#8226;   <a href="#infrastructure.tinvest.client_factory">infrastructure.tinvest.client_factory</a>
  &#8226;   <a href="#infrastructure.tinvest.history_provider">infrastructure.tinvest.history_provider</a>
@@ -18028,6 +18149,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#_pytest.python_api">_pytest.python_api</a>
+ &#8226;   <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
  &#8226;   <a href="#application.level_quantity_calculator">application.level_quantity_calculator</a>
  &#8226;   <a href="#application.live_account_service">application.live_account_service</a>
  &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
@@ -18041,6 +18163,7 @@ imported by:
  &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
  &#8226;   <a href="#application.trade_capital_service">application.trade_capital_service</a>
  &#8226;   <a href="#application.trade_event_handler">application.trade_event_handler</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
  &#8226;   <a href="#dateutil.parser._parser">dateutil.parser._parser</a>
  &#8226;   <a href="#domain.commands">domain.commands</a>
@@ -18050,6 +18173,7 @@ imported by:
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
  &#8226;   <a href="#domain.portfolio">domain.portfolio</a>
  &#8226;   <a href="#domain.positions">domain.positions</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
  &#8226;   <a href="#fastapi.encoders">fastapi.encoders</a>
  &#8226;   <a href="#fractions">fractions</a>
  &#8226;   <a href="#infrastructure.tinvest.candles_mapper">infrastructure.tinvest.candles_mapper</a>
@@ -18316,6 +18440,7 @@ imported by:
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
  &#8226;   <a href="#domain.portfolio">domain.portfolio</a>
  &#8226;   <a href="#domain.positions">domain.positions</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
 
   </div>
 
@@ -18333,7 +18458,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#broker.live_order_manager">broker.live_order_manager</a>
+    <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
+ &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
  &#8226;   <a href="#broker.order_execution_event_mapper">broker.order_execution_event_mapper</a>
  &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
  &#8226;   <a href="#strategy.grid_risk_manager">strategy.grid_risk_manager</a>
@@ -18378,7 +18505,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#domain.entities">domain.entities</a>
+    <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
+ &#8226;   <a href="#domain.entities">domain.entities</a>
  &#8226;   <a href="#infrastructure.tinvest.instrument_mapper">infrastructure.tinvest.instrument_mapper</a>
  &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
 
@@ -18421,7 +18549,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
+    <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
  &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
  &#8226;   <a href="#broker.live_order_manager">broker.live_order_manager</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
@@ -18436,7 +18565,8 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/domain/order_state.py" type="text/plain"><tt>domain.order_state</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#dataclasses">dataclasses</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#decimal">decimal</a>
  &#8226;   <a href="#domain">domain</a>
 
@@ -18483,8 +18613,32 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#strategy.grid_engine">strategy.grid_engine</a>
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
  &#8226;   <a href="#strategy.grid_risk_manager">strategy.grid_risk_manager</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="domain.trading_state"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/domain/trading_state.py" type="text/plain"><tt>domain.trading_state</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#decimal">decimal</a>
+ &#8226;   <a href="#domain">domain</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#application.live_order_manager_state_mapper">application.live_order_manager_state_mapper</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
 
   </div>
 
@@ -26830,6 +26984,7 @@ imported by:
  &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#urllib3.util.ssl_">urllib3.util.ssl_</a>
  &#8226;   <a href="#uuid">uuid</a>
+ &#8226;   <a href="#web.api">web.api</a>
 
   </div>
 
@@ -29599,6 +29754,7 @@ imports:
 imported by:
     <a href="#infrastructure.sqlite.api_usage_repository">infrastructure.sqlite.api_usage_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.sqlite_database">infrastructure.sqlite.sqlite_database</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.web_session_repository">infrastructure.sqlite.web_session_repository</a>
 
   </div>
@@ -29640,6 +29796,29 @@ imports:
 imported by:
     <a href="#infrastructure.sqlite.api_usage_repository">infrastructure.sqlite.api_usage_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.web_session_repository">infrastructure.sqlite.web_session_repository</a>
+ &#8226;   <a href="#web.api">web.api</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="infrastructure.sqlite.trading_state_repository"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/infrastructure/sqlite/trading_state_repository.py" type="text/plain"><tt>infrastructure.sqlite.trading_state_repository</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
+ &#8226;   <a href="#infrastructure.sqlite">infrastructure.sqlite</a>
+ &#8226;   <a href="#json">json</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#sqlite3">sqlite3</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#web.api">web.api</a>
 
   </div>
@@ -29875,7 +30054,8 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/infrastructure/tinvest/live_order_state_provider.py" type="text/plain"><tt>infrastructure.tinvest.live_order_state_provider</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#dataclasses">dataclasses</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#decimal">decimal</a>
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
  &#8226;   <a href="#infrastructure.tinvest">infrastructure.tinvest</a>
@@ -29981,11 +30161,13 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/infrastructure/tinvest/sandbox_order_state_provider.py" type="text/plain"><tt>infrastructure.tinvest.sandbox_order_state_provider</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#dataclasses">dataclasses</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#decimal">decimal</a>
  &#8226;   <a href="#domain.order_state">domain.order_state</a>
  &#8226;   <a href="#infrastructure.tinvest">infrastructure.tinvest</a>
  &#8226;   <a href="#infrastructure.tinvest.client_factory">infrastructure.tinvest.client_factory</a>
+ &#8226;   <a href="#t_tech.invest">t_tech.invest</a>
 
   </div>
   <div class="import">
@@ -30732,6 +30914,7 @@ imported by:
  &#8226;   <a href="#httpx2._main">httpx2._main</a>
  &#8226;   <a href="#httpx2._models">httpx2._models</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#json.decoder">json.decoder</a>
  &#8226;   <a href="#json.encoder">json.encoder</a>
  &#8226;   <a href="#json.scanner">json.scanner</a>
@@ -30785,6 +30968,7 @@ imported by:
  &#8226;   <a href="#urllib3.contrib.emscripten.response">urllib3.contrib.emscripten.response</a>
  &#8226;   <a href="#urllib3.response">urllib3.response</a>
  &#8226;   <a href="#uvicorn.config">uvicorn.config</a>
+ &#8226;   <a href="#web.api">web.api</a>
 
   </div>
 
@@ -59549,6 +59733,7 @@ imported by:
  &#8226;   <a href="#_pytest.tmpdir">_pytest.tmpdir</a>
  &#8226;   <a href="#anyio._core._fileio">anyio._core._fileio</a>
  &#8226;   <a href="#click._termui_impl">click._termui_impl</a>
+ &#8226;   <a href="#config.runtime_paths">config.runtime_paths</a>
  &#8226;   <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#dotenv.main">dotenv.main</a>
  &#8226;   <a href="#fastapi.encoders">fastapi.encoders</a>
@@ -59558,6 +59743,7 @@ imported by:
  &#8226;   <a href="#importlib.resources.abc">importlib.resources.abc</a>
  &#8226;   <a href="#importlib.resources.readers">importlib.resources.readers</a>
  &#8226;   <a href="#infrastructure.sqlite.sqlite_database">infrastructure.sqlite.sqlite_database</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#matplotlib">matplotlib</a>
  &#8226;   <a href="#matplotlib._api">matplotlib._api</a>
  &#8226;   <a href="#matplotlib.backend_bases">matplotlib.backend_bases</a>
@@ -59621,7 +59807,6 @@ imported by:
  &#8226;   <a href="#uvicorn.supervisors.basereload">uvicorn.supervisors.basereload</a>
  &#8226;   <a href="#uvicorn.supervisors.statreload">uvicorn.supervisors.statreload</a>
  &#8226;   <a href="#uvicorn.supervisors.watchfilesreload">uvicorn.supervisors.watchfilesreload</a>
- &#8226;   <a href="#web.api">web.api</a>
  &#8226;   <a href="#web.main">web.main</a>
  &#8226;   <a href="#zipfile._path">zipfile._path</a>
 
@@ -60160,6 +60345,7 @@ imports:
 imported by:
     <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
  &#8226;   <a href="#application.trade_capital_service">application.trade_capital_service</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
 
   </div>
 
@@ -91680,6 +91866,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#infrastructure.sqlite.sqlite_database">infrastructure.sqlite.sqlite_database</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#pandas.io.sql">pandas.io.sql</a>
  &#8226;   <a href="#sqlalchemy.dialects.sqlite.pysqlite">sqlalchemy.dialects.sqlite.pysqlite</a>
  &#8226;   <a href="#sqlite3">sqlite3</a>
@@ -92848,7 +93035,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
  &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
  &#8226;   <a href="#application.sandbox_trading_session">application.sandbox_trading_session</a>
  &#8226;   <a href="#strategy.grid_builder">strategy.grid_builder</a>
@@ -92871,7 +93059,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#strategy.grid_engine">strategy.grid_engine</a>
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
 
   </div>
 
@@ -92909,7 +93098,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#domain.positions">domain.positions</a>
+    <a href="#application.grid_engine_state_mapper">application.grid_engine_state_mapper</a>
+ &#8226;   <a href="#domain.positions">domain.positions</a>
  &#8226;   <a href="#strategy.grid_engine">strategy.grid_engine</a>
 
   </div>
@@ -93261,6 +93451,7 @@ imported by:
  &#8226;   <a href="#colorama.ansitowin32">colorama.ansitowin32</a>
  &#8226;   <a href="#colorama.initialise">colorama.initialise</a>
  &#8226;   <a href="#concurrent.futures.process">concurrent.futures.process</a>
+ &#8226;   <a href="#config.runtime_paths">config.runtime_paths</a>
  &#8226;   <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#contextlib">contextlib</a>
@@ -93746,6 +93937,7 @@ imported by:
  &#8226;   <a href="#infrastructure.tinvest.quotation_mapper">infrastructure.tinvest.quotation_mapper</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
+ &#8226;   <a href="#infrastructure.tinvest.sandbox_order_state_provider">infrastructure.tinvest.sandbox_order_state_provider</a>
  &#8226;   <a href="#server_entry.py">server_entry.py</a>
  &#8226;   <a href="#t_tech.invest">t_tech.invest</a>
  &#8226;   <a href="#t_tech.invest._error_hub">t_tech.invest._error_hub</a>
@@ -98260,6 +98452,7 @@ imported by:
  &#8226;   <a href="#contourpy.typecheck">contourpy.typecheck</a>
  &#8226;   <a href="#cycler">cycler</a>
  &#8226;   <a href="#domain.order_execution">domain.order_execution</a>
+ &#8226;   <a href="#domain.trading_state">domain.trading_state</a>
  &#8226;   <a href="#dotenv">dotenv</a>
  &#8226;   <a href="#dotenv.main">dotenv.main</a>
  &#8226;   <a href="#dotenv.parser">dotenv.parser</a>
@@ -103359,23 +103552,28 @@ imported by:
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/web/api.py" type="text/plain"><tt>web.api</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#application.live_account_service">application.live_account_service</a>
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#application.live_account_service">application.live_account_service</a>
  &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
  &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
  &#8226;   <a href="#application.portfolio_orchestrator">application.portfolio_orchestrator</a>
  &#8226;   <a href="#application.sandbox_session_registry">application.sandbox_session_registry</a>
  &#8226;   <a href="#application.trading_mode_guard">application.trading_mode_guard</a>
+ &#8226;   <a href="#application.trading_session_state_service">application.trading_session_state_service</a>
  &#8226;   <a href="#application.web_runner_registry">application.web_runner_registry</a>
  &#8226;   <a href="#application.web_runner_service">application.web_runner_service</a>
+ &#8226;   <a href="#config.runtime_paths">config.runtime_paths</a>
  &#8226;   <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#decimal">decimal</a>
  &#8226;   <a href="#fastapi">fastapi</a>
  &#8226;   <a href="#fastapi.middleware.cors">fastapi.middleware.cors</a>
+ &#8226;   <a href="#hashlib">hashlib</a>
  &#8226;   <a href="#infrastructure.sqlite.api_usage_repository">infrastructure.sqlite.api_usage_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.sqlite_database">infrastructure.sqlite.sqlite_database</a>
+ &#8226;   <a href="#infrastructure.sqlite.trading_state_repository">infrastructure.sqlite.trading_state_repository</a>
  &#8226;   <a href="#infrastructure.sqlite.web_session_repository">infrastructure.sqlite.web_session_repository</a>
+ &#8226;   <a href="#json">json</a>
  &#8226;   <a href="#os">os</a>
- &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#pydantic">pydantic</a>
  &#8226;   <a href="#pydantic.BaseModel">pydantic.BaseModel</a>
  &#8226;   <a href="#web">web</a>
