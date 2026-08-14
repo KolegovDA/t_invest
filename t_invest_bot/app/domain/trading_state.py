@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import (
+    dataclass,
+    field,
+)
 from decimal import Decimal
 from typing import Any
 
@@ -32,12 +35,21 @@ class GridEngineConfigState:
     trailing_percent: Decimal
 
     min_profit_percent: Decimal
+
     take_profit_buffer_percent: Decimal
 
-    fallback_buy_commission_percent: Decimal
-    fallback_sell_commission_percent: Decimal
+    fallback_buy_commission_percent: (
+        Decimal
+    )
 
-    min_open_positions_for_compensation: int
+    fallback_sell_commission_percent: (
+        Decimal
+    )
+
+    min_open_positions_for_compensation: (
+        int
+    )
+
     compensation_multiplier: Decimal
 
     quantity: int
@@ -47,13 +59,16 @@ class GridEngineConfigState:
 class GridLevelState:
     level_index: int
     level_price: Decimal
+
     status: str
 
     trailing_entry_lowest_price: (
         Decimal | None
     ) = None
 
-    trailing_entry_confirmed: bool = False
+    trailing_entry_confirmed: (
+        bool
+    ) = False
 
 
 @dataclass(slots=True)
@@ -61,6 +76,10 @@ class OpenPositionState:
     level_index: int
 
     entry_price: Decimal
+
+    #
+    # Количество лотов.
+    #
     quantity: int
 
     buy_commission: Decimal
@@ -79,12 +98,23 @@ class OpenPositionState:
         Decimal | None
     ) = None
 
-    trailing_exit_confirmed: bool = False
+    trailing_exit_confirmed: (
+        bool
+    ) = False
+
+    #
+    # Полная фактическая стоимость
+    # покупки с BUY-комиссией.
+    #
+    purchase_cost: (
+        Decimal | None
+    ) = None
 
 
 @dataclass(slots=True)
 class BrokerOrderState:
     broker_order_id: str
+
     request_id: str | None
 
     instrument_uid: str
@@ -95,6 +125,7 @@ class BrokerOrderState:
     side: str
 
     quantity: int
+
     limit_price: Decimal
 
     status: str
@@ -102,22 +133,30 @@ class BrokerOrderState:
     lots_requested: int = 0
     lots_executed: int = 0
 
-    executed_price: Decimal | None = None
+    executed_price: (
+        Decimal | None
+    ) = None
 
 
 @dataclass(slots=True)
 class CapitalReservationState:
     instrument_uid: str
+
     level_index: int
+
     amount: Decimal
 
 
 @dataclass(slots=True)
 class InstrumentTradingState:
     ticker: str
+
     instrument_uid: str
 
-    current_price: Decimal | None
+    current_price: (
+        Decimal | None
+    )
+
     realized_profit: Decimal
 
     levels: list[
@@ -142,6 +181,18 @@ class InstrumentTradingState:
         GridEngineConfigState | None
     ) = None
 
+    #
+    # Накопленные комиссии
+    # конкретного инструмента.
+    #
+    total_buy_commission: Decimal = (
+        Decimal("0")
+    )
+
+    total_sell_commission: Decimal = (
+        Decimal("0")
+    )
+
 
 @dataclass(slots=True)
 class TradingSessionState:
@@ -150,6 +201,7 @@ class TradingSessionState:
     session_id: str
 
     trading_account_id: str
+
     broker_account_id: str
 
     mode: str
@@ -174,6 +226,24 @@ class TradingSessionState:
         default_factory=list
     )
 
+    #
+    # Фиксируется при первом
+    # snapshot сессии.
+    #
+    # После рестарта НЕ пересчитываем.
+    #
+    initial_deposit: (
+        Decimal | None
+    ) = None
+
+    total_buy_commission: Decimal = (
+        Decimal("0")
+    )
+
+    total_sell_commission: Decimal = (
+        Decimal("0")
+    )
+
     def to_dict(
         self,
     ) -> dict[str, Any]:
@@ -185,10 +255,12 @@ class TradingSessionState:
                 self.session_id,
 
             "trading_account_id":
-                self.trading_account_id,
+                self
+                .trading_account_id,
 
             "broker_account_id":
-                self.broker_account_id,
+                self
+                .broker_account_id,
 
             "mode":
                 self.mode,
@@ -211,13 +283,32 @@ class TradingSessionState:
                     self.portfolio_cash
                 ),
 
+            "initial_deposit":
+                _decimal_to_str(
+                    self.initial_deposit
+                ),
+
+            "total_buy_commission":
+                str(
+                    self
+                    .total_buy_commission
+                ),
+
+            "total_sell_commission":
+                str(
+                    self
+                    .total_sell_commission
+                ),
+
             "reservations": [
                 {
                     "instrument_uid":
-                        item.instrument_uid,
+                        item
+                        .instrument_uid,
 
                     "level_index":
-                        item.level_index,
+                        item
+                        .level_index,
 
                     "amount":
                         str(
@@ -229,7 +320,8 @@ class TradingSessionState:
             ],
 
             "instruments": [
-                self._instrument_to_dict(
+                self
+                ._instrument_to_dict(
                     instrument
                 )
                 for instrument
@@ -239,7 +331,9 @@ class TradingSessionState:
 
     @staticmethod
     def _instrument_to_dict(
-        instrument: InstrumentTradingState,
+        instrument: (
+            InstrumentTradingState
+        ),
     ) -> dict[str, Any]:
         config = (
             instrument.grid_config
@@ -250,16 +344,31 @@ class TradingSessionState:
                 instrument.ticker,
 
             "instrument_uid":
-                instrument.instrument_uid,
+                instrument
+                .instrument_uid,
 
             "current_price":
                 _decimal_to_str(
-                    instrument.current_price
+                    instrument
+                    .current_price
                 ),
 
             "realized_profit":
                 str(
-                    instrument.realized_profit
+                    instrument
+                    .realized_profit
+                ),
+
+            "total_buy_commission":
+                str(
+                    instrument
+                    .total_buy_commission
+                ),
+
+            "total_sell_commission":
+                str(
+                    instrument
+                    .total_sell_commission
                 ),
 
             "grid_config": (
@@ -332,11 +441,13 @@ class TradingSessionState:
             "levels": [
                 {
                     "level_index":
-                        level.level_index,
+                        level
+                        .level_index,
 
                     "level_price":
                         str(
-                            level.level_price
+                            level
+                            .level_price
                         ),
 
                     "status":
@@ -359,11 +470,13 @@ class TradingSessionState:
             "open_positions": [
                 {
                     "level_index":
-                        position.level_index,
+                        position
+                        .level_index,
 
                     "entry_price":
                         str(
-                            position.entry_price
+                            position
+                            .entry_price
                         ),
 
                     "quantity":
@@ -371,7 +484,8 @@ class TradingSessionState:
 
                     "buy_commission":
                         str(
-                            position.buy_commission
+                            position
+                            .buy_commission
                         ),
 
                     "hard_take_profit_price":
@@ -401,27 +515,38 @@ class TradingSessionState:
                     "trailing_exit_confirmed":
                         position
                         .trailing_exit_confirmed,
+
+                    "purchase_cost":
+                        _decimal_to_str(
+                            position
+                            .purchase_cost
+                        ),
                 }
                 for position
-                in instrument.open_positions
+                in instrument
+                .open_positions
             ],
 
             "active_orders": [
                 {
                     "broker_order_id":
-                        order.broker_order_id,
+                        order
+                        .broker_order_id,
 
                     "request_id":
-                        order.request_id,
+                        order
+                        .request_id,
 
                     "instrument_uid":
-                        order.instrument_uid,
+                        order
+                        .instrument_uid,
 
                     "ticker":
                         order.ticker,
 
                     "level_index":
-                        order.level_index,
+                        order
+                        .level_index,
 
                     "side":
                         order.side,
@@ -431,25 +556,30 @@ class TradingSessionState:
 
                     "limit_price":
                         str(
-                            order.limit_price
+                            order
+                            .limit_price
                         ),
 
                     "status":
                         order.status,
 
                     "lots_requested":
-                        order.lots_requested,
+                        order
+                        .lots_requested,
 
                     "lots_executed":
-                        order.lots_executed,
+                        order
+                        .lots_executed,
 
                     "executed_price":
                         _decimal_to_str(
-                            order.executed_price
+                            order
+                            .executed_price
                         ),
                 }
                 for order
-                in instrument.active_orders
+                in instrument
+                .active_orders
             ],
         }
 
@@ -555,7 +685,31 @@ class TradingSessionState:
                 )
             ),
 
-            reservations=reservations,
+            reservations=(
+                reservations
+            ),
+
+            initial_deposit=(
+                _str_to_decimal(
+                    data.get(
+                        "initial_deposit"
+                    )
+                )
+            ),
+
+            total_buy_commission=Decimal(
+                data.get(
+                    "total_buy_commission",
+                    "0",
+                )
+            ),
+
+            total_sell_commission=Decimal(
+                data.get(
+                    "total_sell_commission",
+                    "0",
+                )
+            ),
         )
 
     @staticmethod
@@ -741,6 +895,14 @@ class TradingSessionState:
                         False,
                     )
                 ),
+
+                purchase_cost=(
+                    _str_to_decimal(
+                        position.get(
+                            "purchase_cost"
+                        )
+                    )
+                ),
             )
             for position
             in data.get(
@@ -878,4 +1040,18 @@ class TradingSessionState:
             active_orders=orders,
 
             grid_config=grid_config,
+
+            total_buy_commission=Decimal(
+                data.get(
+                    "total_buy_commission",
+                    "0",
+                )
+            ),
+
+            total_sell_commission=Decimal(
+                data.get(
+                    "total_sell_commission",
+                    "0",
+                )
+            ),
         )

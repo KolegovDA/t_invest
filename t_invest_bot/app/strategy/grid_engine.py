@@ -1,4 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import (
+    dataclass,
+    field,
+)
 from decimal import Decimal
 
 from domain.commands import (
@@ -6,9 +9,15 @@ from domain.commands import (
     PlaceSellLimitCommand,
     TradingCommand,
 )
-from domain.enums import GridLevelStatus
-from domain.events import TradeExecutedEvent
-from domain.positions import OpenLevelPosition
+from domain.enums import (
+    GridLevelStatus,
+)
+from domain.events import (
+    TradeExecutedEvent,
+)
+from domain.positions import (
+    OpenLevelPosition,
+)
 from strategy.grid_risk_manager import (
     GridRiskManager,
     GridRiskManagerConfig,
@@ -26,7 +35,8 @@ class GridLevel:
     price: Decimal
 
     status: GridLevelStatus = (
-        GridLevelStatus.WAITING_PRICE
+        GridLevelStatus
+        .WAITING_PRICE
     )
 
     trailing_entry: (
@@ -36,43 +46,45 @@ class GridLevel:
 
 @dataclass(slots=True)
 class GridEngineConfig:
-    entry_limit_offset_percent: Decimal = Decimal(
-        "0.15"
+    entry_limit_offset_percent: (
+        Decimal
+    ) = Decimal("0.15")
+
+    exit_limit_offset_percent: (
+        Decimal
+    ) = Decimal("0.15")
+
+    entry_rebound_percent: (
+        Decimal
+    ) = Decimal("0.15")
+
+    trailing_percent: Decimal = (
+        Decimal("0.50")
     )
 
-    exit_limit_offset_percent: Decimal = Decimal(
-        "0.15"
+    min_profit_percent: Decimal = (
+        Decimal("0.30")
     )
 
-    entry_rebound_percent: Decimal = Decimal(
-        "0.15"
-    )
+    take_profit_buffer_percent: (
+        Decimal
+    ) = Decimal("0.15")
 
-    trailing_percent: Decimal = Decimal(
-        "0.50"
-    )
+    fallback_buy_commission_percent: (
+        Decimal
+    ) = Decimal("0.30")
 
-    min_profit_percent: Decimal = Decimal(
-        "0.30"
-    )
+    fallback_sell_commission_percent: (
+        Decimal
+    ) = Decimal("0.30")
 
-    take_profit_buffer_percent: Decimal = Decimal(
-        "0.15"
-    )
+    min_open_positions_for_compensation: (
+        int
+    ) = 5
 
-    fallback_buy_commission_percent: Decimal = Decimal(
-        "0.30"
-    )
-
-    fallback_sell_commission_percent: Decimal = Decimal(
-        "0.30"
-    )
-
-    min_open_positions_for_compensation: int = 5
-
-    compensation_multiplier: Decimal = Decimal(
-        "3"
-    )
+    compensation_multiplier: (
+        Decimal
+    ) = Decimal("3")
 
     quantity: int = 1
 
@@ -80,17 +92,26 @@ class GridEngineConfig:
 @dataclass(slots=True)
 class GridEngine:
     instrument_id: str
-    levels: list[GridLevel]
+
+    levels: list[
+        GridLevel
+    ]
 
     config: GridEngineConfig = field(
-        default_factory=GridEngineConfig
+        default_factory=(
+            GridEngineConfig
+        )
     )
 
-    trailing_engine: TrailingEngine = field(
+    trailing_engine: (
+        TrailingEngine
+    ) = field(
         init=False
     )
 
-    risk_manager: GridRiskManager = field(
+    risk_manager: (
+        GridRiskManager
+    ) = field(
         init=False
     )
 
@@ -101,57 +122,95 @@ class GridEngine:
         default_factory=dict
     )
 
-    realized_profit: Decimal = Decimal(
-        "0"
+    realized_profit: Decimal = (
+        Decimal("0")
     )
 
-    def __post_init__(self) -> None:
-        self.trailing_engine = TrailingEngine(
-            entry_rebound_percent=(
-                self.config.entry_rebound_percent
-            ),
-            trailing_percent=(
-                self.config.trailing_percent
-            ),
+    #
+    # Накопленные фактические
+    # комиссии этой сессии.
+    #
+    total_buy_commission: Decimal = (
+        Decimal("0")
+    )
+
+    total_sell_commission: Decimal = (
+        Decimal("0")
+    )
+
+    def __post_init__(
+        self,
+    ) -> None:
+        self.trailing_engine = (
+            TrailingEngine(
+                entry_rebound_percent=(
+                    self.config
+                    .entry_rebound_percent
+                ),
+
+                trailing_percent=(
+                    self.config
+                    .trailing_percent
+                ),
+            )
         )
 
-        self.risk_manager = GridRiskManager(
-            instrument_id=self.instrument_id,
-            config=GridRiskManagerConfig(
-                min_open_positions_for_compensation=(
-                    self.config
-                    .min_open_positions_for_compensation
+        self.risk_manager = (
+            GridRiskManager(
+                instrument_id=(
+                    self.instrument_id
                 ),
-                compensation_multiplier=(
-                    self.config
-                    .compensation_multiplier
+
+                config=(
+                    GridRiskManagerConfig(
+                        min_open_positions_for_compensation=(
+                            self.config
+                            .min_open_positions_for_compensation
+                        ),
+
+                        compensation_multiplier=(
+                            self.config
+                            .compensation_multiplier
+                        ),
+
+                        emergency_sell_offset_percent=(
+                            self.config
+                            .exit_limit_offset_percent
+                        ),
+                    )
                 ),
-                emergency_sell_offset_percent=(
-                    self.config
-                    .exit_limit_offset_percent
-                ),
-            ),
+            )
         )
 
         self.levels.sort(
-            key=lambda level: level.index
+            key=lambda level: (
+                level.index
+            )
         )
 
     def on_price(
         self,
         current_price: Decimal,
-    ) -> list[TradingCommand]:
-        commands: list[TradingCommand] = []
+    ) -> list[
+        TradingCommand
+    ]:
+        commands: list[
+            TradingCommand
+        ] = []
 
         commands.extend(
             self._process_entries(
-                current_price=current_price,
+                current_price=(
+                    current_price
+                ),
             )
         )
 
         commands.extend(
             self._process_exits(
-                current_price=current_price,
+                current_price=(
+                    current_price
+                ),
             )
         )
 
@@ -161,10 +220,14 @@ class GridEngine:
                 open_positions=(
                     self.open_positions
                 ),
+
                 realized_profit=(
                     self.realized_profit
                 ),
-                current_price=current_price,
+
+                current_price=(
+                    current_price
+                ),
             )
         )
 
@@ -173,35 +236,84 @@ class GridEngine:
     def on_trade_executed(
         self,
         event: TradeExecutedEvent,
-    ) -> list[TradingCommand]:
+    ) -> list[
+        TradingCommand
+    ]:
         if (
             event.instrument_id
             != self.instrument_id
         ):
             return []
 
-        level = self._get_level_by_index(
-            event.level_index
+        level = (
+            self
+            ._get_level_by_index(
+                event.level_index
+            )
         )
 
         if level is None:
             return []
 
-        if event.side == "BUY":
+        if (
+            event.side
+            == "BUY"
+        ):
             hard_take_profit_price = (
-                self._calculate_hard_take_profit_price(
-                    entry_price=event.price,
+                self
+                ._calculate_hard_take_profit_price(
+                    entry_price=(
+                        event.price
+                    ),
                 )
             )
 
             buy_commission = (
-                self._calculate_buy_commission(
-                    price=event.price,
-                    quantity=event.quantity,
+                self
+                ._calculate_buy_commission(
+                    price=(
+                        event.price
+                    ),
+
+                    quantity=(
+                        event.quantity
+                    ),
+
                     actual_commission=(
                         event.commission
                     ),
                 )
+            )
+
+            #
+            # Для live используем
+            # фактическую денежную сумму
+            # брокера.
+            #
+            if (
+                event.total_amount
+                is not None
+                and event.total_amount > 0
+            ):
+                purchase_cost = (
+                    event.total_amount
+                    + buy_commission
+                )
+
+            else:
+                #
+                # Sandbox / legacy fallback.
+                #
+                purchase_cost = (
+                    event.price
+                    * Decimal(
+                        event.quantity
+                    )
+                    + buy_commission
+                )
+
+            self.total_buy_commission += (
+                buy_commission
             )
 
             self.open_positions[
@@ -210,62 +322,121 @@ class GridEngine:
                 level_index=(
                     event.level_index
                 ),
-                entry_price=event.price,
-                quantity=event.quantity,
-                buy_commission=buy_commission,
+
+                entry_price=(
+                    event.price
+                ),
+
+                quantity=(
+                    event.quantity
+                ),
+
+                buy_commission=(
+                    buy_commission
+                ),
+
                 expected_sell_commission_percent=(
                     self.config
                     .fallback_sell_commission_percent
                 ),
+
                 hard_take_profit_price=(
                     hard_take_profit_price
+                ),
+
+                purchase_cost=(
+                    purchase_cost
                 ),
             )
 
             level.status = (
-                GridLevelStatus.POSITION_OPENED
+                GridLevelStatus
+                .POSITION_OPENED
             )
 
             level.trailing_entry = None
 
-        elif event.side == "SELL":
+        elif (
+            event.side
+            == "SELL"
+        ):
             position = (
-                self.open_positions.pop(
+                self.open_positions
+                .pop(
                     event.level_index,
                     None,
                 )
             )
 
             if position is not None:
-                buy_commission = (
-                    position.buy_commission
-                )
-
                 sell_commission = (
-                    self._calculate_sell_commission(
-                        price=event.price,
-                        quantity=event.quantity,
+                    self
+                    ._calculate_sell_commission(
+                        price=(
+                            event.price
+                        ),
+
+                        quantity=(
+                            event.quantity
+                        ),
+
                         actual_commission=(
                             event.commission
                         ),
                     )
                 )
 
-                sell_total = (
-                    event.price
-                    * event.quantity
+                self.total_sell_commission += (
+                    sell_commission
                 )
 
-                buy_total = (
-                    position.entry_price
-                    * position.quantity
+                if (
+                    event.total_amount
+                    is not None
+                    and event.total_amount > 0
+                ):
+                    gross_sell_amount = (
+                        event
+                        .total_amount
+                    )
+
+                else:
+                    gross_sell_amount = (
+                        event.price
+                        * Decimal(
+                            event.quantity
+                        )
+                    )
+
+                net_sell_amount = (
+                    gross_sell_amount
+                    - sell_commission
                 )
+
+                if (
+                    position.purchase_cost
+                    is not None
+                ):
+                    purchase_cost = (
+                        position
+                        .purchase_cost
+                    )
+
+                else:
+                    purchase_cost = (
+                        position
+                        .entry_price
+                        * Decimal(
+                            position
+                            .quantity
+                        )
+                        + position
+                        .buy_commission
+                    )
 
                 profit = (
-                    sell_total
-                    - sell_commission
-                    - buy_total
-                    - buy_commission
+                    net_sell_amount
+                    - purchase_cost
                 )
 
                 self.realized_profit += (
@@ -273,7 +444,8 @@ class GridEngine:
                 )
 
             level.status = (
-                GridLevelStatus.WAITING_PRICE
+                GridLevelStatus
+                .WAITING_PRICE
             )
 
             level.trailing_entry = None
@@ -290,22 +462,21 @@ class GridEngine:
 
         if entry_price <= 0:
             raise ValueError(
-                "Recovery entry price must be positive"
+                "Recovery entry price "
+                "must be positive"
             )
 
-        #
-        # Если GridEngine уже содержит позицию,
-        # повторный recovery не выполняем.
-        #
         if self.open_positions:
             return
 
         available_levels = [
             level
-            for level in self.levels
+            for level
+            in self.levels
             if (
                 level.index
-                not in self.open_positions
+                not in self
+                .open_positions
             )
         ]
 
@@ -315,13 +486,9 @@ class GridEngine:
                 "for live position recovery"
             )
 
-        #
-        # Старый level_index неизвестен.
-        # Берём ближайший уровень сетки
-        # к средней цене позиции брокера.
-        #
         level = min(
             available_levels,
+
             key=lambda item: abs(
                 item.price
                 - entry_price
@@ -329,37 +496,71 @@ class GridEngine:
         )
 
         hard_take_profit_price = (
-            self._calculate_hard_take_profit_price(
-                entry_price=entry_price,
+            self
+            ._calculate_hard_take_profit_price(
+                entry_price=(
+                    entry_price
+                ),
             )
         )
 
         buy_commission = (
-            self._calculate_buy_commission(
-                price=entry_price,
-                quantity=quantity,
+            self
+            ._calculate_buy_commission(
+                price=(
+                    entry_price
+                ),
+
+                quantity=(
+                    quantity
+                ),
+
                 actual_commission=None,
             )
+        )
+
+        purchase_cost = (
+            entry_price
+            * Decimal(quantity)
+            + buy_commission
         )
 
         self.open_positions[
             level.index
         ] = OpenLevelPosition(
-            level_index=level.index,
-            entry_price=entry_price,
-            quantity=quantity,
-            buy_commission=buy_commission,
+            level_index=(
+                level.index
+            ),
+
+            entry_price=(
+                entry_price
+            ),
+
+            quantity=(
+                quantity
+            ),
+
+            buy_commission=(
+                buy_commission
+            ),
+
             expected_sell_commission_percent=(
                 self.config
                 .fallback_sell_commission_percent
             ),
+
             hard_take_profit_price=(
                 hard_take_profit_price
+            ),
+
+            purchase_cost=(
+                purchase_cost
             ),
         )
 
         level.status = (
-            GridLevelStatus.POSITION_OPENED
+            GridLevelStatus
+            .POSITION_OPENED
         )
 
         level.trailing_entry = None
@@ -367,23 +568,36 @@ class GridEngine:
     def _process_entries(
         self,
         current_price: Decimal,
-    ) -> list[TradingCommand]:
-        commands: list[TradingCommand] = []
+    ) -> list[
+        TradingCommand
+    ]:
+        commands: list[
+            TradingCommand
+        ] = []
 
-        active_entry_level_exists = any(
-            level.status
-            in (
-                GridLevelStatus.TRAILING_ENTRY,
-                GridLevelStatus.ORDER_PLACED,
+        active_entry_level_exists = (
+            any(
+                level.status
+                in (
+                    GridLevelStatus
+                    .TRAILING_ENTRY,
+
+                    GridLevelStatus
+                    .ORDER_PLACED,
+                )
+                for level
+                in self.levels
             )
-            for level in self.levels
         )
 
         if not active_entry_level_exists:
-            for level in self.levels:
+            for level in (
+                self.levels
+            ):
                 if (
                     level.status
-                    != GridLevelStatus.WAITING_PRICE
+                    != GridLevelStatus
+                    .WAITING_PRICE
                 ):
                     continue
 
@@ -401,6 +615,7 @@ class GridEngine:
                             level_price=(
                                 level.price
                             ),
+
                             lowest_price=(
                                 current_price
                             ),
@@ -409,33 +624,39 @@ class GridEngine:
 
                     break
 
-        for level in self.levels:
+        for level in (
+            self.levels
+        ):
             if (
                 level.status
-                != GridLevelStatus.TRAILING_ENTRY
+                != GridLevelStatus
+                .TRAILING_ENTRY
             ):
                 continue
 
-            if level.trailing_entry is None:
+            if (
+                level.trailing_entry
+                is None
+            ):
                 continue
 
             level.trailing_entry = (
                 self.trailing_engine
                 .update_entry(
-                    level.trailing_entry,
+                    level
+                    .trailing_entry,
+
                     current_price,
                 )
             )
 
             if not (
-                level.trailing_entry
+                level
+                .trailing_entry
                 .is_confirmed
             ):
                 continue
 
-            #
-            # BUY ставим ВЫШЕ рынка.
-            #
             buy_price = (
                 current_price
                 * (
@@ -453,18 +674,25 @@ class GridEngine:
                     instrument_id=(
                         self.instrument_id
                     ),
+
                     level_index=(
                         level.index
                     ),
+
                     quantity=(
-                        self.config.quantity
+                        self.config
+                        .quantity
                     ),
-                    price=buy_price,
+
+                    price=(
+                        buy_price
+                    ),
                 )
             )
 
             level.status = (
-                GridLevelStatus.ORDER_PLACED
+                GridLevelStatus
+                .ORDER_PLACED
             )
 
             break
@@ -474,17 +702,24 @@ class GridEngine:
     def _process_exits(
         self,
         current_price: Decimal,
-    ) -> list[TradingCommand]:
-        commands: list[TradingCommand] = []
+    ) -> list[
+        TradingCommand
+    ]:
+        commands: list[
+            TradingCommand
+        ] = []
 
         for (
             level_index,
             position,
         ) in list(
-            self.open_positions.items()
+            self
+            .open_positions
+            .items()
         ):
             level = (
-                self._get_level_by_index(
+                self
+                ._get_level_by_index(
                     level_index
                 )
             )
@@ -492,12 +727,10 @@ class GridEngine:
             if level is None:
                 continue
 
-            #
-            # SELL уже отправлен брокеру.
-            #
             if (
                 level.status
-                == GridLevelStatus.ORDER_PLACED
+                == GridLevelStatus
+                .ORDER_PLACED
             ):
                 continue
 
@@ -526,6 +759,7 @@ class GridEngine:
                         target_price=(
                             activation_price
                         ),
+
                         highest_price=(
                             current_price
                         ),
@@ -535,20 +769,20 @@ class GridEngine:
             position.trailing_exit = (
                 self.trailing_engine
                 .update_exit(
-                    position.trailing_exit,
+                    position
+                    .trailing_exit,
+
                     current_price,
                 )
             )
 
             if not (
-                position.trailing_exit
+                position
+                .trailing_exit
                 .is_confirmed
             ):
                 continue
 
-            #
-            # SELL ставим НИЖЕ текущего рынка.
-            #
             sell_price = (
                 current_price
                 * (
@@ -561,39 +795,42 @@ class GridEngine:
                 )
             )
 
-            #
-            # Минимальная прибыль должна
-            # сохраняться даже после трейла.
-            #
             if (
                 sell_price
                 < position
                 .hard_take_profit_price
             ):
-                position.trailing_exit = None
+                position.trailing_exit = (
+                    None
+                )
 
                 continue
 
             commands.append(
                 PlaceSellLimitCommand(
                     instrument_id=(
-                        self.instrument_id
+                        self
+                        .instrument_id
                     ),
+
                     level_index=(
-                        position.level_index
+                        position
+                        .level_index
                     ),
+
                     quantity=(
                         position.quantity
                     ),
-                    price=sell_price,
+
+                    price=(
+                        sell_price
+                    ),
                 )
             )
 
-            #
-            # Блокируем повторный SELL.
-            #
             level.status = (
-                GridLevelStatus.ORDER_PLACED
+                GridLevelStatus
+                .ORDER_PLACED
             )
 
         return commands
@@ -605,7 +842,8 @@ class GridEngine:
         trailing_multiplier = (
             Decimal("1")
             - (
-                self.config.trailing_percent
+                self.config
+                .trailing_percent
                 / Decimal("100")
             )
         )
@@ -652,7 +890,8 @@ class GridEngine:
         )
 
         min_profit_rate = (
-            self.config.min_profit_percent
+            self.config
+            .min_profit_percent
             / Decimal("100")
         )
 
@@ -686,12 +925,17 @@ class GridEngine:
             Decimal | None
         ),
     ) -> Decimal:
-        if actual_commission is not None:
-            return actual_commission
+        if (
+            actual_commission
+            is not None
+        ):
+            return (
+                actual_commission
+            )
 
         return (
             price
-            * quantity
+            * Decimal(quantity)
             * self.config
             .fallback_buy_commission_percent
             / Decimal("100")
@@ -705,12 +949,17 @@ class GridEngine:
             Decimal | None
         ),
     ) -> Decimal:
-        if actual_commission is not None:
-            return actual_commission
+        if (
+            actual_commission
+            is not None
+        ):
+            return (
+                actual_commission
+            )
 
         return (
             price
-            * quantity
+            * Decimal(quantity)
             * self.config
             .fallback_sell_commission_percent
             / Decimal("100")
@@ -720,7 +969,9 @@ class GridEngine:
         self,
         level_index: int,
     ) -> GridLevel | None:
-        for level in self.levels:
+        for level in (
+            self.levels
+        ):
             if (
                 level.index
                 == level_index

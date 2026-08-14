@@ -48,25 +48,45 @@ class TradingSessionStateService:
                     reservation
                     .instrument_id
                 ),
+
                 level_index=(
                     reservation
                     .level_index
                 ),
+
                 amount=(
                     reservation.amount
                 ),
             )
             for reservation
             in reservation_manager
-            .reservations.values()
+            .reservations
+            .values()
         ]
 
         instruments = []
 
+        total_buy_commission = (
+            Decimal("0")
+        )
+
+        total_sell_commission = (
+            Decimal("0")
+        )
+
+        total_open_purchase_cost = (
+            Decimal("0")
+        )
+
         for (
             instrument_uid,
             trading_session,
-        ) in context.session.sessions.items():
+        ) in (
+            context
+            .session
+            .sessions
+            .items()
+        ):
             ticker = (
                 context
                 .tickers_by_instrument_id
@@ -79,6 +99,7 @@ class TradingSessionStateService:
             current_price = (
                 self._get_current_price(
                     context=context,
+
                     instrument_uid=(
                         instrument_uid
                     ),
@@ -88,13 +109,16 @@ class TradingSessionStateService:
             instrument_state = (
                 self.mapper.to_state(
                     ticker=ticker,
+
                     engine=(
                         trading_session
                         .grid_engine
                     ),
+
                     current_price=(
                         current_price
                     ),
+
                     live_order_manager=(
                         trading_session
                         .live_order_manager
@@ -102,14 +126,116 @@ class TradingSessionStateService:
                 )
             )
 
+            engine = (
+                trading_session
+                .grid_engine
+            )
+
+            engine_buy_commission = (
+                Decimal(
+                    str(
+                        getattr(
+                            engine,
+                            "total_buy_commission",
+                            Decimal("0"),
+                        )
+                    )
+                )
+            )
+
+            engine_sell_commission = (
+                Decimal(
+                    str(
+                        getattr(
+                            engine,
+                            "total_sell_commission",
+                            Decimal("0"),
+                        )
+                    )
+                )
+            )
+
+            instrument_state\
+                .total_buy_commission = (
+                    engine_buy_commission
+                )
+
+            instrument_state\
+                .total_sell_commission = (
+                    engine_sell_commission
+                )
+
+            total_buy_commission += (
+                engine_buy_commission
+            )
+
+            total_sell_commission += (
+                engine_sell_commission
+            )
+
+            for position in (
+                instrument_state
+                .open_positions
+            ):
+                if (
+                    position
+                    .purchase_cost
+                    is not None
+                ):
+                    total_open_purchase_cost += (
+                        position
+                        .purchase_cost
+                    )
+
             instruments.append(
                 instrument_state
             )
 
-        return TradingSessionState(
-            schema_version=3,
+        #
+        # Initial deposit должен
+        # фиксироваться один раз.
+        #
+        existing_state = (
+            self.repository.get(
+                session_id
+            )
+        )
 
-            session_id=session_id,
+        if (
+            existing_state
+            is not None
+            and existing_state
+            .initial_deposit
+            is not None
+        ):
+            initial_deposit = (
+                existing_state
+                .initial_deposit
+            )
+
+        else:
+            #
+            # При первом snapshot:
+            #
+            # cash
+            # +
+            # уже существующие позиции
+            # по фактической цене покупки.
+            #
+            initial_deposit = (
+                context
+                .portfolio_manager
+                .portfolio
+                .cash
+                + total_open_purchase_cost
+            )
+
+        return TradingSessionState(
+            schema_version=4,
+
+            session_id=(
+                session_id
+            ),
 
             trading_account_id=(
                 trading_account_id
@@ -133,7 +259,9 @@ class TradingSessionStateService:
                 .get_reserved_total()
             ),
 
-            instruments=instruments,
+            instruments=(
+                instruments
+            ),
 
             portfolio_cash=(
                 context
@@ -144,6 +272,18 @@ class TradingSessionStateService:
 
             reservations=(
                 reservations
+            ),
+
+            initial_deposit=(
+                initial_deposit
+            ),
+
+            total_buy_commission=(
+                total_buy_commission
+            ),
+
+            total_sell_commission=(
+                total_sell_commission
             ),
         )
 
@@ -156,10 +296,13 @@ class TradingSessionStateService:
     ) -> TradingSessionState:
         state = self.build_state(
             context=context,
+
             session_id=session_id,
+
             trading_account_id=(
                 trading_account_id
             ),
+
             status=status,
         )
 
@@ -174,8 +317,10 @@ class TradingSessionStateService:
         context: MultiInstrumentSessionContext,
         session_id: str,
     ) -> TradingSessionState | None:
-        state = self.repository.get(
-            session_id
+        state = (
+            self.repository.get(
+                session_id
+            )
         )
 
         if state is None:
@@ -193,10 +338,6 @@ class TradingSessionStateService:
                 f"{context.account_id}"
             )
 
-        #
-        # Сначала восстанавливаем
-        # GridEngine + live orders.
-        #
         for instrument_state in (
             state.instruments
         ):
@@ -222,18 +363,40 @@ class TradingSessionStateService:
                     trading_session
                     .grid_engine
                 ),
+
                 state=(
                     instrument_state
                 ),
+
                 live_order_manager=(
                     trading_session
                     .live_order_manager
                 ),
             )
 
-        #
-        # Восстанавливаем резервы капитала.
-        #
+            engine = (
+                trading_session
+                .grid_engine
+            )
+
+            if hasattr(
+                engine,
+                "total_buy_commission",
+            ):
+                engine.total_buy_commission = (
+                    instrument_state
+                    .total_buy_commission
+                )
+
+            if hasattr(
+                engine,
+                "total_sell_commission",
+            ):
+                engine.total_sell_commission = (
+                    instrument_state
+                    .total_sell_commission
+                )
+
         reservation_manager = (
             context
             .trade_capital_service
@@ -241,7 +404,8 @@ class TradingSessionStateService:
         )
 
         reservation_manager\
-            .reservations.clear()
+            .reservations\
+            .clear()
 
         reservation_manager.available_cash = (
             state.available_cash
@@ -253,31 +417,31 @@ class TradingSessionStateService:
             key = (
                 saved_reservation
                 .instrument_uid,
+
                 saved_reservation
                 .level_index,
             )
 
-            reservation_manager.reservations[
-                key
-            ] = CapitalReservation(
-                instrument_id=(
-                    saved_reservation
-                    .instrument_uid
-                ),
-                level_index=(
-                    saved_reservation
-                    .level_index
-                ),
-                amount=(
-                    saved_reservation
-                    .amount
-                ),
-            )
+            reservation_manager\
+                .reservations[
+                    key
+                ] = CapitalReservation(
+                    instrument_id=(
+                        saved_reservation
+                        .instrument_uid
+                    ),
 
-        #
-        # Восстанавливаем внутренний
-        # PortfolioManager cash.
-        #
+                    level_index=(
+                        saved_reservation
+                        .level_index
+                    ),
+
+                    amount=(
+                        saved_reservation
+                        .amount
+                    ),
+                )
+
         if (
             state.portfolio_cash
             is not None
@@ -286,7 +450,8 @@ class TradingSessionStateService:
                 .portfolio_manager\
                 .portfolio\
                 .cash = (
-                    state.portfolio_cash
+                    state
+                    .portfolio_cash
                 )
 
         return state
@@ -299,10 +464,15 @@ class TradingSessionStateService:
     ) -> TradingSessionState:
         return self.save(
             context=context,
-            session_id=session_id,
+
+            session_id=(
+                session_id
+            ),
+
             trading_account_id=(
                 trading_account_id
             ),
+
             status="STOPPED",
         )
 
@@ -334,5 +504,7 @@ class TradingSessionStateService:
             return None
 
         return Decimal(
-            str(price)
+            str(
+                price
+            )
         )

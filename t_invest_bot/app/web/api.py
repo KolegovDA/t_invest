@@ -484,12 +484,63 @@ def dashboard():
         .get_sessions()
     ]
 
-    return {
-        "accounts":
-            1,
+    active_states = (
+        trading_state_repository
+        .get_active()
+    )
 
-        "capital":
-            100000,
+    initial_deposit = Decimal("0")
+    available_cash = Decimal("0")
+    reserved_cash = Decimal("0")
+
+    for state in active_states:
+        initial_deposit += getattr(
+            state,
+            "initial_deposit",
+            Decimal("0"),
+        )
+
+        available_cash += (
+            state.available_cash
+        )
+
+        reserved_cash += (
+            state.reserved_cash
+        )
+
+    return {
+        "accounts": len(
+            {
+                state.trading_account_id
+                for state in active_states
+            }
+        ),
+
+        #
+        # Больше никакого фиктивного
+        # капитала 100000.
+        #
+        "capital": (
+            float(initial_deposit)
+            if initial_deposit > 0
+            else None
+        ),
+
+        "available_cash": (
+            float(
+                available_cash
+            )
+            if active_states
+            else None
+        ),
+
+        "reserved_cash": (
+            float(
+                reserved_cash
+            )
+            if active_states
+            else None
+        ),
 
         "active_positions": sum(
             session[

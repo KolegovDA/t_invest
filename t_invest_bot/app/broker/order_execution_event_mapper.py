@@ -1,12 +1,16 @@
 from dataclasses import dataclass
 
-from broker.order_state_tracker import ExecutedOrder
+from broker.order_state_tracker import (
+    ExecutedOrder,
+)
 from domain.commands import (
     PlaceBuyLimitCommand,
     PlaceSellAllLimitCommand,
     PlaceSellLimitCommand,
 )
-from domain.events import TradeExecutedEvent
+from domain.events import (
+    TradeExecutedEvent,
+)
 
 
 @dataclass(slots=True)
@@ -15,42 +19,132 @@ class OrderExecutionEventMapper:
         self,
         executed_order: ExecutedOrder,
     ) -> TradeExecutedEvent:
-        command = executed_order.order_record.command
-        state = executed_order.execution_state
+        command = (
+            executed_order
+            .order_record
+            .command
+        )
 
-        if state.executed_price is None:
-            raise ValueError("Executed price is missing")
+        state = (
+            executed_order
+            .execution_state
+        )
 
-        if isinstance(command, PlaceBuyLimitCommand):
+        if (
+            state.executed_price
+            is None
+        ):
+            raise ValueError(
+                "Executed price is missing"
+            )
+
+        if isinstance(
+            command,
+            PlaceBuyLimitCommand,
+        ):
             return TradeExecutedEvent(
-                instrument_id=command.instrument_id,
-                level_index=command.level_index,
+                instrument_id=(
+                    command.instrument_id
+                ),
+
+                level_index=(
+                    command.level_index
+                ),
+
                 side="BUY",
-                quantity=state.executed_quantity,
-                price=state.executed_price,
-                commission=None,
+
+                quantity=(
+                    state
+                    .executed_quantity
+                ),
+
+                price=(
+                    state
+                    .executed_price
+                ),
+
+                commission=(
+                    state
+                    .executed_commission
+                ),
+
+                total_amount=(
+                    state
+                    .total_order_amount
+                ),
             )
 
-        if isinstance(command, PlaceSellLimitCommand):
+        if isinstance(
+            command,
+            PlaceSellLimitCommand,
+        ):
             return TradeExecutedEvent(
-                instrument_id=command.instrument_id,
-                level_index=command.level_index,
+                instrument_id=(
+                    command.instrument_id
+                ),
+
+                level_index=(
+                    command.level_index
+                ),
+
                 side="SELL",
-                quantity=state.executed_quantity,
-                price=state.executed_price,
-                commission=None,
+
+                quantity=(
+                    state
+                    .executed_quantity
+                ),
+
+                price=(
+                    state
+                    .executed_price
+                ),
+
+                commission=(
+                    state
+                    .executed_commission
+                ),
+
+                total_amount=(
+                    state
+                    .total_order_amount
+                ),
             )
 
-        if isinstance(command, PlaceSellAllLimitCommand):
+        if isinstance(
+            command,
+            PlaceSellAllLimitCommand,
+        ):
             return TradeExecutedEvent(
-                instrument_id=command.instrument_id,
+                instrument_id=(
+                    command.instrument_id
+                ),
+
                 level_index=0,
+
                 side="SELL",
-                quantity=state.executed_quantity,
-                price=state.executed_price,
-                commission=None,
+
+                quantity=(
+                    state
+                    .executed_quantity
+                ),
+
+                price=(
+                    state
+                    .executed_price
+                ),
+
+                commission=(
+                    state
+                    .executed_commission
+                ),
+
+                total_amount=(
+                    state
+                    .total_order_amount
+                ),
             )
 
         raise ValueError(
-            f"Unsupported command type: {type(command)}"
+            "Unsupported command type: "
+            f"{type(command)}"
         )

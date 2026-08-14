@@ -6,7 +6,31 @@ from decimal import Decimal
 class TradeExecutedEvent:
     instrument_id: str
     level_index: int
+
     side: str
+
+    #
+    # Количество лотов.
+    #
     quantity: int
+
+    #
+    # Фактическая средняя
+    # цена исполнения.
+    #
     price: Decimal
-    commission: Decimal = Decimal("0")
+
+    #
+    # Фактическая комиссия.
+    #
+    commission: (
+        Decimal | None
+    ) = None
+
+    #
+    # Фактическая сумма сделки
+    # без комиссии.
+    #
+    total_amount: (
+        Decimal | None
+    ) = None

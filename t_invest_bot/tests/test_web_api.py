@@ -58,10 +58,41 @@ def test_dashboard_endpoint_returns_dashboard() -> None:
     )
 
     assert response.status_code == 200
+
+    data = response.json()
+
+    assert "accounts" in data
+    assert "capital" in data
+    assert "available_cash" in data
+    assert "reserved_cash" in data
+    assert "active_positions" in data
+    assert "profit" in data
+    assert "instruments" in data
+
     assert (
-        response.json()["accounts"]
-        == 1
+        data["accounts"]
+        >= 0
     )
+
+    #
+    # В тестовой БД может не быть
+    # активной торговой сессии.
+    #
+    if data["accounts"] == 0:
+        assert (
+            data["capital"]
+            is None
+        )
+
+        assert (
+            data["available_cash"]
+            is None
+        )
+
+        assert (
+            data["reserved_cash"]
+            is None
+        )
 
 
 def test_instruments_endpoint_returns_instruments() -> None:
