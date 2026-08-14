@@ -4,6 +4,10 @@ from domain.commands import PlaceSellLimitCommand
 from domain.events import TradeExecutedEvent
 from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
 
+from domain.commands import (
+    PlaceBuyLimitCommand,
+    PlaceSellLimitCommand,
+)
 
 def test_grid_engine_activates_trailing_exit_after_take_profit_but_does_not_sell_immediately() -> None:
     grid = GridEngine(
@@ -150,3 +154,193 @@ def test_grid_engine_uses_fallback_commission_when_actual_commission_is_missing(
 
     assert grid.open_positions == {}
     assert grid.realized_profit == expected_profit
+
+def test_sell_limit_is_below_current_price_after_trailing() -> None:
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("324"),
+            )
+        ],
+        config=GridEngineConfig(
+            quantity=1,
+            min_profit_percent=Decimal("0.30"),
+            take_profit_buffer_percent=Decimal("0.15"),
+            trailing_percent=Decimal("0.50"),
+            exit_limit_offset_percent=Decimal("0.15"),
+        ),
+    )
+
+    grid.on_trade_executed(
+        TradeExecutedEvent(
+            instrument_id="SBER",
+            level_index=1,
+            side="BUY",
+            quantity=1,
+            price=Decimal("324"),
+            commission=None,
+        )
+    )
+
+    position = grid.open_positions[1]
+
+    activation_price = (
+        grid._calculate_exit_activation_price(
+            position.hard_take_profit_price
+        )
+    )
+
+    assert (
+        grid.on_price(
+            activation_price
+        )
+        == []
+    )
+
+    rollback_price = (
+        activation_price
+        * Decimal("0.995")
+    )
+
+    commands = grid.on_price(
+        rollback_price
+    )
+
+    assert len(commands) == 1
+
+    command = commands[0]
+
+    assert isinstance(
+        command,
+        PlaceSellLimitCommand,
+    )
+
+    assert (
+        command.price
+        < rollback_price
+    )
+
+    assert (
+        command.price
+        >= position.hard_take_profit_price
+    )
+
+
+def test_sell_order_is_created_only_once_while_waiting_for_execution() -> None:
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("324"),
+            )
+        ],
+        config=GridEngineConfig(
+            quantity=1,
+            min_profit_percent=Decimal("0.30"),
+            take_profit_buffer_percent=Decimal("0.15"),
+            trailing_percent=Decimal("0.50"),
+            exit_limit_offset_percent=Decimal("0.15"),
+        ),
+    )
+
+    grid.on_trade_executed(
+        TradeExecutedEvent(
+            instrument_id="SBER",
+            level_index=1,
+            side="BUY",
+            quantity=1,
+            price=Decimal("324"),
+            commission=None,
+        )
+    )
+
+    position = grid.open_positions[1]
+
+    activation_price = (
+        grid._calculate_exit_activation_price(
+            position.hard_take_profit_price
+        )
+    )
+
+    grid.on_price(
+        activation_price
+    )
+
+    rollback_price = (
+        activation_price
+        * Decimal("0.995")
+    )
+
+    first_commands = grid.on_price(
+        rollback_price
+    )
+
+    assert len(first_commands) == 1
+
+    second_commands = grid.on_price(
+        rollback_price
+    )
+
+    third_commands = grid.on_price(
+        rollback_price
+    )
+
+    assert second_commands == []
+    assert third_commands == []
+
+
+def test_buy_limit_is_above_current_price_after_entry_trailing() -> None:
+    grid = GridEngine(
+        instrument_id="SBER",
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("300"),
+            )
+        ],
+        config=GridEngineConfig(
+            quantity=1,
+            entry_rebound_percent=Decimal("0.15"),
+            entry_limit_offset_percent=Decimal("0.15"),
+        ),
+    )
+
+    assert (
+        grid.on_price(
+            Decimal("300")
+        )
+        == []
+    )
+
+    assert (
+        grid.on_price(
+            Decimal("298")
+        )
+        == []
+    )
+
+    rebound_price = (
+        Decimal("298")
+        * Decimal("1.0015")
+    )
+
+    commands = grid.on_price(
+        rebound_price
+    )
+
+    assert len(commands) == 1
+
+    command = commands[0]
+
+    assert isinstance(
+        command,
+        PlaceBuyLimitCommand,
+    )
+
+    assert (
+        command.price
+        > rebound_price
+    )

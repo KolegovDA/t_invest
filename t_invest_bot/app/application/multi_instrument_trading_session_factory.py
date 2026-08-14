@@ -86,6 +86,14 @@ from strategy.history_analyzer import (
     HistoryAnalyzer,
 )
 
+from application.live_position_recovery_service import (
+    LivePositionRecoveryService,
+)
+
+from infrastructure.tinvest.live_position_provider import (
+    TInvestLivePositionProvider,
+)
+
 
 @dataclass(slots=True)
 class MultiInstrumentTradingSessionFactory:
@@ -183,7 +191,8 @@ class MultiInstrumentTradingSessionFactory:
             )
 
         account_id = (
-            self.settings.tinvest_live_account_id
+            self.settings
+            .tinvest_live_account_id
         )
 
         if not account_id:
@@ -192,32 +201,31 @@ class MultiInstrumentTradingSessionFactory:
                 "is not configured"
             )
 
-        client_factory = TInvestClientFactory(
-            token=token,
+        client_factory = (
+            TInvestClientFactory(
+                token=token,
+            )
         )
 
         available_cash = (
             TInvestLiveBalanceProvider(
                 client_factory=client_factory,
-            ).get_rub_balance(
+            )
+            .get_rub_balance(
                 account_id=account_id,
             )
         )
 
-        if available_cash <= 0:
-            raise ValueError(
-                "Live account has no available "
-                "RUB balance"
-            )
-
-        return self._create_context(
+        context = self._create_context(
             config=config,
             client_factory=client_factory,
             account_id=account_id,
             available_cash=available_cash,
             order_executor=(
                 TInvestLiveOrderExecutor(
-                    client_factory=client_factory,
+                    client_factory=(
+                        client_factory
+                    ),
                     quotation_mapper=(
                         TInvestQuotationMapper()
                     ),
@@ -225,13 +233,40 @@ class MultiInstrumentTradingSessionFactory:
             ),
             order_state_provider=(
                 TInvestLiveOrderStateProvider(
-                    client_factory=client_factory,
+                    client_factory=(
+                        client_factory
+                    ),
                 )
             ),
             sandbox_account_provider=None,
             close_account_on_close=False,
             is_live=True,
         )
+
+        recovery_service = (
+            LivePositionRecoveryService(
+                position_provider=(
+                    TInvestLivePositionProvider(
+                        client_factory=(
+                            client_factory
+                        ),
+                    )
+                )
+            )
+        )
+
+        recovered_count = (
+            recovery_service.recover(
+                context=context,
+            )
+        )
+
+        print(
+            "LIVE RECOVERY COMPLETED:",
+            f"{recovered_count} instrument(s)",
+        )
+
+        return context
 
     def _create_context(
         self,

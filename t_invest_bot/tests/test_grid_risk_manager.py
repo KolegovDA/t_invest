@@ -45,3 +45,42 @@ def test_grid_risk_manager_creates_single_sell_all_command() -> None:
     assert commands[0].instrument_id == "SBER"
     assert commands[0].quantity == 50
     assert commands[0].price == Decimal("289.5650")
+
+def test_compensation_sell_is_generated_only_once() -> None:
+    manager = GridRiskManager(
+        instrument_id="SBER",
+        config=GridRiskManagerConfig(
+            min_open_positions_for_compensation=1,
+            compensation_multiplier=Decimal("0"),
+        ),
+    )
+
+    positions = {
+        1: OpenLevelPosition(
+            level_index=1,
+            entry_price=Decimal("100"),
+            quantity=1,
+            buy_commission=Decimal("0"),
+            expected_sell_commission_percent=Decimal(
+                "0.3"
+            ),
+            hard_take_profit_price=Decimal(
+                "101"
+            ),
+        )
+    }
+
+    first = manager.check_compensation_close(
+        open_positions=positions,
+        realized_profit=Decimal("100"),
+        current_price=Decimal("90"),
+    )
+
+    second = manager.check_compensation_close(
+        open_positions=positions,
+        realized_profit=Decimal("100"),
+        current_price=Decimal("90"),
+    )
+
+    assert len(first) == 1
+    assert second == []

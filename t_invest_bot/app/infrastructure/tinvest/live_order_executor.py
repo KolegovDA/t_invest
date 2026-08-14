@@ -21,6 +21,48 @@ class TInvestLiveOrderExecutor:
     client_factory: TInvestClientFactory
     quotation_mapper: TInvestQuotationMapper
 
+    def has_active_order(
+        self,
+        account_id: str,
+        instrument_id: str,
+    ) -> bool:
+        """
+        Broker is the source of truth.
+
+        После рестарта локальный active_orders может
+        быть пустым, но заявка у брокера продолжает жить.
+        """
+
+        with (
+            self.client_factory.create_live_client()
+            as client
+        ):
+            response = client.orders.get_orders(
+                account_id=account_id,
+            )
+
+        for order in response.orders:
+            order_instrument_id = str(
+                getattr(
+                    order,
+                    "instrument_uid",
+                    "",
+                )
+                or getattr(
+                    order,
+                    "figi",
+                    "",
+                )
+            )
+
+            if (
+                order_instrument_id
+                == instrument_id
+            ):
+                return True
+
+        return False
+
     def place_limit_buy(
         self,
         account_id: str,
@@ -34,7 +76,8 @@ class TInvestLiveOrderExecutor:
             quantity=quantity,
             price=price,
             direction=(
-                OrderDirection.ORDER_DIRECTION_BUY
+                OrderDirection
+                .ORDER_DIRECTION_BUY
             ),
         )
 
@@ -51,7 +94,8 @@ class TInvestLiveOrderExecutor:
             quantity=quantity,
             price=price,
             direction=(
-                OrderDirection.ORDER_DIRECTION_SELL
+                OrderDirection
+                .ORDER_DIRECTION_SELL
             ),
         )
 
@@ -77,25 +121,34 @@ class TInvestLiveOrderExecutor:
         price: Decimal,
         direction: OrderDirection,
     ) -> PlacedOrder:
-        request_id = str(uuid4())
+        request_id = str(
+            uuid4()
+        )
 
         with (
             self.client_factory.create_live_client()
             as client
         ):
-            response = client.orders.post_order(
-                account_id=account_id,
-                instrument_id=instrument_id,
-                quantity=quantity,
-                price=(
-                    self.quotation_mapper
-                    .decimal_to_quotation(price)
-                ),
-                direction=direction,
-                order_type=(
-                    OrderType.ORDER_TYPE_LIMIT
-                ),
-                order_id=request_id,
+            response = (
+                client.orders.post_order(
+                    account_id=account_id,
+                    instrument_id=(
+                        instrument_id
+                    ),
+                    quantity=quantity,
+                    price=(
+                        self.quotation_mapper
+                        .decimal_to_quotation(
+                            price
+                        )
+                    ),
+                    direction=direction,
+                    order_type=(
+                        OrderType
+                        .ORDER_TYPE_LIMIT
+                    ),
+                    order_id=request_id,
+                )
             )
 
         return PlacedOrder(

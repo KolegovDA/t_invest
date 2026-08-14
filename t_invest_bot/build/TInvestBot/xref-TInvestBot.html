@@ -12453,6 +12453,7 @@ imported by:
     <a href="#application.api_usage_recorder">application.api_usage_recorder</a>
  &#8226;   <a href="#application.level_quantity_calculator">application.level_quantity_calculator</a>
  &#8226;   <a href="#application.live_account_service">application.live_account_service</a>
+ &#8226;   <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
  &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
  &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
  &#8226;   <a href="#application.multi_instrument_session_context">application.multi_instrument_session_context</a>
@@ -12531,6 +12532,25 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="application.live_position_recovery_service"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/live_position_recovery_service.py" type="text/plain"><tt>application.live_position_recovery_service</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#application">application</a>
+ &#8226;   <a href="#application.multi_instrument_session_context">application.multi_instrument_session_context</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="application.multi_instrument_sandbox_session"></a>
   <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/application/multi_instrument_sandbox_session.py" type="text/plain"><tt>application.multi_instrument_sandbox_session</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
@@ -12590,7 +12610,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
+    <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
+ &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
 
   </div>
 
@@ -12602,6 +12623,7 @@ imported by:
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
     <a href="#application">application</a>
+ &#8226;   <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
  &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
  &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
  &#8226;   <a href="#application.multi_instrument_session_context">application.multi_instrument_session_context</a>
@@ -12625,6 +12647,7 @@ imports:
  &#8226;   <a href="#infrastructure.tinvest.live_balance_provider">infrastructure.tinvest.live_balance_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.quotation_mapper">infrastructure.tinvest.quotation_mapper</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
@@ -17275,6 +17298,7 @@ imported by:
  &#8226;   <a href="#application.api_usage_recorder">application.api_usage_recorder</a>
  &#8226;   <a href="#application.level_quantity_calculator">application.level_quantity_calculator</a>
  &#8226;   <a href="#application.live_account_service">application.live_account_service</a>
+ &#8226;   <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
  &#8226;   <a href="#application.multi_instrument_sandbox_session">application.multi_instrument_sandbox_session</a>
  &#8226;   <a href="#application.multi_instrument_session_config">application.multi_instrument_session_config</a>
  &#8226;   <a href="#application.multi_instrument_session_context">application.multi_instrument_session_context</a>
@@ -17319,6 +17343,7 @@ imported by:
  &#8226;   <a href="#infrastructure.tinvest.live_balance_provider">infrastructure.tinvest.live_balance_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_state_provider">infrastructure.tinvest.sandbox_order_state_provider</a>
@@ -18033,6 +18058,7 @@ imported by:
  &#8226;   <a href="#infrastructure.tinvest.live_balance_provider">infrastructure.tinvest.live_balance_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.quotation_mapper">infrastructure.tinvest.quotation_mapper</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
@@ -29658,6 +29684,7 @@ imported by:
  &#8226;   <a href="#infrastructure.tinvest.live_balance_provider">infrastructure.tinvest.live_balance_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.quotation_mapper">infrastructure.tinvest.quotation_mapper</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
@@ -29708,6 +29735,7 @@ imported by:
  &#8226;   <a href="#infrastructure.tinvest.live_balance_provider">infrastructure.tinvest.live_balance_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_executor">infrastructure.tinvest.live_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.live_order_state_provider">infrastructure.tinvest.live_order_state_provider</a>
+ &#8226;   <a href="#infrastructure.tinvest.live_position_provider">infrastructure.tinvest.live_position_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_account_provider">infrastructure.tinvest.sandbox_account_provider</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_executor">infrastructure.tinvest.sandbox_order_executor</a>
  &#8226;   <a href="#infrastructure.tinvest.sandbox_order_state_provider">infrastructure.tinvest.sandbox_order_state_provider</a>
@@ -29858,6 +29886,26 @@ imports:
   <div class="import">
 imported by:
     <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="infrastructure.tinvest.live_position_provider"></a>
+  <a target="code" href="///C:/new/T-Invest/t_invest_bot/app/infrastructure/tinvest/live_position_provider.py" type="text/plain"><tt>infrastructure.tinvest.live_position_provider</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#decimal">decimal</a>
+ &#8226;   <a href="#infrastructure.tinvest">infrastructure.tinvest</a>
+ &#8226;   <a href="#infrastructure.tinvest.client_factory">infrastructure.tinvest.client_factory</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#application.live_position_recovery_service">application.live_position_recovery_service</a>
+ &#8226;   <a href="#application.multi_instrument_trading_session_factory">application.multi_instrument_trading_session_factory</a>
 
   </div>
 

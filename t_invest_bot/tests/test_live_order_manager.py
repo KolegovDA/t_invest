@@ -140,3 +140,60 @@ def test_live_order_manager_cancels_all_orders() -> None:
 
     assert len(manager.active_orders) == 0
     assert len(executor.canceled_orders) == 2
+
+from decimal import Decimal
+
+from broker.live_order_manager import (
+    LiveOrderManager,
+)
+from domain.commands import (
+    PlaceSellLimitCommand,
+)
+
+
+class FakeLiveExecutorWithBrokerOrder:
+    def __init__(self):
+        self.sell_calls = 0
+
+    def has_active_order(
+        self,
+        account_id: str,
+        instrument_id: str,
+    ) -> bool:
+        return True
+
+    def place_limit_sell(
+        self,
+        **kwargs,
+    ):
+        self.sell_calls += 1
+
+        raise AssertionError(
+            "SELL must not be sent"
+        )
+
+
+def test_existing_broker_order_blocks_duplicate_sell() -> None:
+    executor = (
+        FakeLiveExecutorWithBrokerOrder()
+    )
+
+    manager = LiveOrderManager(
+        account_id="LIVE",
+        order_executor=executor,
+    )
+
+    result = manager.submit_commands(
+        [
+            PlaceSellLimitCommand(
+                instrument_id="SBER",
+                level_index=1,
+                quantity=1,
+                price=Decimal("300"),
+            )
+        ]
+    )
+
+    assert result == []
+    assert executor.sell_calls == 0
+
