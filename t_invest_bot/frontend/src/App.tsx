@@ -683,7 +683,7 @@ export default function App() {
                         <>
                             <SectionTitle
                                 title="Настройки"
-                                subtitle="ESM Trade System v.1.0.1"
+                            subtitle="ESM Invest System v1.0.2"
                             />
 
                             <LiveStatusCard
@@ -1025,7 +1025,7 @@ function Header() {
                     fontWeight: 600,
                 }}
             >
-                ESM Trade System
+                ESM Invest System
             </div>
 
             <h1
@@ -1228,7 +1228,7 @@ function SettingsCard({
 
             <SettingRow
                 label="Версия"
-                value="1.0 MVP"
+                value="1.0.2 MVP"
             />
         </div>
     )

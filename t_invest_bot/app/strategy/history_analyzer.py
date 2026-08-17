@@ -13,39 +13,93 @@ class PriceRange:
 
 @dataclass(slots=True)
 class HistoryAnalyzer:
+    #
+    # Первую неделю торгов
+    # исключаем из анализа.
+    #
     exclude_first_days: int = 7
 
-    def calculate_range(self, candles: list[Candle]) -> PriceRange:
+    def calculate_range(
+        self,
+        candles: list[Candle],
+    ) -> PriceRange:
         if not candles:
-            raise ValueError("Candles list is empty")
+            raise ValueError(
+                "Candles list is empty"
+            )
 
-        filtered_candles = self._exclude_first_days(candles)
+        filtered_candles = (
+            self._exclude_first_days(
+                candles
+            )
+        )
 
         if not filtered_candles:
-            raise ValueError("No candles left after excluding first days")
+            raise ValueError(
+                "No candles left after "
+                "excluding first days"
+            )
 
-        min_price = min(candle.low for candle in filtered_candles)
-        max_price = max(candle.high for candle in filtered_candles)
+        min_price = min(
+            candle.low
+            for candle
+            in filtered_candles
+        )
+
+        max_price = max(
+            candle.high
+            for candle
+            in filtered_candles
+        )
 
         if min_price <= Decimal("0"):
-            raise ValueError("min_price must be greater than zero")
+            raise ValueError(
+                "min_price must be "
+                "greater than zero"
+            )
 
-        if max_price <= min_price:
-            raise ValueError("max_price must be greater than min_price")
+        if max_price <= Decimal("0"):
+            raise ValueError(
+                "max_price must be "
+                "greater than zero"
+            )
 
         return PriceRange(
             min_price=min_price,
             max_price=max_price,
         )
 
-    def _exclude_first_days(self, candles: list[Candle]) -> list[Candle]:
-        sorted_candles = sorted(candles, key=lambda candle: candle.timestamp)
+    def _exclude_first_days(
+        self,
+        candles: list[Candle],
+    ) -> list[Candle]:
+        sorted_candles = sorted(
+            candles,
+            key=lambda candle: (
+                candle.timestamp
+            ),
+        )
 
-        first_timestamp = sorted_candles[0].timestamp
-        cutoff_timestamp = first_timestamp + timedelta(days=self.exclude_first_days)
+        first_timestamp = (
+            sorted_candles[0]
+            .timestamp
+        )
+
+        cutoff_timestamp = (
+            first_timestamp
+            + timedelta(
+                days=(
+                    self.exclude_first_days
+                )
+            )
+        )
 
         return [
             candle
-            for candle in sorted_candles
-            if candle.timestamp >= cutoff_timestamp
+            for candle
+            in sorted_candles
+            if (
+                candle.timestamp
+                >= cutoff_timestamp
+            )
         ]

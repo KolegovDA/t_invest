@@ -1,10 +1,21 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from domain.entities import Candle
-from strategy.grid_builder import GridBuilder
-from strategy.grid_engine import GridEngine, GridEngineConfig, GridLevel
-from strategy.history_analyzer import HistoryAnalyzer, PriceRange
+from domain.entities import (
+    Candle,
+)
+from strategy.grid_builder import (
+    GridBuilder,
+)
+from strategy.grid_engine import (
+    GridEngine,
+    GridEngineConfig,
+    GridLevel,
+)
+from strategy.history_analyzer import (
+    HistoryAnalyzer,
+    PriceRange,
+)
 
 
 @dataclass(slots=True)
@@ -16,7 +27,9 @@ class GridFactoryResult:
 
 @dataclass(slots=True)
 class GridFactory:
-    history_analyzer: HistoryAnalyzer
+    history_analyzer: (
+        HistoryAnalyzer
+    )
 
     def create_grid_engine(
         self,
@@ -24,26 +37,68 @@ class GridFactory:
         candles: list[Candle],
         levels_count: int,
         config: GridEngineConfig,
-        current_price: Decimal | None = None,
+        current_price: (
+            Decimal | None
+        ) = None,
     ) -> GridFactoryResult:
-        price_range = self.history_analyzer.calculate_range(candles)
-
-        if current_price is None:
-            current_price = candles[-1].close
-
-        builder = GridBuilder(
-            levels_count=levels_count,
+        price_range = (
+            self.history_analyzer
+            .calculate_range(
+                candles
+            )
         )
 
-        levels = builder.build_from_range(
-            min_price=price_range.min_price,
-            current_price=current_price,
+        if current_price is None:
+            current_price = (
+                candles[-1].close
+            )
+
+        builder = GridBuilder(
+            levels_count=(
+                levels_count
+            ),
+        )
+
+        grid_step = (
+            builder.calculate_step(
+                min_price=(
+                    price_range.min_price
+                ),
+
+                current_price=(
+                    current_price
+                ),
+            )
+        )
+
+        levels = (
+            builder.build_from_range(
+                min_price=(
+                    price_range.min_price
+                ),
+
+                current_price=(
+                    current_price
+                ),
+            )
         )
 
         grid_engine = GridEngine(
-            instrument_id=instrument_id,
+            instrument_id=(
+                instrument_id
+            ),
+
             levels=levels,
+
             config=config,
+
+            session_start_price=(
+                current_price
+            ),
+
+            grid_step=(
+                grid_step
+            ),
         )
 
         return GridFactoryResult(

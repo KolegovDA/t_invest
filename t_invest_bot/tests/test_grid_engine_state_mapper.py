@@ -158,10 +158,47 @@ def test_grid_engine_state_can_be_restored() -> None:
 
 
 def test_entry_trailing_survives_restart() -> None:
-    engine = create_engine()
+    engine = GridEngine(
+        instrument_id="SBER_UID",
+
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("99"),
+            ),
+            GridLevel(
+                index=2,
+                price=Decimal("98"),
+            ),
+            GridLevel(
+                index=3,
+                price=Decimal("97"),
+            ),
+        ],
+
+        config=GridEngineConfig(
+            quantity=1,
+
+            first_entry_activation_percent=(
+                Decimal("0.50")
+            ),
+
+            entry_rebound_percent=(
+                Decimal("0.15")
+            ),
+        ),
+
+        session_start_price=(
+            Decimal("100")
+        ),
+
+        grid_step=(
+            Decimal("1")
+        ),
+    )
 
     engine.on_price(
-        Decimal("299")
+        Decimal("100.50")
     )
 
     level = engine.levels[0]
@@ -172,14 +209,14 @@ def test_entry_trailing_survives_restart() -> None:
     )
 
     engine.on_price(
-        Decimal("295")
+        Decimal("101")
     )
 
     assert (
         level
         .trailing_entry
-        .lowest_price
-        == Decimal("295")
+        .highest_price
+        == Decimal("101")
     )
 
     mapper = (
@@ -189,11 +226,48 @@ def test_entry_trailing_survives_restart() -> None:
     state = mapper.to_state(
         ticker="SBER",
         engine=engine,
-        current_price=Decimal("295"),
+        current_price=(
+            Decimal("101")
+        ),
     )
 
-    restored_engine = (
-        create_engine()
+    restored_engine = GridEngine(
+        instrument_id="SBER_UID",
+
+        levels=[
+            GridLevel(
+                index=1,
+                price=Decimal("99"),
+            ),
+            GridLevel(
+                index=2,
+                price=Decimal("98"),
+            ),
+            GridLevel(
+                index=3,
+                price=Decimal("97"),
+            ),
+        ],
+
+        config=GridEngineConfig(
+            quantity=1,
+
+            first_entry_activation_percent=(
+                Decimal("0.50")
+            ),
+
+            entry_rebound_percent=(
+                Decimal("0.15")
+            ),
+        ),
+
+        session_start_price=(
+            Decimal("100")
+        ),
+
+        grid_step=(
+            Decimal("1")
+        ),
     )
 
     mapper.restore(
@@ -211,11 +285,16 @@ def test_entry_trailing_survives_restart() -> None:
         is not None
     )
 
+    #
+    # Пока mapper сохраняет новое
+    # значение через legacy
+    # lowest_price.
+    #
     assert (
         restored_level
         .trailing_entry
-        .lowest_price
-        == Decimal("295")
+        .highest_price
+        == Decimal("101")
     )
 
 

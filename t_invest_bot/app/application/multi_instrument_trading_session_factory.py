@@ -420,13 +420,46 @@ class MultiInstrumentTradingSessionFactory:
                 current_price=current_price,
             )
 
-            grid_engine = GridEngine(
-                instrument_id=instrument.id,
-                levels=levels,
-                config=(
-                    instrument_config
-                    .to_grid_engine_config()
-                ),
+            grid_step = (
+                GridBuilder(
+                    levels_count=(
+                        instrument_config
+                        .levels_count
+                    ),
+                )
+                .calculate_step(
+                    min_price=(
+                        price_range
+                        .min_price
+                    ),
+
+                    current_price=(
+                        current_price
+                    ),
+                )
+            )
+
+            grid_engine = (
+                GridEngine(
+                    instrument_id=(
+                        instrument.id
+                    ),
+
+                    levels=levels,
+
+                    config=(
+                        instrument_config
+                        .to_grid_engine_config()
+                    ),
+
+                    session_start_price=(
+                        current_price
+                    ),
+
+                    grid_step=(
+                        grid_step
+                    ),
+                )
             )
 
             live_order_manager = (
