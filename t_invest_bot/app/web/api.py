@@ -13,7 +13,10 @@ from fastapi import (
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
-from pydantic import BaseModel
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 from application.live_account_service import (
     LiveAccountService,
@@ -31,6 +34,9 @@ from application.portfolio_orchestrator import (
 from application.sandbox_session_registry import (
     SandboxSessionSnapshot,
     sandbox_session_registry,
+)
+from application.trading_account_service import (
+    TradingAccountService,
 )
 from application.trading_mode_guard import (
     TradingModeGuard,
@@ -52,11 +58,27 @@ from config.settings import (
     Settings,
 )
 
+from domain.trading_account import (
+    BrokerType,
+    CommissionMode,
+    TradingAccount,
+    TradingAccountMode,
+)
+
+from infrastructure.brokers.default_registry import (
+    create_default_broker_registry,
+)
+from infrastructure.security.dpapi_secret_protector import (
+    DPAPISecretProtector,
+)
 from infrastructure.sqlite.api_usage_repository import (
     SQLiteApiUsageRepository,
 )
 from infrastructure.sqlite.sqlite_database import (
     SQLiteDatabase,
+)
+from infrastructure.sqlite.trading_account_repository import (
+    TradingAccountRepository,
 )
 from infrastructure.sqlite.trading_state_repository import (
     TradingStateRepository,
@@ -81,18 +103,6 @@ settings = Settings.from_env()
 # DATABASE
 # ============================================================
 
-#
-# КРИТИЧНО:
-#
-# Путь к БД больше не зависит
-# от текущей рабочей директории.
-#
-# Python:
-#   <project>/data/tinvest.db
-#
-# PyInstaller:
-#   <exe_dir>/data/tinvest.db
-#
 database_path = (
     get_database_path()
 )
@@ -160,11 +170,46 @@ trading_state_service = (
 
 
 # ============================================================
+# TRADING ACCOUNTS 1.1
+# ============================================================
+
+trading_account_repository = (
+    TradingAccountRepository(
+        db_path=str(
+            database_path
+        ),
+    )
+)
+
+
+trading_account_service = (
+    TradingAccountService(
+        repository=(
+            trading_account_repository
+        ),
+
+        secret_protector=(
+            DPAPISecretProtector()
+        ),
+    )
+)
+
+
+# ============================================================
+# BROKERS 1.1
+# ============================================================
+
+broker_registry = (
+    create_default_broker_registry()
+)
+
+
+# ============================================================
 # FASTAPI
 # ============================================================
 
 app = FastAPI(
-    title="T-Invest Bot API",
+    title="ESM Trade System API",
     version=APP_VERSION,
 )
 
@@ -210,8 +255,645 @@ class StartSandboxRequest(
     ]
 
 
+class CreateTradingAccountRequest(
+    BaseModel
+):
+    name: str
+
+    broker: BrokerType = (
+        BrokerType.TINVEST
+    )
+
+    broker_account_id: str
+
+    credentials: dict[
+        str,
+        str,
+    ]
+
+    mode: TradingAccountMode = (
+        TradingAccountMode.LIVE
+    )
+
+    commission_mode: CommissionMode = (
+        CommissionMode.AUTO
+    )
+
+    custom_buy_commission_percent: (
+        Decimal | None
+    ) = None
+
+    custom_sell_commission_percent: (
+        Decimal | None
+    ) = None
+
+    enabled: bool = True
+
+
+class UpdateTradingAccountRequest(
+    BaseModel
+):
+    name: str | None = None
+
+    broker: BrokerType | None = None
+
+    broker_account_id: (
+        str | None
+    ) = None
+
+    credentials: (
+        dict[
+            str,
+            str,
+        ]
+        | None
+    ) = None
+
+    mode: (
+        TradingAccountMode
+        | None
+    ) = None
+
+    commission_mode: (
+        CommissionMode
+        | None
+    ) = None
+
+    custom_buy_commission_percent: (
+        Decimal | None
+    ) = None
+
+    custom_sell_commission_percent: (
+        Decimal | None
+    ) = None
+
+    enabled: bool | None = None
+
+
+# ============================================================
+# BROKERS
+# ============================================================
+
+@app.get(
+    "/api/brokers"
+)
+def get_brokers():
+    supported = set(
+        broker_registry
+        .get_supported_brokers()
+    )
+
+    return {
+        "brokers": [
+            _build_broker_info(
+                broker=broker,
+
+                supported=(
+                    broker
+                    in supported
+                ),
+            )
+            for broker
+            in BrokerType
+        ],
+    }
+
+
+# ============================================================
+# TRADING ACCOUNTS
+# ============================================================
+
+@app.get(
+    "/api/accounts"
+)
+def get_trading_accounts():
+    accounts = (
+        trading_account_service
+        .get_all()
+    )
+
+    return {
+        "accounts": [
+            _trading_account_to_dict(
+                account
+            )
+            for account
+            in accounts
+        ],
+    }
+
+
+@app.get(
+    "/api/accounts/{account_id}"
+)
+def get_trading_account(
+    account_id: str,
+):
+    try:
+        account = (
+            trading_account_service
+            .get(
+                account_id
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Trading account "
+                "not found"
+            ),
+        ) from error
+
+    return (
+        _trading_account_to_dict(
+            account
+        )
+    )
+
+
+@app.post(
+    "/api/accounts",
+    status_code=201,
+)
+def create_trading_account(
+    request: CreateTradingAccountRequest,
+):
+    #
+    # Пока разрешаем сохранять
+    # только брокеров, для которых
+    # реально установлен adapter.
+    #
+    if not (
+        broker_registry
+        .is_supported(
+            request.broker
+        )
+    ):
+        raise HTTPException(
+            status_code=400,
+
+            detail=(
+                "Broker is not supported "
+                "yet: "
+                f"{request.broker.value}"
+            ),
+        )
+
+    try:
+        account = (
+            trading_account_service
+            .create(
+                name=(
+                    request.name
+                ),
+
+                broker=(
+                    request.broker
+                ),
+
+                broker_account_id=(
+                    request
+                    .broker_account_id
+                ),
+
+                credentials=(
+                    request
+                    .credentials
+                ),
+
+                mode=(
+                    request.mode
+                ),
+
+                commission_mode=(
+                    request
+                    .commission_mode
+                ),
+
+                custom_buy_commission_percent=(
+                    request
+                    .custom_buy_commission_percent
+                ),
+
+                custom_sell_commission_percent=(
+                    request
+                    .custom_sell_commission_percent
+                ),
+
+                enabled=(
+                    request.enabled
+                ),
+            )
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+
+            detail=str(
+                error
+            ),
+        ) from error
+
+    api_usage_repository.record(
+        source="web",
+        operation=(
+            "trading_account_created"
+        ),
+        weight=1,
+    )
+
+    return (
+        _trading_account_to_dict(
+            account
+        )
+    )
+
+
+@app.put(
+    "/api/accounts/{account_id}"
+)
+def update_trading_account(
+    account_id: str,
+
+    request: UpdateTradingAccountRequest,
+):
+    if (
+        request.broker
+        is not None
+        and not (
+            broker_registry
+            .is_supported(
+                request.broker
+            )
+        )
+    ):
+        raise HTTPException(
+            status_code=400,
+
+            detail=(
+                "Broker is not supported "
+                "yet: "
+                f"{request.broker.value}"
+            ),
+        )
+
+    try:
+        account = (
+            trading_account_service
+            .update(
+                account_id=(
+                    account_id
+                ),
+
+                name=(
+                    request.name
+                ),
+
+                broker=(
+                    request.broker
+                ),
+
+                broker_account_id=(
+                    request
+                    .broker_account_id
+                ),
+
+                credentials=(
+                    request
+                    .credentials
+                ),
+
+                mode=(
+                    request.mode
+                ),
+
+                commission_mode=(
+                    request
+                    .commission_mode
+                ),
+
+                custom_buy_commission_percent=(
+                    request
+                    .custom_buy_commission_percent
+                ),
+
+                custom_sell_commission_percent=(
+                    request
+                    .custom_sell_commission_percent
+                ),
+
+                enabled=(
+                    request.enabled
+                ),
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Trading account "
+                "not found"
+            ),
+        ) from error
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+
+            detail=str(
+                error
+            ),
+        ) from error
+
+    api_usage_repository.record(
+        source="web",
+        operation=(
+            "trading_account_updated"
+        ),
+        weight=1,
+    )
+
+    return (
+        _trading_account_to_dict(
+            account
+        )
+    )
+
+
+@app.delete(
+    "/api/accounts/{account_id}"
+)
+def delete_trading_account(
+    account_id: str,
+):
+    #
+    # Позже здесь добавим запрет
+    # удаления счёта, если у него
+    # есть активный runner.
+    #
+    try:
+        trading_account_service\
+            .delete(
+                account_id
+            )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Trading account "
+                "not found"
+            ),
+        ) from error
+
+    api_usage_repository.record(
+        source="web",
+        operation=(
+            "trading_account_deleted"
+        ),
+        weight=1,
+    )
+
+    return {
+        "status":
+            "deleted",
+
+        "account_id":
+            account_id,
+    }
+
+
+@app.post(
+    "/api/accounts/{account_id}/test"
+)
+def test_trading_account(
+    account_id: str,
+):
+    try:
+        account = (
+            trading_account_service
+            .get(
+                account_id
+            )
+        )
+
+        credentials = (
+            trading_account_service
+            .get_credentials(
+                account_id
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Trading account "
+                "not found"
+            ),
+        ) from error
+
+    try:
+        adapter = (
+            broker_registry
+            .get(
+                account.broker
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=400,
+
+            detail=(
+                "Broker adapter "
+                "is not available: "
+                f"{account.broker.value}"
+            ),
+        ) from error
+
+    result = (
+        adapter.test_connection(
+            credentials=(
+                credentials
+            ),
+
+            broker_account_id=(
+                account
+                .broker_account_id
+            ),
+
+            mode=(
+                account.mode
+            ),
+        )
+    )
+
+    api_usage_repository.record(
+        source="web",
+
+        operation=(
+            "trading_account_test"
+        ),
+
+        weight=1,
+    )
+
+    return {
+        "success":
+            result.success,
+
+        "broker":
+            result
+            .broker
+            .value,
+
+        "broker_account_id":
+            result
+            .broker_account_id,
+
+        "account_found":
+            result
+            .account_found,
+
+        "error":
+            result.error,
+
+        "accounts": [
+            {
+                "broker_account_id":
+                    item
+                    .broker_account_id,
+
+                "name":
+                    item.name,
+
+                "status":
+                    item.status,
+
+                "account_type":
+                    item
+                    .account_type,
+            }
+            for item
+            in (
+                result.accounts
+                or []
+            )
+        ],
+
+        "portfolio": (
+            _broker_portfolio_to_dict(
+                result.portfolio
+            )
+            if (
+                result.portfolio
+                is not None
+            )
+            else None
+        ),
+    }
+
+
+@app.get(
+    "/api/accounts/{account_id}/portfolio"
+)
+def get_trading_account_portfolio(
+    account_id: str,
+):
+    try:
+        account = (
+            trading_account_service
+            .get(
+                account_id
+            )
+        )
+
+        credentials = (
+            trading_account_service
+            .get_credentials(
+                account_id
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+
+            detail=(
+                "Trading account "
+                "not found"
+            ),
+        ) from error
+
+    try:
+        adapter = (
+            broker_registry
+            .get(
+                account.broker
+            )
+        )
+
+        portfolio = (
+            adapter.get_portfolio(
+                credentials=(
+                    credentials
+                ),
+
+                broker_account_id=(
+                    account
+                    .broker_account_id
+                ),
+
+                mode=(
+                    account.mode
+                ),
+            )
+        )
+
+    except KeyError as error:
+        raise HTTPException(
+            status_code=400,
+
+            detail=(
+                "Broker adapter "
+                "is not available"
+            ),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+
+            detail=(
+                "Broker portfolio "
+                f"request failed: {error!r}"
+            ),
+        ) from error
+
+    return (
+        _broker_portfolio_to_dict(
+            portfolio
+        )
+    )
+
+
 # ============================================================
 # LIVE START
+#
+# LEGACY.
+#
+# Пока продолжает использовать Settings/.env.
+# После тестирования Account Manager
+# переведём runner на account_id ESM.
 # ============================================================
 
 @app.post(
@@ -446,6 +1128,12 @@ def health():
         "state_persistence_enabled":
             True,
 
+        "multi_account_enabled":
+            True,
+
+        "multi_broker_architecture":
+            True,
+
         "database_path":
             str(
                 database_path
@@ -494,10 +1182,13 @@ def dashboard():
     reserved_cash = Decimal("0")
 
     for state in active_states:
-        initial_deposit += getattr(
-            state,
-            "initial_deposit",
-            Decimal("0"),
+        initial_deposit += (
+            getattr(
+                state,
+                "initial_deposit",
+                None,
+            )
+            or Decimal("0")
         )
 
         available_cash += (
@@ -508,20 +1199,37 @@ def dashboard():
             state.reserved_cash
         )
 
-    return {
-        "accounts": len(
-            {
-                state.trading_account_id
-                for state in active_states
-            }
-        ),
+    configured_accounts = (
+        trading_account_service
+        .get_all()
+    )
 
+    return {
         #
-        # Больше никакого фиктивного
-        # капитала 100000.
+        # Здесь теперь показываем
+        # количество настроенных счетов,
+        # а не только активных runner.
         #
+        "accounts":
+            len(
+                configured_accounts
+            ),
+
+        "active_accounts":
+            len(
+                {
+                    state
+                    .trading_account_id
+
+                    for state
+                    in active_states
+                }
+            ),
+
         "capital": (
-            float(initial_deposit)
+            float(
+                initial_deposit
+            )
             if initial_deposit > 0
             else None
         ),
@@ -1103,6 +1811,8 @@ def start_sandbox(
 
 # ============================================================
 # LIVE STATUS
+#
+# LEGACY T-INVEST STATUS.
 # ============================================================
 
 @app.get(
@@ -1331,6 +2041,240 @@ def _try_start_real_sandbox(
         )
 
         return "fallback_mock"
+
+
+# ============================================================
+# ACCOUNT HELPERS
+# ============================================================
+
+def _trading_account_to_dict(
+    account: TradingAccount,
+) -> dict:
+    return {
+        "id":
+            account.id,
+
+        "name":
+            account.name,
+
+        "broker":
+            account
+            .broker
+            .value,
+
+        "broker_account_id":
+            account
+            .broker_account_id,
+
+        "mode":
+            account
+            .mode
+            .value,
+
+        #
+        # Credentials никогда
+        # обратно в UI не отдаём.
+        #
+        "credentials_configured":
+            True,
+
+        "commission_mode":
+            account
+            .commission_mode
+            .value,
+
+        "custom_buy_commission_percent": (
+            str(
+                account
+                .custom_buy_commission_percent
+            )
+            if (
+                account
+                .custom_buy_commission_percent
+                is not None
+            )
+            else None
+        ),
+
+        "custom_sell_commission_percent": (
+            str(
+                account
+                .custom_sell_commission_percent
+            )
+            if (
+                account
+                .custom_sell_commission_percent
+                is not None
+            )
+            else None
+        ),
+
+        "detected_buy_commission_percent": (
+            str(
+                account
+                .detected_buy_commission_percent
+            )
+            if (
+                account
+                .detected_buy_commission_percent
+                is not None
+            )
+            else None
+        ),
+
+        "detected_sell_commission_percent": (
+            str(
+                account
+                .detected_sell_commission_percent
+            )
+            if (
+                account
+                .detected_sell_commission_percent
+                is not None
+            )
+            else None
+        ),
+
+        "expected_buy_commission_percent":
+            str(
+                account
+                .get_expected_buy_commission_percent()
+            ),
+
+        "expected_sell_commission_percent":
+            str(
+                account
+                .get_expected_sell_commission_percent()
+            ),
+
+        "enabled":
+            account.enabled,
+
+        "created_at": (
+            account
+            .created_at
+            .isoformat()
+            if (
+                account.created_at
+                is not None
+            )
+            else None
+        ),
+
+        "updated_at": (
+            account
+            .updated_at
+            .isoformat()
+            if (
+                account.updated_at
+                is not None
+            )
+            else None
+        ),
+    }
+
+
+def _build_broker_info(
+    broker: BrokerType,
+    supported: bool,
+) -> dict:
+    if (
+        broker
+        == BrokerType.TINVEST
+    ):
+        return {
+            "id":
+                broker.value,
+
+            "name":
+                "T-Invest",
+
+            "supported":
+                supported,
+
+            "credential_fields": [
+                {
+                    "key":
+                        "token",
+
+                    "label":
+                        "API Token",
+
+                    "type":
+                        "password",
+
+                    "required":
+                        True,
+                },
+            ],
+
+            "modes": [
+                "live",
+                "sandbox",
+            ],
+        }
+
+    names = {
+        BrokerType.ALFA:
+            "Альфа-Инвестиции",
+
+        BrokerType.BCS:
+            "БКС",
+
+        BrokerType.FINAM:
+            "Финам",
+
+        BrokerType.OTHER:
+            "Другой брокер",
+    }
+
+    return {
+        "id":
+            broker.value,
+
+        "name":
+            names.get(
+                broker,
+                broker.value,
+            ),
+
+        "supported":
+            supported,
+
+        "credential_fields":
+            [],
+
+        "modes": [
+            "live",
+        ],
+    }
+
+
+def _broker_portfolio_to_dict(
+    portfolio,
+) -> dict:
+    return {
+        "cash":
+            str(
+                portfolio.cash
+            ),
+
+        "total_value": (
+            str(
+                portfolio.total_value
+            )
+            if (
+                portfolio
+                .total_value
+                is not None
+            )
+            else None
+        ),
+
+        "positions_count":
+            portfolio
+            .positions_count,
+    }
 
 
 # ============================================================
