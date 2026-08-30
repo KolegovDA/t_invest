@@ -34,7 +34,8 @@ export interface BrokerInfo {
     credential_fields:
     BrokerCredentialField[]
 
-    modes: TradingAccountMode[]
+    modes:
+    TradingAccountMode[]
 }
 
 
@@ -75,6 +76,7 @@ export interface TradingAccount {
     enabled: boolean
 
     created_at: string | null
+
     updated_at: string | null
 }
 
@@ -91,8 +93,11 @@ export interface BrokerPortfolio {
 
 export interface BrokerConnectionAccount {
     broker_account_id: string
+
     name: string
+
     status: string
+
     account_type: string
 }
 
@@ -128,7 +133,8 @@ export interface CreateTradingAccountPayload {
     credentials:
     Record<string, string>
 
-    mode: TradingAccountMode
+    mode:
+    TradingAccountMode
 
     commission_mode:
     CommissionMode
@@ -153,7 +159,8 @@ export interface UpdateTradingAccountPayload {
     credentials?:
     Record<string, string>
 
-    mode?: TradingAccountMode
+    mode?:
+    TradingAccountMode
 
     commission_mode?:
     CommissionMode

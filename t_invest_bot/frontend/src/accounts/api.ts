@@ -16,18 +16,24 @@ async function parseJsonResponse(
     response: Response
 ) {
     if (!response.ok) {
-        const data = await response
-            .json()
-            .catch(() => null)
+        const data =
+            await response
+                .json()
+                .catch(
+                    () => null
+                )
 
         const message =
             data?.detail
             || `HTTP ${response.status}`
 
         throw new Error(
-            typeof message === "string"
+            typeof message
+                === "string"
                 ? message
-                : JSON.stringify(message)
+                : JSON.stringify(
+                    message
+                )
         )
     }
 
@@ -37,9 +43,10 @@ async function parseJsonResponse(
 
 export async function getBrokers():
     Promise<BrokerInfo[]> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/brokers`
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/brokers`
+        )
 
     const data =
         await parseJsonResponse(
@@ -52,9 +59,10 @@ export async function getBrokers():
 
 export async function getTradingAccounts():
     Promise<TradingAccount[]> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts`
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts`
+        )
 
     const data =
         await parseJsonResponse(
@@ -68,9 +76,10 @@ export async function getTradingAccounts():
 export async function getTradingAccount(
     accountId: string
 ): Promise<TradingAccount> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`
+        )
 
     return parseJsonResponse(
         response
@@ -82,21 +91,24 @@ export async function createTradingAccount(
     payload:
         CreateTradingAccountPayload
 ): Promise<TradingAccount> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts`,
-        {
-            method: "POST",
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts`,
+            {
+                method:
+                    "POST",
 
-            headers: {
-                "Content-Type":
-                    "application/json",
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
 
-            body: JSON.stringify(
-                payload
-            ),
-        }
-    )
+                body:
+                    JSON.stringify(
+                        payload
+                    ),
+            }
+        )
 
     return parseJsonResponse(
         response
@@ -110,21 +122,24 @@ export async function updateTradingAccount(
     payload:
         UpdateTradingAccountPayload
 ): Promise<TradingAccount> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`,
-        {
-            method: "PUT",
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`,
+            {
+                method:
+                    "PUT",
 
-            headers: {
-                "Content-Type":
-                    "application/json",
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
 
-            body: JSON.stringify(
-                payload
-            ),
-        }
-    )
+                body:
+                    JSON.stringify(
+                        payload
+                    ),
+            }
+        )
 
     return parseJsonResponse(
         response
@@ -135,12 +150,14 @@ export async function updateTradingAccount(
 export async function deleteTradingAccount(
     accountId: string
 ): Promise<void> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`,
-        {
-            method: "DELETE",
-        }
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`,
+            {
+                method:
+                    "DELETE",
+            }
+        )
 
     await parseJsonResponse(
         response
@@ -151,12 +168,14 @@ export async function deleteTradingAccount(
 export async function testTradingAccount(
     accountId: string
 ): Promise<BrokerConnectionResult> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/test`,
-        {
-            method: "POST",
-        }
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/test`,
+            {
+                method:
+                    "POST",
+            }
+        )
 
     return parseJsonResponse(
         response
@@ -167,9 +186,10 @@ export async function testTradingAccount(
 export async function getTradingAccountPortfolio(
     accountId: string
 ): Promise<BrokerPortfolio> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/portfolio`
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/portfolio`
+        )
 
     return parseJsonResponse(
         response

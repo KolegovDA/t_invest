@@ -34,22 +34,19 @@ type FormState = {
 
     mode: TradingAccountMode
 
-    commissionMode:
-    CommissionMode
+    commissionMode: CommissionMode
 
     customBuyCommission: string
 
     customSellCommission: string
 
-    credentials:
-    Record<string, string>
+    credentials: Record<string, string>
 
     enabled: boolean
 }
 
 
-const emptyForm:
-    FormState = {
+const emptyForm: FormState = {
     name: "",
 
     broker: "tinvest",
@@ -58,14 +55,11 @@ const emptyForm:
 
     mode: "live",
 
-    commissionMode:
-        "auto",
+    commissionMode: "auto",
 
-    customBuyCommission:
-        "0.30",
+    customBuyCommission: "0.30",
 
-    customSellCommission:
-        "0.30",
+    customSellCommission: "0.30",
 
     credentials: {},
 
@@ -118,6 +112,9 @@ function commissionLabel(
 
         case "custom":
             return "Пользовательская"
+
+        default:
+            return mode
     }
 }
 
@@ -174,7 +171,9 @@ export function AccountsPanel() {
     const [
         loading,
         setLoading,
-    ] = useState(false)
+    ] = useState(
+        false
+    )
 
     const [
         error,
@@ -182,6 +181,7 @@ export function AccountsPanel() {
     ] = useState<
         string | null
     >(null)
+
 
     const selectedBroker =
         useMemo(
@@ -196,6 +196,7 @@ export function AccountsPanel() {
                 form.broker,
             ]
         )
+
 
     async function reload() {
         const [
@@ -215,15 +216,19 @@ export function AccountsPanel() {
         )
     }
 
+
     useEffect(
         () => {
             reload()
                 .catch(
                     currentError => {
                         setError(
-                            String(
-                                currentError
-                            )
+                            currentError
+                                instanceof Error
+                                ? currentError.message
+                                : String(
+                                    currentError
+                                )
                         )
                     }
                 )
@@ -231,10 +236,12 @@ export function AccountsPanel() {
         []
     )
 
+
     function resetForm() {
-        setForm(
-            emptyForm
-        )
+        setForm({
+            ...emptyForm,
+            credentials: {},
+        })
 
         setEditingId(
             null
@@ -244,6 +251,7 @@ export function AccountsPanel() {
             null
         )
     }
+
 
     function updateCredential(
         key: string,
@@ -264,6 +272,7 @@ export function AccountsPanel() {
         )
     }
 
+
     async function saveAccount() {
         setLoading(
             true
@@ -281,7 +290,8 @@ export function AccountsPanel() {
                     )
                         .filter(
                             ([, value]) =>
-                                value.trim()
+                                value
+                                    .trim()
                                 !== ""
                         )
                 )
@@ -291,7 +301,8 @@ export function AccountsPanel() {
                 === null
                 && Object.keys(
                     credentials
-                ).length === 0
+                ).length
+                === 0
             ) {
                 throw new Error(
                     "Укажите реквизиты доступа к брокеру"
@@ -308,10 +319,7 @@ export function AccountsPanel() {
                         form.name,
 
                     broker:
-                        form.broker
-                        as CreateTradingAccountPayload[
-                        "broker"
-                    ],
+                        form.broker as CreateTradingAccountPayload["broker"],
 
                     broker_account_id:
                         form
@@ -351,7 +359,16 @@ export function AccountsPanel() {
                 )
 
             } else {
-                const payload: any = {
+                const payload: {
+                    name: string
+                    broker_account_id: string
+                    mode: TradingAccountMode
+                    commission_mode: CommissionMode
+                    enabled: boolean
+                    credentials?: Record<string, string>
+                    custom_buy_commission_percent?: string
+                    custom_sell_commission_percent?: string
+                } = {
                     name:
                         form.name,
 
@@ -373,7 +390,8 @@ export function AccountsPanel() {
                 if (
                     Object.keys(
                         credentials
-                    ).length > 0
+                    ).length
+                    > 0
                 ) {
                     payload.credentials =
                         credentials
@@ -424,6 +442,7 @@ export function AccountsPanel() {
         }
     }
 
+
     function editAccount(
         account: TradingAccount
     ) {
@@ -459,22 +478,22 @@ export function AccountsPanel() {
                     .custom_sell_commission_percent
                 ?? "0.30",
 
-            #
-            # Старые credentials
-            # никогда не возвращаются
-            # с backend.
-            #
             credentials: {},
 
             enabled:
                 account.enabled,
         })
 
+        setError(
+            null
+        )
+
         window.scrollTo({
             top: 0,
             behavior: "smooth",
         })
     }
+
 
     async function removeAccount(
         account: TradingAccount
@@ -484,14 +503,55 @@ export function AccountsPanel() {
                 `Удалить счёт "${account.name}"?`
             )
 
-        if (!accepted) {
+        if (
+            !accepted
+        ) {
             return
         }
 
         try {
+            setError(
+                null
+            )
+
             await deleteTradingAccount(
                 account.id
             )
+
+            setPortfolios(
+                previous => {
+                    const next = {
+                        ...previous,
+                    }
+
+                    delete next[
+                        account.id
+                    ]
+
+                    return next
+                }
+            )
+
+            setConnectionResult(
+                previous => {
+                    const next = {
+                        ...previous,
+                    }
+
+                    delete next[
+                        account.id
+                    ]
+
+                    return next
+                }
+            )
+
+            if (
+                editingId
+                === account.id
+            ) {
+                resetForm()
+            }
 
             await reload()
 
@@ -499,12 +559,16 @@ export function AccountsPanel() {
         currentError
         ) {
             setError(
-                String(
-                    currentError
-                )
+                currentError
+                    instanceof Error
+                    ? currentError.message
+                    : String(
+                        currentError
+                    )
             )
         }
     }
+
 
     async function testConnection(
         account: TradingAccount
@@ -562,37 +626,55 @@ export function AccountsPanel() {
         }
     }
 
+
     return (
         <div
             style={{
-                display: "grid",
-                gap: 20,
+                display:
+                    "grid",
+
+                gap:
+                    20,
             }}
         >
             <section
                 style={{
-                    background: "#ffffff",
-                    borderRadius: 18,
-                    padding: 20,
+                    background:
+                        "#ffffff",
+
+                    borderRadius:
+                        18,
+
+                    padding:
+                        20,
+
                     boxShadow:
                         "0 8px 28px rgba(0,0,0,0.06)",
                 }}
             >
                 <div
                     style={{
-                        display: "flex",
+                        display:
+                            "flex",
+
                         justifyContent:
                             "space-between",
-                        gap: 16,
+
+                        gap:
+                            16,
+
                         alignItems:
                             "center",
-                        marginBottom: 18,
+
+                        marginBottom:
+                            18,
                     }}
                 >
                     <div>
                         <h2
                             style={{
-                                margin: 0,
+                                margin:
+                                    0,
                             }}
                         >
                             {
@@ -604,11 +686,14 @@ export function AccountsPanel() {
 
                         <div
                             style={{
-                                marginTop: 6,
-                                opacity: 0.65,
+                                marginTop:
+                                    6,
+
+                                opacity:
+                                    0.65,
                             }}
                         >
-                            ESM Trade System 1.1
+                            ESM Trade System v1.1.0-dev
                         </div>
                     </div>
 
@@ -616,6 +701,8 @@ export function AccountsPanel() {
                         editingId
                         && (
                             <button
+                                type="button"
+
                                 onClick={
                                     resetForm
                                 }
@@ -628,10 +715,14 @@ export function AccountsPanel() {
 
                 <div
                     style={{
-                        display: "grid",
+                        display:
+                            "grid",
+
                         gridTemplateColumns:
                             "repeat(auto-fit, minmax(220px, 1fr))",
-                        gap: 14,
+
+                        gap:
+                            14,
                     }}
                 >
                     <label>
@@ -641,6 +732,7 @@ export function AccountsPanel() {
                             value={
                                 form.name
                             }
+
                             onChange={
                                 event =>
                                     setForm(
@@ -654,10 +746,16 @@ export function AccountsPanel() {
                                         })
                                     )
                             }
-                            placeholder="Основной счёт"
+
+                            placeholder=
+                            "Основной счёт"
+
                             style={{
-                                width: "100%",
-                                marginTop: 6,
+                                width:
+                                    "100%",
+
+                                marginTop:
+                                    6,
                             }}
                         />
                     </label>
@@ -669,10 +767,12 @@ export function AccountsPanel() {
                             value={
                                 form.broker
                             }
+
                             disabled={
                                 editingId
                                 !== null
                             }
+
                             onChange={
                                 event => {
                                     setForm(
@@ -690,9 +790,13 @@ export function AccountsPanel() {
                                     )
                                 }
                             }
+
                             style={{
-                                width: "100%",
-                                marginTop: 6,
+                                width:
+                                    "100%",
+
+                                marginTop:
+                                    6,
                             }}
                         >
                             {
@@ -702,9 +806,11 @@ export function AccountsPanel() {
                                             key={
                                                 broker.id
                                             }
+
                                             value={
                                                 broker.id
                                             }
+
                                             disabled={
                                                 !broker
                                                     .supported
@@ -714,6 +820,7 @@ export function AccountsPanel() {
                                                 broker
                                                     .name
                                             }
+
                                             {
                                                 !broker
                                                     .supported
@@ -735,6 +842,7 @@ export function AccountsPanel() {
                                 form
                                     .brokerAccountId
                             }
+
                             onChange={
                                 event =>
                                     setForm(
@@ -748,9 +856,13 @@ export function AccountsPanel() {
                                         })
                                     )
                             }
+
                             style={{
-                                width: "100%",
-                                marginTop: 6,
+                                width:
+                                    "100%",
+
+                                marginTop:
+                                    6,
                             }}
                         />
                     </label>
@@ -762,23 +874,28 @@ export function AccountsPanel() {
                             value={
                                 form.mode
                             }
+
                             onChange={
-                                event =>
+                                event => {
+                                    const mode =
+                                        event.target.value as TradingAccountMode
+
                                     setForm(
                                         previous => ({
                                             ...previous,
 
-                                            mode:
-                                                event
-                                                    .target
-                                                    .value
-                                                as TradingAccountMode,
+                                            mode,
                                         })
                                     )
+                                }
                             }
+
                             style={{
-                                width: "100%",
-                                marginTop: 6,
+                                width:
+                                    "100%",
+
+                                marginTop:
+                                    6,
                             }}
                         >
                             {
@@ -794,6 +911,7 @@ export function AccountsPanel() {
                                             key={
                                                 mode
                                             }
+
                                             value={
                                                 mode
                                             }
@@ -817,11 +935,17 @@ export function AccountsPanel() {
                     && (
                         <div
                             style={{
-                                marginTop: 18,
-                                display: "grid",
+                                marginTop:
+                                    18,
+
+                                display:
+                                    "grid",
+
                                 gridTemplateColumns:
                                     "repeat(auto-fit, minmax(260px, 1fr))",
-                                gap: 14,
+
+                                gap:
+                                    14,
                             }}
                         >
                             {
@@ -845,6 +969,7 @@ export function AccountsPanel() {
                                                             ? "password"
                                                             : "text"
                                                     }
+
                                                     value={
                                                         form
                                                             .credentials[
@@ -852,23 +977,28 @@ export function AccountsPanel() {
                                                         ]
                                                         ?? ""
                                                     }
+
                                                     onChange={
                                                         event =>
                                                             updateCredential(
                                                                 field.key,
+
                                                                 event
                                                                     .target
                                                                     .value
                                                             )
                                                     }
+
                                                     placeholder={
                                                         editingId
                                                             ? "Оставьте пустым, чтобы не менять"
                                                             : ""
                                                     }
+
                                                     style={{
                                                         width:
                                                             "100%",
+
                                                         marginTop:
                                                             6,
                                                     }}
@@ -883,11 +1013,17 @@ export function AccountsPanel() {
 
                 <div
                     style={{
-                        marginTop: 18,
-                        display: "grid",
+                        marginTop:
+                            18,
+
+                        display:
+                            "grid",
+
                         gridTemplateColumns:
                             "repeat(auto-fit, minmax(220px, 1fr))",
-                        gap: 14,
+
+                        gap:
+                            14,
                     }}
                 >
                     <label>
@@ -898,23 +1034,28 @@ export function AccountsPanel() {
                                 form
                                     .commissionMode
                             }
+
                             onChange={
-                                event =>
+                                event => {
+                                    const commissionMode =
+                                        event.target.value as CommissionMode
+
                                     setForm(
                                         previous => ({
                                             ...previous,
 
-                                            commissionMode:
-                                                event
-                                                    .target
-                                                    .value
-                                                as CommissionMode,
+                                            commissionMode,
                                         })
                                     )
+                                }
                             }
+
                             style={{
-                                width: "100%",
-                                marginTop: 6,
+                                width:
+                                    "100%",
+
+                                marginTop:
+                                    6,
                             }}
                         >
                             <option
@@ -953,12 +1094,20 @@ export function AccountsPanel() {
                                     BUY комиссия, %
 
                                     <input
-                                        type="number"
-                                        step="0.01"
+                                        type=
+                                        "number"
+
+                                        min=
+                                        "0"
+
+                                        step=
+                                        "0.01"
+
                                         value={
                                             form
                                                 .customBuyCommission
                                         }
+
                                         onChange={
                                             event =>
                                                 setForm(
@@ -972,9 +1121,11 @@ export function AccountsPanel() {
                                                     })
                                                 )
                                         }
+
                                         style={{
                                             width:
                                                 "100%",
+
                                             marginTop:
                                                 6,
                                         }}
@@ -985,12 +1136,20 @@ export function AccountsPanel() {
                                     SELL комиссия, %
 
                                     <input
-                                        type="number"
-                                        step="0.01"
+                                        type=
+                                        "number"
+
+                                        min=
+                                        "0"
+
+                                        step=
+                                        "0.01"
+
                                         value={
                                             form
                                                 .customSellCommission
                                         }
+
                                         onChange={
                                             event =>
                                                 setForm(
@@ -1004,9 +1163,11 @@ export function AccountsPanel() {
                                                     })
                                                 )
                                         }
+
                                         style={{
                                             width:
                                                 "100%",
+
                                             marginTop:
                                                 6,
                                         }}
@@ -1019,18 +1180,27 @@ export function AccountsPanel() {
 
                 <label
                     style={{
-                        display: "flex",
-                        gap: 8,
+                        display:
+                            "flex",
+
+                        gap:
+                            8,
+
                         alignItems:
                             "center",
-                        marginTop: 18,
+
+                        marginTop:
+                            18,
                     }}
                 >
                     <input
-                        type="checkbox"
+                        type=
+                        "checkbox"
+
                         checked={
                             form.enabled
                         }
+
                         onChange={
                             event =>
                                 setForm(
@@ -1054,30 +1224,53 @@ export function AccountsPanel() {
                     && (
                         <div
                             style={{
-                                marginTop: 16,
-                                padding: 12,
-                                borderRadius: 10,
+                                marginTop:
+                                    16,
+
+                                padding:
+                                    12,
+
+                                borderRadius:
+                                    10,
+
                                 background:
                                     "#fff1f1",
+
+                                color:
+                                    "#991b1b",
+
+                                wordBreak:
+                                    "break-word",
                             }}
                         >
-                            {error}
+                            {
+                                error
+                            }
                         </div>
                     )
                 }
 
                 <button
+                    type="button"
+
                     onClick={
                         saveAccount
                     }
+
                     disabled={
                         loading
-                        || !form.name
+                        || !form
+                            .name
+                            .trim()
                         || !form
                             .brokerAccountId
+                            .trim()
                     }
+
                     style={{
-                        marginTop: 18,
+                        marginTop:
+                            18,
+
                         padding:
                             "10px 18px",
                     }}
@@ -1094,13 +1287,17 @@ export function AccountsPanel() {
 
             <section
                 style={{
-                    display: "grid",
-                    gap: 14,
+                    display:
+                        "grid",
+
+                    gap:
+                        14,
                 }}
             >
                 <h2
                     style={{
-                        marginBottom: 0,
+                        marginBottom:
+                            0,
                     }}
                 >
                     Торговые счета
@@ -1142,13 +1339,17 @@ export function AccountsPanel() {
                                     key={
                                         account.id
                                     }
+
                                     style={{
                                         background:
                                             "#ffffff",
+
                                         borderRadius:
                                             18,
+
                                         padding:
                                             18,
+
                                         boxShadow:
                                             "0 8px 28px rgba(0,0,0,0.06)",
                                     }}
@@ -1157,9 +1358,13 @@ export function AccountsPanel() {
                                         style={{
                                             display:
                                                 "flex",
+
                                             justifyContent:
                                                 "space-between",
-                                            gap: 16,
+
+                                            gap:
+                                                16,
+
                                             flexWrap:
                                                 "wrap",
                                         }}
@@ -1181,6 +1386,7 @@ export function AccountsPanel() {
                                                 style={{
                                                     marginTop:
                                                         6,
+
                                                     opacity:
                                                         0.65,
                                                 }}
@@ -1191,7 +1397,9 @@ export function AccountsPanel() {
                                                     ?? account
                                                         .broker
                                                 }
+
                                                 {" · "}
+
                                                 {
                                                     account
                                                         .mode
@@ -1216,11 +1424,15 @@ export function AccountsPanel() {
                                         style={{
                                             marginTop:
                                                 16,
+
                                             display:
                                                 "grid",
+
                                             gridTemplateColumns:
                                                 "repeat(auto-fit, minmax(180px, 1fr))",
-                                            gap: 12,
+
+                                            gap:
+                                                12,
                                         }}
                                     >
                                         <div>
@@ -1337,14 +1549,17 @@ export function AccountsPanel() {
                                                 style={{
                                                     marginTop:
                                                         14,
+
                                                     padding:
                                                         10,
+
                                                     borderRadius:
                                                         10,
 
                                                     background:
                                                         (
-                                                            test.success
+                                                            test
+                                                                .success
                                                             && test
                                                                 .account_found
                                                         )
@@ -1354,13 +1569,15 @@ export function AccountsPanel() {
                                             >
                                                 {
                                                     (
-                                                        test.success
+                                                        test
+                                                            .success
                                                         && test
                                                             .account_found
                                                     )
                                                         ? "Подключение успешно"
                                                         : (
-                                                            test.error
+                                                            test
+                                                                .error
                                                             ?? "Счёт у брокера не найден"
                                                         )
                                                 }
@@ -1372,14 +1589,20 @@ export function AccountsPanel() {
                                         style={{
                                             marginTop:
                                                 16,
+
                                             display:
                                                 "flex",
-                                            gap: 10,
+
+                                            gap:
+                                                10,
+
                                             flexWrap:
                                                 "wrap",
                                         }}
                                     >
                                         <button
+                                            type="button"
+
                                             onClick={
                                                 () =>
                                                     testConnection(
@@ -1391,6 +1614,8 @@ export function AccountsPanel() {
                                         </button>
 
                                         <button
+                                            type="button"
+
                                             onClick={
                                                 () =>
                                                     editAccount(
@@ -1402,6 +1627,8 @@ export function AccountsPanel() {
                                         </button>
 
                                         <button
+                                            type="button"
+
                                             onClick={
                                                 () =>
                                                     removeAccount(

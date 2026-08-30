@@ -15,11 +15,13 @@ from fastapi.middleware.cors import (
 )
 from pydantic import (
     BaseModel,
-    Field,
 )
 
 from application.live_account_service import (
     LiveAccountService,
+)
+from application.live_start_validation_service import (
+    LiveStartValidationService,
 )
 from application.multi_instrument_session_config import (
     InstrumentConfig,
@@ -196,11 +198,38 @@ trading_account_service = (
 
 
 # ============================================================
-# BROKERS 1.1
+# BROKER REGISTRY
 # ============================================================
 
 broker_registry = (
     create_default_broker_registry()
+)
+
+
+# ============================================================
+# LIVE VALIDATION 1.1
+# ============================================================
+
+live_start_validation_service = (
+    LiveStartValidationService(
+        trading_account_service=(
+            trading_account_service
+        ),
+
+        broker_registry=(
+            broker_registry
+        ),
+
+        session_factory=(
+            MultiInstrumentTradingSessionFactory(
+                settings=settings,
+            )
+        ),
+
+        portfolio_orchestrator=(
+            PortfolioOrchestrator()
+        ),
+    )
 )
 
 
@@ -250,6 +279,10 @@ class StartSandboxRequest(
 ):
     force: bool = False
 
+    trading_account_id: (
+        str | None
+    ) = None
+
     instruments: list[
         StartPlanInstrumentRequest
     ]
@@ -293,19 +326,20 @@ class CreateTradingAccountRequest(
 class UpdateTradingAccountRequest(
     BaseModel
 ):
-    name: str | None = None
+    name: (
+        str | None
+    ) = None
 
-    broker: BrokerType | None = None
+    broker: (
+        BrokerType | None
+    ) = None
 
     broker_account_id: (
         str | None
     ) = None
 
     credentials: (
-        dict[
-            str,
-            str,
-        ]
+        dict[str, str]
         | None
     ) = None
 
@@ -327,7 +361,9 @@ class UpdateTradingAccountRequest(
         Decimal | None
     ) = None
 
-    enabled: bool | None = None
+    enabled: (
+        bool | None
+    ) = None
 
 
 # ============================================================
@@ -360,7 +396,7 @@ def get_brokers():
 
 
 # ============================================================
-# TRADING ACCOUNTS
+# ACCOUNTS
 # ============================================================
 
 @app.get(
@@ -400,11 +436,7 @@ def get_trading_account(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
-            detail=(
-                "Trading account "
-                "not found"
-            ),
+            detail="Trading account not found",
         ) from error
 
     return (
@@ -421,11 +453,6 @@ def get_trading_account(
 def create_trading_account(
     request: CreateTradingAccountRequest,
 ):
-    #
-    # Пока разрешаем сохранять
-    # только брокеров, для которых
-    # реально установлен adapter.
-    #
     if not (
         broker_registry
         .is_supported(
@@ -434,10 +461,8 @@ def create_trading_account(
     ):
         raise HTTPException(
             status_code=400,
-
             detail=(
-                "Broker is not supported "
-                "yet: "
+                "Broker is not supported yet: "
                 f"{request.broker.value}"
             ),
         )
@@ -446,13 +471,9 @@ def create_trading_account(
         account = (
             trading_account_service
             .create(
-                name=(
-                    request.name
-                ),
+                name=request.name,
 
-                broker=(
-                    request.broker
-                ),
+                broker=request.broker,
 
                 broker_account_id=(
                     request
@@ -460,13 +481,10 @@ def create_trading_account(
                 ),
 
                 credentials=(
-                    request
-                    .credentials
+                    request.credentials
                 ),
 
-                mode=(
-                    request.mode
-                ),
+                mode=request.mode,
 
                 commission_mode=(
                     request
@@ -483,16 +501,13 @@ def create_trading_account(
                     .custom_sell_commission_percent
                 ),
 
-                enabled=(
-                    request.enabled
-                ),
+                enabled=request.enabled,
             )
         )
 
     except ValueError as error:
         raise HTTPException(
             status_code=400,
-
             detail=str(
                 error
             ),
@@ -533,10 +548,8 @@ def update_trading_account(
     ):
         raise HTTPException(
             status_code=400,
-
             detail=(
-                "Broker is not supported "
-                "yet: "
+                "Broker is not supported yet: "
                 f"{request.broker.value}"
             ),
         )
@@ -549,13 +562,9 @@ def update_trading_account(
                     account_id
                 ),
 
-                name=(
-                    request.name
-                ),
+                name=request.name,
 
-                broker=(
-                    request.broker
-                ),
+                broker=request.broker,
 
                 broker_account_id=(
                     request
@@ -563,13 +572,10 @@ def update_trading_account(
                 ),
 
                 credentials=(
-                    request
-                    .credentials
+                    request.credentials
                 ),
 
-                mode=(
-                    request.mode
-                ),
+                mode=request.mode,
 
                 commission_mode=(
                     request
@@ -586,38 +592,23 @@ def update_trading_account(
                     .custom_sell_commission_percent
                 ),
 
-                enabled=(
-                    request.enabled
-                ),
+                enabled=request.enabled,
             )
         )
 
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
-            detail=(
-                "Trading account "
-                "not found"
-            ),
+            detail="Trading account not found",
         ) from error
 
     except ValueError as error:
         raise HTTPException(
             status_code=400,
-
             detail=str(
                 error
             ),
         ) from error
-
-    api_usage_repository.record(
-        source="web",
-        operation=(
-            "trading_account_updated"
-        ),
-        weight=1,
-    )
 
     return (
         _trading_account_to_dict(
@@ -632,11 +623,6 @@ def update_trading_account(
 def delete_trading_account(
     account_id: str,
 ):
-    #
-    # Позже здесь добавим запрет
-    # удаления счёта, если у него
-    # есть активный runner.
-    #
     try:
         trading_account_service\
             .delete(
@@ -646,20 +632,8 @@ def delete_trading_account(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
-            detail=(
-                "Trading account "
-                "not found"
-            ),
+            detail="Trading account not found",
         ) from error
-
-    api_usage_repository.record(
-        source="web",
-        operation=(
-            "trading_account_deleted"
-        ),
-        weight=1,
-    )
 
     return {
         "status":
@@ -694,11 +668,7 @@ def test_trading_account(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
-            detail=(
-                "Trading account "
-                "not found"
-            ),
+            detail="Trading account not found",
         ) from error
 
     try:
@@ -712,10 +682,8 @@ def test_trading_account(
     except KeyError as error:
         raise HTTPException(
             status_code=400,
-
             detail=(
-                "Broker adapter "
-                "is not available: "
+                "Broker adapter is not available: "
                 f"{account.broker.value}"
             ),
         ) from error
@@ -735,16 +703,6 @@ def test_trading_account(
                 account.mode
             ),
         )
-    )
-
-    api_usage_repository.record(
-        source="web",
-
-        operation=(
-            "trading_account_test"
-        ),
-
-        weight=1,
     )
 
     return {
@@ -827,21 +785,17 @@ def get_trading_account_portfolio(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
-            detail=(
-                "Trading account "
-                "not found"
-            ),
+            detail="Trading account not found",
         ) from error
 
-    try:
-        adapter = (
-            broker_registry
-            .get(
-                account.broker
-            )
+    adapter = (
+        broker_registry
+        .get(
+            account.broker
         )
+    )
 
+    try:
         portfolio = (
             adapter.get_portfolio(
                 credentials=(
@@ -859,23 +813,12 @@ def get_trading_account_portfolio(
             )
         )
 
-    except KeyError as error:
-        raise HTTPException(
-            status_code=400,
-
-            detail=(
-                "Broker adapter "
-                "is not available"
-            ),
-        ) from error
-
     except Exception as error:
         raise HTTPException(
             status_code=502,
-
             detail=(
-                "Broker portfolio "
-                f"request failed: {error!r}"
+                "Broker portfolio request failed: "
+                f"{error!r}"
             ),
         ) from error
 
@@ -887,13 +830,195 @@ def get_trading_account_portfolio(
 
 
 # ============================================================
+# LIVE VALIDATION
+# ============================================================
+
+@app.post(
+    "/api/start-live/validate"
+)
+def validate_live_start(
+    request: StartSandboxRequest,
+):
+    if (
+        request
+        .trading_account_id
+        is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "trading_account_id "
+                "is required"
+            ),
+        )
+
+    if not request.instruments:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No instruments selected"
+            ),
+        )
+
+    config = (
+        _build_multi_instrument_config(
+            instruments=(
+                request.instruments
+            ),
+        )
+    )
+
+    try:
+        result = (
+            live_start_validation_service
+            .validate(
+                trading_account_id=(
+                    request
+                    .trading_account_id
+                ),
+
+                config=config,
+            )
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(
+                error
+            ),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Live validation failed: "
+                f"{error!r}"
+            ),
+        ) from error
+
+    api_usage_repository.record(
+        source="web",
+        operation=(
+            "live_start_validation"
+        ),
+        weight=1,
+    )
+
+    return {
+        "success":
+            result.success,
+
+        "trading_account_id":
+            result
+            .trading_account_id,
+
+        "broker":
+            result.broker,
+
+        "broker_account_id":
+            result
+            .broker_account_id,
+
+        "account_name":
+            result
+            .account_name,
+
+        "available_cash":
+            str(
+                result
+                .available_cash
+            ),
+
+        "total_required_deposit":
+            str(
+                result
+                .total_required_deposit
+            ),
+
+        "remaining_cash":
+            str(
+                result
+                .remaining_cash
+            ),
+
+        "missing_cash":
+            str(
+                result
+                .missing_cash
+            ),
+
+        "can_start":
+            result
+            .can_start,
+
+        "can_start_forced":
+            result
+            .can_start_forced,
+
+        "capital_utilization_percent":
+            str(
+                result
+                .capital_utilization_percent
+            ),
+
+        "buy_commission_percent":
+            str(
+                result
+                .buy_commission_percent
+            ),
+
+        "sell_commission_percent":
+            str(
+                result
+                .sell_commission_percent
+            ),
+
+        "instruments": [
+            {
+                "ticker":
+                    instrument
+                    .ticker,
+
+                "instrument_uid":
+                    instrument
+                    .instrument_uid,
+
+                "current_price":
+                    str(
+                        instrument
+                        .current_price
+                    ),
+
+                "min_grid_price":
+                    str(
+                        instrument
+                        .min_grid_price
+                    ),
+
+                "grid_step":
+                    str(
+                        instrument
+                        .grid_step
+                    ),
+
+                "levels_count":
+                    instrument
+                    .levels_count,
+
+                "quantity":
+                    instrument
+                    .quantity,
+            }
+            for instrument
+            in result.instruments
+        ],
+    }
+
+
+# ============================================================
 # LIVE START
-#
-# LEGACY.
-#
-# Пока продолжает использовать Settings/.env.
-# После тестирования Account Manager
-# переведём runner на account_id ESM.
 # ============================================================
 
 @app.post(
@@ -908,8 +1033,10 @@ def start_live(
         weight=1,
     )
 
-    guard = TradingModeGuard(
-        settings=settings,
+    guard = (
+        TradingModeGuard(
+            settings=settings,
+        )
     )
 
     try:
@@ -939,17 +1066,139 @@ def start_live(
         )
     )
 
+    factory = (
+        MultiInstrumentTradingSessionFactory(
+            settings=settings,
+        )
+    )
+
     runner = None
 
     try:
-        context = (
-            MultiInstrumentTradingSessionFactory(
-                settings=settings,
+        if (
+            request
+            .trading_account_id
+            is not None
+        ):
+            try:
+                esm_account = (
+                    trading_account_service
+                    .get(
+                        request
+                        .trading_account_id
+                    )
+                )
+
+            except KeyError as error:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "Trading account "
+                        "not found"
+                    ),
+                ) from error
+
+            if not esm_account.enabled:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Trading account "
+                        "is disabled"
+                    ),
+                )
+
+            if (
+                esm_account.broker
+                != BrokerType.TINVEST
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Live trading for "
+                        f"{esm_account.broker.value} "
+                        "is not supported yet"
+                    ),
+                )
+
+            if (
+                esm_account.mode
+                != TradingAccountMode.LIVE
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Selected account "
+                        "is not LIVE"
+                    ),
+                )
+
+            credentials = (
+                trading_account_service
+                .get_credentials(
+                    esm_account.id
+                )
             )
-            .create_live_session(
-                config=config,
+
+            context = (
+                factory
+                .create_live_session_for_account(
+                    config=config,
+
+                    token=(
+                        credentials
+                        .require(
+                            "token"
+                        )
+                    ),
+
+                    broker_account_id=(
+                        esm_account
+                        .broker_account_id
+                    ),
+
+                    buy_commission_percent=(
+                        esm_account
+                        .get_expected_buy_commission_percent()
+                    ),
+
+                    sell_commission_percent=(
+                        esm_account
+                        .get_expected_sell_commission_percent()
+                    ),
+                )
             )
-        )
+
+            trading_account_id = (
+                esm_account.id
+            )
+
+            broker_name = (
+                esm_account
+                .broker
+                .value
+            )
+
+        else:
+            context = (
+                factory
+                .create_live_session(
+                    config=config,
+                )
+            )
+
+            trading_account_id = (
+                _build_trading_account_id(
+                    mode="live",
+
+                    broker_account_id=(
+                        context.account_id
+                    ),
+                )
+            )
+
+            broker_name = (
+                "tinvest"
+            )
 
         runner_session_id = (
             _build_runner_session_id(
@@ -965,63 +1214,54 @@ def start_live(
             )
         )
 
-        trading_account_id = (
-            _build_trading_account_id(
-                mode="live",
+        if (
+            request
+            .trading_account_id
+            is not None
+        ):
+            runner_session_id = (
+                f"{broker_name}:"
+                f"{trading_account_id}:"
+                f"{runner_session_id}"
+            )
 
-                broker_account_id=(
-                    context.account_id
+        runner = (
+            WebRunnerService(
+                context=context,
+
+                api_usage_repository=(
+                    api_usage_repository
+                ),
+
+                polling_interval_seconds=10,
+
+                state_service=(
+                    trading_state_service
+                ),
+
+                session_id=(
+                    runner_session_id
+                ),
+
+                trading_account_id=(
+                    trading_account_id
                 ),
             )
-        )
-
-        runner = WebRunnerService(
-            context=context,
-
-            api_usage_repository=(
-                api_usage_repository
-            ),
-
-            polling_interval_seconds=10,
-
-            state_service=(
-                trading_state_service
-            ),
-
-            session_id=(
-                runner_session_id
-            ),
-
-            trading_account_id=(
-                trading_account_id
-            ),
         )
 
         web_runner_registry.start(
             runner=runner,
         )
 
+    except HTTPException:
+        raise
+
     except Exception as error:
-        api_usage_repository.record(
-            source="runner",
-            operation=(
-                "live_start_failed"
-            ),
-            weight=1,
-        )
-
-        print(
-            "LIVE START FAILED:",
-            repr(
-                error
-            ),
-        )
-
         raise HTTPException(
             status_code=500,
             detail=(
-                "Live trading session "
-                f"failed: {error!r}"
+                "Live trading session failed: "
+                f"{error!r}"
             ),
         ) from error
 
@@ -1037,9 +1277,11 @@ def start_live(
                     ticker=(
                         instrument.ticker
                     ),
+
                     levels=(
                         instrument.levels
                     ),
+
                     quantity=(
                         instrument.quantity
                     ),
@@ -1050,14 +1292,11 @@ def start_live(
                 session
             )
 
-        api_usage_repository.record(
-            source="runner",
-            operation="live_started",
-            weight=1,
-        )
-
     except Exception:
-        if runner is not None:
+        if (
+            runner
+            is not None
+        ):
             runner.stop()
 
         raise
@@ -1075,16 +1314,23 @@ def start_live(
         "force":
             request.force,
 
-        "account_id": (
-            settings
-            .tinvest_live_account_id
+        "account_id":
+            context.account_id,
+
+        "trading_account_id":
+            trading_account_id,
+
+        "broker":
+            broker_name,
+
+        "legacy_account": (
+            request
+            .trading_account_id
+            is None
         ),
 
-        "runner_session_id": (
-            runner.session_id
-            if runner is not None
-            else None
-        ),
+        "runner_session_id":
+            runner.session_id,
 
         "sessions": [
             _build_display_session(
@@ -1111,19 +1357,16 @@ def health():
         "version":
             APP_VERSION,
 
-        "trading_mode": (
+        "trading_mode":
             settings
-            .trading_mode
-        ),
+            .trading_mode,
 
-        "live_trading_enabled": (
+        "live_trading_enabled":
             settings
-            .live_trading_enabled
-        ),
+            .live_trading_enabled,
 
-        "real_sandbox_enabled": (
-            _is_real_sandbox_enabled()
-        ),
+        "real_sandbox_enabled":
+            _is_real_sandbox_enabled(),
 
         "state_persistence_enabled":
             True,
@@ -1140,10 +1383,6 @@ def health():
             ),
     }
 
-
-# ============================================================
-# VERSION
-# ============================================================
 
 @app.get(
     "/api/version"
@@ -1177,9 +1416,17 @@ def dashboard():
         .get_active()
     )
 
-    initial_deposit = Decimal("0")
-    available_cash = Decimal("0")
-    reserved_cash = Decimal("0")
+    initial_deposit = (
+        Decimal("0")
+    )
+
+    available_cash = (
+        Decimal("0")
+    )
+
+    reserved_cash = (
+        Decimal("0")
+    )
 
     for state in active_states:
         initial_deposit += (
@@ -1205,11 +1452,6 @@ def dashboard():
     )
 
     return {
-        #
-        # Здесь теперь показываем
-        # количество настроенных счетов,
-        # а не только активных runner.
-        #
         "accounts":
             len(
                 configured_accounts
@@ -1230,7 +1472,10 @@ def dashboard():
             float(
                 initial_deposit
             )
-            if initial_deposit > 0
+            if (
+                initial_deposit
+                > 0
+            )
             else None
         ),
 
@@ -1250,21 +1495,23 @@ def dashboard():
             else None
         ),
 
-        "active_positions": sum(
-            session[
-                "positions"
-            ]
-            for session
-            in sessions
-        ),
+        "active_positions":
+            sum(
+                session[
+                    "positions"
+                ]
+                for session
+                in sessions
+            ),
 
-        "profit": sum(
-            session[
-                "total_profit"
-            ]
-            for session
-            in sessions
-        ),
+        "profit":
+            sum(
+                session[
+                    "total_profit"
+                ]
+                for session
+                in sessions
+            ),
 
         "instruments": [
             session[
@@ -1335,10 +1582,6 @@ def api_usage():
     }
 
 
-# ============================================================
-# RUNNER STATUS
-# ============================================================
-
 @app.get(
     "/api/runner-status"
 )
@@ -1346,50 +1589,41 @@ def runner_status():
     return {
         "runners": [
             {
-                "session_id": (
+                "session_id":
                     runner
-                    .session_id
-                ),
+                    .session_id,
 
-                "trading_account_id": (
+                "trading_account_id":
                     runner
-                    .trading_account_id
-                ),
+                    .trading_account_id,
 
-                "is_running": (
+                "is_running":
                     status
-                    .is_running
-                ),
+                    .is_running,
 
-                "last_tick_at": (
+                "last_tick_at":
                     status
-                    .last_tick_at
-                ),
+                    .last_tick_at,
 
-                "last_error": (
+                "last_error":
                     status
-                    .last_error
-                ),
+                    .last_error,
 
-                "ticks_count": (
+                "ticks_count":
                     status
-                    .ticks_count
-                ),
+                    .ticks_count,
 
-                "prices_checked_total": (
+                "prices_checked_total":
                     status
-                    .prices_checked_total
-                ),
+                    .prices_checked_total,
 
-                "orders_placed_total": (
+                "orders_placed_total":
                     status
-                    .orders_placed_total
-                ),
+                    .orders_placed_total,
 
-                "executions_total": (
+                "executions_total":
                     status
-                    .executions_total
-                ),
+                    .executions_total,
             }
             for runner
             in web_runner_registry
@@ -1495,17 +1729,18 @@ def session_detail(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
             detail=(
                 "Session not found: "
                 f"{ticker.upper()}"
             ),
         ) from error
 
-    return _build_display_session(
-        web_session=(
-            web_session
-        ),
+    return (
+        _build_display_session(
+            web_session=(
+                web_session
+            ),
+        )
     )
 
 
@@ -1536,7 +1771,6 @@ def stop_session(
     except KeyError as error:
         raise HTTPException(
             status_code=404,
-
             detail=(
                 "Session not found: "
                 f"{ticker.upper()}"
@@ -1575,12 +1809,6 @@ def stop_session(
 def start_plan(
     request: StartPlanRequest,
 ):
-    api_usage_repository.record(
-        source="web",
-        operation="start_plan",
-        weight=1,
-    )
-
     config = (
         _build_multi_instrument_config(
             instruments=(
@@ -1635,15 +1863,6 @@ def start_plan(
             ),
         )
 
-        api_usage_repository.record(
-            source="mock",
-            operation=(
-                "get_last_price"
-            ),
-            weight=1,
-            ticker=ticker,
-        )
-
     plan = (
         PortfolioOrchestrator()
         .build_start_plan(
@@ -1667,8 +1886,7 @@ def start_plan(
     return {
         "available_cash":
             str(
-                plan
-                .available_cash
+                plan.available_cash
             ),
 
         "total_required":
@@ -1690,8 +1908,7 @@ def start_plan(
             ),
 
         "can_start":
-            plan
-            .can_start,
+            plan.can_start,
 
         "can_start_forced":
             plan
@@ -1706,16 +1923,14 @@ def start_plan(
         "instruments": [
             {
                 "ticker":
-                    instrument
-                    .ticker,
+                    instrument.ticker,
 
                 "levels":
                     instrument
                     .levels_count,
 
                 "quantity":
-                    instrument
-                    .quantity,
+                    instrument.quantity,
 
                 "last_price":
                     str(
@@ -1736,7 +1951,7 @@ def start_plan(
 
 
 # ============================================================
-# SANDBOX START
+# SANDBOX
 # ============================================================
 
 @app.post(
@@ -1745,28 +1960,19 @@ def start_plan(
 def start_sandbox(
     request: StartSandboxRequest,
 ):
-    api_usage_repository.record(
-        source="web",
-        operation="start_sandbox",
-        weight=1,
-    )
-
     started_sessions = [
         session_registry
         .start_session(
             ticker=(
-                instrument
-                .ticker
+                instrument.ticker
             ),
 
             levels=(
-                instrument
-                .levels
+                instrument.levels
             ),
 
             quantity=(
-                instrument
-                .quantity
+                instrument.quantity
             ),
         )
         for instrument
@@ -1799,6 +2005,10 @@ def start_sandbox(
         "force":
             request.force,
 
+        "trading_account_id":
+            request
+            .trading_account_id,
+
         "sessions": [
             _build_display_session(
                 web_session=session,
@@ -1811,8 +2021,6 @@ def start_sandbox(
 
 # ============================================================
 # LIVE STATUS
-#
-# LEGACY T-INVEST STATUS.
 # ============================================================
 
 @app.get(
@@ -1854,20 +2062,17 @@ def live_status():
                     .account_id,
 
                 "name":
-                    account
-                    .name,
+                    account.name,
 
                 "status":
-                    account
-                    .status,
+                    account.status,
 
                 "account_type":
                     account
                     .account_type,
 
                 "selected":
-                    account
-                    .selected,
+                    account.selected,
             }
             for account
             in status.accounts
@@ -1916,8 +2121,7 @@ def live_status():
                     .positions_count,
             }
             if (
-                status
-                .portfolio
+                status.portfolio
                 is not None
             )
             else None
@@ -1932,8 +2136,7 @@ def live_status():
             .stream_limits_count,
 
         "error":
-            status
-            .error,
+            status.error,
     }
 
 
@@ -1948,8 +2151,7 @@ def _try_start_real_sandbox(
         config = (
             _build_multi_instrument_config(
                 instruments=(
-                    request
-                    .instruments
+                    request.instruments
                 ),
             )
         )
@@ -1972,67 +2174,63 @@ def _try_start_real_sandbox(
                 ),
 
                 instruments=(
-                    request
-                    .instruments
+                    request.instruments
                 ),
             )
         )
 
         trading_account_id = (
-            _build_trading_account_id(
-                mode="sandbox",
-
-                broker_account_id=(
-                    context.account_id
-                ),
-            )
+            request
+            .trading_account_id
         )
 
-        runner = WebRunnerService(
-            context=context,
+        if (
+            trading_account_id
+            is None
+        ):
+            trading_account_id = (
+                _build_trading_account_id(
+                    mode="sandbox",
 
-            api_usage_repository=(
-                api_usage_repository
-            ),
+                    broker_account_id=(
+                        context.account_id
+                    ),
+                )
+            )
 
-            polling_interval_seconds=10,
+        runner = (
+            WebRunnerService(
+                context=context,
 
-            state_service=(
-                trading_state_service
-            ),
+                api_usage_repository=(
+                    api_usage_repository
+                ),
 
-            session_id=(
-                runner_session_id
-            ),
+                polling_interval_seconds=10,
 
-            trading_account_id=(
-                trading_account_id
-            ),
+                state_service=(
+                    trading_state_service
+                ),
+
+                session_id=(
+                    runner_session_id
+                ),
+
+                trading_account_id=(
+                    trading_account_id
+                ),
+            )
         )
 
         web_runner_registry.start(
             runner=runner,
         )
 
-        api_usage_repository.record(
-            source="runner",
-            operation=(
-                "real_sandbox_started"
-            ),
-            weight=1,
+        return (
+            "started"
         )
-
-        return "started"
 
     except Exception as error:
-        api_usage_repository.record(
-            source="runner",
-            operation=(
-                "real_sandbox_start_failed"
-            ),
-            weight=1,
-        )
-
         print(
             "REAL SANDBOX START FAILED:",
             repr(
@@ -2040,11 +2238,13 @@ def _try_start_real_sandbox(
             ),
         )
 
-        return "fallback_mock"
+        return (
+            "fallback_mock"
+        )
 
 
 # ============================================================
-# ACCOUNT HELPERS
+# HELPERS
 # ============================================================
 
 def _trading_account_to_dict(
@@ -2071,10 +2271,6 @@ def _trading_account_to_dict(
             .mode
             .value,
 
-        #
-        # Credentials никогда
-        # обратно в UI не отдаём.
-        #
         "credentials_configured":
             True,
 
@@ -2261,7 +2457,8 @@ def _broker_portfolio_to_dict(
 
         "total_value": (
             str(
-                portfolio.total_value
+                portfolio
+                .total_value
             )
             if (
                 portfolio
@@ -2276,10 +2473,6 @@ def _broker_portfolio_to_dict(
             .positions_count,
     }
 
-
-# ============================================================
-# CONFIG HELPERS
-# ============================================================
 
 def _build_multi_instrument_config(
     instruments: list[
@@ -2297,13 +2490,11 @@ def _build_multi_instrument_config(
                     ),
 
                     levels_count=(
-                        instrument
-                        .levels
+                        instrument.levels
                     ),
 
                     quantity=(
-                        instrument
-                        .quantity
+                        instrument.quantity
                     ),
                 )
                 for instrument
@@ -2312,10 +2503,6 @@ def _build_multi_instrument_config(
         )
     )
 
-
-# ============================================================
-# STABLE SESSION ID
-# ============================================================
 
 def _build_runner_session_id(
     mode: str,
@@ -2328,21 +2515,20 @@ def _build_runner_session_id(
 ) -> str:
     normalized_instruments = [
         {
-            "ticker": (
+            "ticker":
                 instrument
                 .ticker
-                .upper()
-            ),
+                .upper(),
 
-            "levels": int(
-                instrument
-                .levels
-            ),
+            "levels":
+                int(
+                    instrument.levels
+                ),
 
-            "quantity": int(
-                instrument
-                .quantity
-            ),
+            "quantity":
+                int(
+                    instrument.quantity
+                ),
         }
         for instrument
         in instruments
@@ -2366,8 +2552,7 @@ def _build_runner_session_id(
 
     payload = {
         "mode":
-            mode
-            .lower(),
+            mode.lower(),
 
         "broker_account_id":
             str(
@@ -2378,17 +2563,19 @@ def _build_runner_session_id(
             normalized_instruments,
     }
 
-    serialized = json.dumps(
-        payload,
+    serialized = (
+        json.dumps(
+            payload,
 
-        ensure_ascii=False,
+            ensure_ascii=False,
 
-        sort_keys=True,
+            sort_keys=True,
 
-        separators=(
-            ",",
-            ":",
-        ),
+            separators=(
+                ",",
+                ":",
+            ),
+        )
     )
 
     digest = (
@@ -2419,13 +2606,11 @@ def _build_trading_account_id(
     )
 
 
-# ============================================================
-# ENVIRONMENT
-# ============================================================
-
 def _is_real_sandbox_enabled() -> bool:
-    if os.getenv(
-        "PYTEST_CURRENT_TEST"
+    if (
+        os.getenv(
+            "PYTEST_CURRENT_TEST"
+        )
     ):
         return False
 
@@ -2434,10 +2619,6 @@ def _is_real_sandbox_enabled() -> bool:
         .web_real_sandbox
     )
 
-
-# ============================================================
-# DISPLAY SESSION
-# ============================================================
 
 def _build_display_session(
     web_session: WebSession,
@@ -2452,7 +2633,10 @@ def _build_display_session(
         )
     )
 
-    if snapshot is not None:
+    if (
+        snapshot
+        is not None
+    ):
         return (
             _snapshot_to_dict(
                 snapshot=snapshot,
@@ -2551,7 +2735,8 @@ def _web_session_to_dict(
             session.positions,
 
         "current_price":
-            session.current_price,
+            session
+            .current_price,
 
         "realized_profit":
             session
@@ -2566,10 +2751,6 @@ def _web_session_to_dict(
             .total_profit,
     }
 
-
-# ============================================================
-# MOCK PRICES
-# ============================================================
 
 def _get_mock_price(
     ticker: str,
@@ -2596,10 +2777,12 @@ def _get_mock_price(
             ),
     }
 
-    return prices.get(
-        ticker,
+    return (
+        prices.get(
+            ticker,
 
-        Decimal(
-            "100"
-        ),
+            Decimal(
+                "100"
+            ),
+        )
     )

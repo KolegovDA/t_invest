@@ -1,12 +1,42 @@
-const API_BASE_URL = window.location.origin
+import type {
+    ActiveSession,
+    ApiUsage,
+    Dashboard,
+    Instrument,
+    LiveStartValidationResult,
+    LiveStatus,
+    RunnerStatus,
+    StartPlan,
+    StartSandboxResult,
+} from "./types"
 
 
-async function parseJsonResponse(response: Response) {
+const API_BASE_URL =
+    window.location.origin
+
+
+async function parseJsonResponse(
+    response: Response
+) {
     if (!response.ok) {
-        const text = await response.text()
+        const data =
+            await response
+                .json()
+                .catch(
+                    () => null
+                )
+
+        const message =
+            data?.detail
+            || `HTTP ${response.status}`
 
         throw new Error(
-            `API error ${response.status}: ${text}`
+            typeof message
+                === "string"
+                ? message
+                : JSON.stringify(
+                    message
+                )
         )
     }
 
@@ -14,174 +44,341 @@ async function parseJsonResponse(response: Response) {
 }
 
 
-export async function getDashboard() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/dashboard`
-    )
+export async function getDashboard():
+    Promise<Dashboard> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/dashboard`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
-export async function getApiUsage() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/api-usage`
-    )
+export async function getApiUsage():
+    Promise<ApiUsage> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/api-usage`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
-export async function getRunnerStatus() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/runner-status`
-    )
+export async function getRunnerStatus():
+    Promise<{
+        runners: RunnerStatus[]
+    }> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/runner-status`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
-export async function getInstruments() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/instruments`
-    )
+export async function getInstruments():
+    Promise<{
+        instruments: Instrument[]
+    }> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instruments`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
-export async function getSessions() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/sessions`
-    )
+export async function getSessions():
+    Promise<{
+        sessions: ActiveSession[]
+    }> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/sessions`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
 export async function getSession(
     ticker: string
-) {
-    const response = await fetch(
-        `${API_BASE_URL}/api/session/${encodeURIComponent(ticker)}`
-    )
+): Promise<ActiveSession> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/session/${encodeURIComponent(ticker)}`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
 export async function stopSession(
     ticker: string
 ) {
-    const response = await fetch(
-        `${API_BASE_URL}/api/stop-session/${encodeURIComponent(ticker)}`,
-        {
-            method: "POST",
-        }
-    )
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/stop-session/${encodeURIComponent(ticker)}`,
+            {
+                method:
+                    "POST",
+            }
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
 
 
 export async function calculateStartPlan(
     instruments: {
-        ticker: string
-        levels: number
-        quantity: number
-    }[]
-) {
-    const response = await fetch(
-        `${API_BASE_URL}/api/start-plan`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                available_cash: 100000,
-                instruments,
-            }),
-        }
-    )
+        ticker:
+        string
 
-    return parseJsonResponse(response)
+        levels:
+        number
+
+        quantity:
+        number
+    }[]
+): Promise<StartPlan> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/start-plan`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        available_cash:
+                            100000,
+
+                        instruments,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function validateLiveStart(
+    tradingAccountId: string,
+
+    instruments: {
+        ticker:
+        string
+
+        levels:
+        number
+
+        quantity:
+        number
+    }[]
+): Promise<LiveStartValidationResult> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/start-live/validate`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        force:
+                            false,
+
+                        trading_account_id:
+                            tradingAccountId,
+
+                        instruments,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
 }
 
 
 export async function startSandbox(
     force: boolean,
-    instruments: {
-        ticker: string
-        levels: number
-        quantity: number
-    }[]
-) {
-    const response = await fetch(
-        `${API_BASE_URL}/api/start-sandbox`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                force,
-                instruments,
-            }),
-        }
-    )
 
-    return parseJsonResponse(response)
+    instruments: {
+        ticker:
+        string
+
+        levels:
+        number
+
+        quantity:
+        number
+    }[],
+
+    tradingAccountId?:
+        string | null
+): Promise<StartSandboxResult> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/start-sandbox`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        force,
+
+                        trading_account_id:
+                            tradingAccountId
+                            ?? null,
+
+                        instruments,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getLiveStatus():
+    Promise<LiveStatus> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/live/status`
+        )
+
+    return parseJsonResponse(
+        response
+    )
 }
 
 
 export async function startLive(
     force: boolean,
+
     instruments: {
-        ticker: string
-        levels: number
-        quantity: number
-    }[]
-) {
-    const response = await fetch(
-        `${API_BASE_URL}/api/start-live`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                force,
-                instruments,
-            }),
-        }
+        ticker:
+        string
+
+        levels:
+        number
+
+        quantity:
+        number
+    }[],
+
+    tradingAccountId?:
+        string | null
+): Promise<StartSandboxResult> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/start-live`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        force,
+
+                        trading_account_id:
+                            tradingAccountId
+                            ?? null,
+
+                        instruments,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
     )
-
-    return parseJsonResponse(response)
-}
-
-
-export async function getLiveStatus() {
-    const response = await fetch(
-        `${API_BASE_URL}/api/live/status`
-    )
-
-    return parseJsonResponse(response)
 }
 
 
 export interface HealthResponse {
-    status: string
-    trading_mode: string
-    live_trading_enabled: boolean
-    real_sandbox_enabled: boolean
+    status:
+    string
+
+    version?:
+    string
+
+    trading_mode:
+    string
+
+    live_trading_enabled:
+    boolean
+
+    real_sandbox_enabled:
+    boolean
+
+    state_persistence_enabled?:
+    boolean
+
+    multi_account_enabled?:
+    boolean
+
+    multi_broker_architecture?:
+    boolean
+
+    database_path?:
+    string
 }
 
 
-export async function getHealth(): Promise<HealthResponse> {
-    const response = await fetch(
-        `${API_BASE_URL}/api/health`
-    )
+export async function getHealth():
+    Promise<HealthResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/health`
+        )
 
-    return parseJsonResponse(response)
+    return parseJsonResponse(
+        response
+    )
 }
