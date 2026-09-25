@@ -190,9 +190,10 @@ class TradingStateRepository:
                 WHERE status IN (
                     'ACTIVE',
                     'RUNNING',
-                    'RECOVERY'
+                    'RECOVERY',
+                    'DRAINING'
                 )
-                ORDER BY updated_at ASC
+                ORDER BY updated_at DESC
                 """
             ).fetchall()
 

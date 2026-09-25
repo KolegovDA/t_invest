@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 
+from contextlib import asynccontextmanager
 from decimal import Decimal
 
 from fastapi import (
@@ -19,6 +20,9 @@ from pydantic import (
 
 from application.live_account_service import (
     LiveAccountService,
+)
+from application.instrument_catalog_service import (
+    InstrumentCatalogService,
 )
 from application.live_start_validation_service import (
     LiveStartValidationService,
@@ -45,6 +49,9 @@ from application.trading_mode_guard import (
 )
 from application.trading_session_state_service import (
     TradingSessionStateService,
+)
+from application.web_runner_recovery_service import (
+    WebRunnerRecoveryService,
 )
 from application.web_runner_registry import (
     web_runner_registry,
@@ -234,12 +241,72 @@ live_start_validation_service = (
 
 
 # ============================================================
+# INSTRUMENT CATALOG 1.1
+# ============================================================
+
+instrument_catalog_service = (
+    InstrumentCatalogService(
+        settings=settings,
+        trading_account_service=(
+            trading_account_service
+        ),
+    )
+)
+
+
+# ============================================================
+# RUNNER RECOVERY 1.1
+# ============================================================
+
+web_runner_recovery_service = (
+    WebRunnerRecoveryService(
+        settings=settings,
+        state_repository=(
+            trading_state_repository
+        ),
+        state_service=(
+            trading_state_service
+        ),
+        trading_account_service=(
+            trading_account_service
+        ),
+        runner_registry=(
+            web_runner_registry
+        ),
+        api_usage_repository=(
+            api_usage_repository
+        ),
+        polling_interval_seconds=10,
+    )
+)
+
+
+# ============================================================
 # FASTAPI
 # ============================================================
+
+@asynccontextmanager
+async def app_lifespan(
+    _app: FastAPI,
+):
+    # Startup recovery is part of the normal application lifecycle.
+    # We intentionally do not mark runners STOPPED on application
+    # shutdown: RUNNING/DRAINING snapshots must survive an exe restart.
+    if not os.getenv(
+        "PYTEST_CURRENT_TEST"
+    ):
+        (
+            web_runner_recovery_service
+            .recover_active_runners()
+        )
+
+    yield
+
 
 app = FastAPI(
     title="ESM Trade System API",
     version=APP_VERSION,
+    lifespan=app_lifespan,
 )
 
 
@@ -267,7 +334,13 @@ class StartPlanInstrumentRequest(
 class StartPlanRequest(
     BaseModel
 ):
-    available_cash: Decimal
+    available_cash: (
+        Decimal | None
+    ) = None
+
+    trading_account_id: (
+        str | None
+    ) = None
 
     instruments: list[
         StartPlanInstrumentRequest
@@ -1073,6 +1146,7 @@ def start_live(
     )
 
     runner = None
+    validation_result = None
 
     try:
         if (
@@ -1136,6 +1210,19 @@ def start_live(
                 trading_account_service
                 .get_credentials(
                     esm_account.id
+                )
+            )
+
+            # Re-validate server-side at the moment of start.
+            # This is the single authoritative planned capital stored
+            # for the session; the frontend does not calculate it again.
+            validation_result = (
+                live_start_validation_service
+                .validate(
+                    trading_account_id=(
+                        esm_account.id
+                    ),
+                    config=config,
                 )
             )
 
@@ -1246,6 +1333,12 @@ def start_live(
                 trading_account_id=(
                     trading_account_id
                 ),
+                planned_initial_capital=(
+                    validation_result.total_required_deposit
+                    if validation_result is not None
+                    else None
+                ),
+                lifecycle_status="RUNNING",
             )
         )
 
@@ -1395,6 +1488,77 @@ def version():
 
 
 # ============================================================
+# ACTIVE STATE HELPERS
+# ============================================================
+
+def _build_active_state_key(
+    state,
+) -> tuple:
+    instrument_keys = []
+
+    for instrument in state.instruments:
+        config = getattr(
+            instrument,
+            "grid_config",
+            None,
+        )
+
+        quantity = (
+            getattr(
+                config,
+                "quantity",
+                None,
+            )
+            if config is not None
+            else None
+        )
+
+        if quantity is None:
+            quantity = (
+                instrument.open_positions[0].quantity
+                if instrument.open_positions
+                else 1
+            )
+
+        instrument_keys.append(
+            (
+                instrument.ticker.upper(),
+                len(instrument.levels),
+                int(quantity),
+            )
+        )
+
+    instrument_keys.sort()
+
+    return (
+        state.trading_account_id,
+        state.broker_account_id,
+        state.mode.lower(),
+        tuple(instrument_keys),
+    )
+
+
+def _deduplicate_active_states(
+    states,
+):
+    seen = set()
+    result = []
+
+    for state in states:
+        key = _build_active_state_key(
+            state
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        result.append(state)
+
+    return result
+
+
+# ============================================================
 # DASHBOARD
 # ============================================================
 
@@ -1412,24 +1576,25 @@ def dashboard():
     ]
 
     active_states = (
-        trading_state_repository
-        .get_active()
+        _deduplicate_active_states(
+            [
+                state
+                for state
+                in trading_state_repository
+                .get_active()
+                if state.mode.lower() == "live"
+            ]
+        )
     )
 
-    initial_deposit = (
-        Decimal("0")
+    configured_accounts = (
+        trading_account_service
+        .get_all()
     )
 
-    available_cash = (
-        Decimal("0")
-    )
-
-    reserved_cash = (
-        Decimal("0")
-    )
-
-    for state in active_states:
-        initial_deposit += (
+    # Fixed amount required when each active strategy was started.
+    initial_capital = sum(
+        (
             getattr(
                 state,
                 "initial_deposit",
@@ -1437,86 +1602,247 @@ def dashboard():
             )
             or Decimal("0")
         )
+        for state
+        in active_states
+    )
 
-        available_cash += (
-            state.available_cash
+    # Current actual money in open positions. We calculate it from
+    # recovered/live GridEngine objects so BUY commission is included.
+    invested_cash = Decimal("0")
+    reserved_cash = Decimal("0")
+
+    for runner in (
+        web_runner_registry
+        .get_all()
+    ):
+        if (
+            getattr(
+                runner.context,
+                "mode",
+                "sandbox",
+            ).lower()
+            != "live"
+        ):
+            continue
+
+        for trading_session in (
+            runner.context
+            .session
+            .sessions
+            .values()
+        ):
+            engine = (
+                trading_session
+                .grid_engine
+            )
+
+            for position in (
+                engine
+                .open_positions
+                .values()
+            ):
+                invested_cash += (
+                    Decimal(
+                        str(position.entry_price)
+                    )
+                    * Decimal(
+                        str(position.quantity)
+                    )
+                    + Decimal(
+                        str(
+                            getattr(
+                                position,
+                                "buy_commission",
+                                Decimal("0"),
+                            )
+                            or Decimal("0")
+                        )
+                    )
+                )
+
+        reservation_manager = (
+            runner.context
+            .trade_capital_service
+            .reservation_manager
         )
 
         reserved_cash += (
-            state.reserved_cash
+            reservation_manager
+            .get_reserved_total()
         )
 
-    configured_accounts = (
-        trading_account_service
-        .get_all()
+    # Fallback if the application is between DB recovery and runner setup.
+    if not web_runner_registry.get_all():
+        reserved_cash = sum(
+            (
+                state.reserved_cash
+                or Decimal("0")
+            )
+            for state
+            in active_states
+        )
+
+        for state in active_states:
+            for instrument in state.instruments:
+                for position in instrument.open_positions:
+                    purchase_cost = getattr(
+                        position,
+                        "purchase_cost",
+                        None,
+                    )
+
+                    if purchase_cost is not None:
+                        invested_cash += Decimal(
+                            str(purchase_cost)
+                        )
+
+    # Real free broker cash: each enabled LIVE account exactly once.
+    live_cash = Decimal("0")
+    live_cash_accounts = 0
+
+    for account in configured_accounts:
+        if (
+            not account.enabled
+            or account.mode
+            != TradingAccountMode.LIVE
+        ):
+            continue
+
+        try:
+            adapter = (
+                broker_registry
+                .get(account.broker)
+            )
+
+            credentials = (
+                trading_account_service
+                .get_credentials(
+                    account.id
+                )
+            )
+
+            portfolio = (
+                adapter.get_portfolio(
+                    credentials=credentials,
+                    broker_account_id=(
+                        account.broker_account_id
+                    ),
+                    mode=account.mode,
+                )
+            )
+
+            live_cash += portfolio.cash
+            live_cash_accounts += 1
+
+        except Exception as error:
+            print(
+                "DASHBOARD PORTFOLIO ERROR:",
+                account.id,
+                repr(error),
+            )
+
+    if live_cash_accounts == 0:
+        latest_cash_by_broker: dict[
+            str,
+            Decimal,
+        ] = {}
+
+        for state in active_states:
+            latest_cash_by_broker[
+                state.broker_account_id
+            ] = state.available_cash
+
+        live_cash = sum(
+            latest_cash_by_broker.values(),
+            Decimal("0"),
+        )
+
+    realized_profit = sum(
+        Decimal(
+            str(
+                session.get(
+                    "realized_profit",
+                    0,
+                )
+            )
+        )
+        for session
+        in sessions
+    )
+
+    unrealized_profit = sum(
+        Decimal(
+            str(
+                session.get(
+                    "unrealized_profit",
+                    0,
+                )
+            )
+        )
+        for session
+        in sessions
+    )
+
+    total_profit = (
+        realized_profit
+        + unrealized_profit
     )
 
     return {
         "accounts":
-            len(
-                configured_accounts
-            ),
+            len(configured_accounts),
 
         "active_accounts":
             len(
                 {
-                    state
-                    .trading_account_id
-
+                    state.trading_account_id
                     for state
                     in active_states
                 }
             ),
 
         "capital": (
-            float(
-                initial_deposit
-            )
-            if (
-                initial_deposit
-                > 0
-            )
+            float(initial_capital)
+            if initial_capital > 0
             else None
         ),
 
+        "invested_cash":
+            float(invested_cash),
+
         "available_cash": (
-            float(
-                available_cash
+            float(live_cash)
+            if (
+                live_cash_accounts > 0
+                or active_states
             )
-            if active_states
             else None
         ),
 
         "reserved_cash": (
-            float(
-                reserved_cash
-            )
+            float(reserved_cash)
             if active_states
             else None
         ),
 
         "active_positions":
             sum(
-                session[
-                    "positions"
-                ]
+                session["positions"]
                 for session
                 in sessions
             ),
+
+        "realized_profit":
+            float(realized_profit),
+
+        "unrealized_profit":
+            float(unrealized_profit),
 
         "profit":
-            sum(
-                session[
-                    "total_profit"
-                ]
-                for session
-                in sessions
-            ),
+            float(total_profit),
 
         "instruments": [
-            session[
-                "ticker"
-            ]
+            session["ticker"]
             for session
             in sessions
         ],
@@ -1601,6 +1927,17 @@ def runner_status():
                     status
                     .is_running,
 
+                "lifecycle_status":
+                    getattr(
+                        status,
+                        "lifecycle_status",
+                        (
+                            "RUNNING"
+                            if status.is_running
+                            else "STOPPED"
+                        ),
+                    ),
+
                 "last_tick_at":
                     status
                     .last_tick_at,
@@ -1645,49 +1982,74 @@ def runner_status():
     "/api/instruments"
 )
 def instruments():
+    # Selected instruments are a user choice.
+    # Do not inject SBER/GAZP/LKOH automatically.
+    return {
+        "instruments": [],
+    }
+
+
+@app.get(
+    "/api/instruments/search"
+)
+def search_instruments(
+    query: str = "",
+    trading_account_id: str | None = None,
+    limit: int = 50,
+):
+    try:
+        items = (
+            instrument_catalog_service
+            .search(
+                query=query,
+                trading_account_id=(
+                    trading_account_id
+                ),
+                limit=limit,
+            )
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "T-Invest instrument search failed: "
+                f"{error!r}"
+            ),
+        ) from error
+
+    api_usage_repository.record(
+        source="web",
+        operation="instrument_search",
+        weight=1,
+    )
+
     return {
         "instruments": [
             {
+                "instrument_uid":
+                    item.instrument_uid,
                 "ticker":
-                    "SBER",
-
-                "levels":
-                    20,
-
-                "price":
-                    317,
-
-                "required_capital":
-                    7774,
-            },
-
-            {
-                "ticker":
-                    "GAZP",
-
-                "levels":
-                    20,
-
-                "price":
-                    107,
-
-                "required_capital":
-                    3080,
-            },
-
-            {
-                "ticker":
-                    "LKOH",
-
-                "levels":
-                    20,
-
-                "price":
-                    4453,
-
-                "required_capital":
-                    128540,
-            },
+                    item.ticker,
+                "name":
+                    item.name,
+                "currency":
+                    item.currency,
+                "lot_size":
+                    item.lot_size,
+                "min_price_step":
+                    str(
+                        item.min_price_step
+                    ),
+            }
+            for item
+            in items
         ],
     }
 
@@ -1800,6 +2162,62 @@ def stop_session(
 
 
 # ============================================================
+# DRAIN / «СУШКА»
+# ============================================================
+
+@app.post(
+    "/api/drain-session/{ticker}"
+)
+def drain_session(
+    ticker: str,
+):
+    normalized_ticker = (
+        ticker.upper()
+    )
+
+    runners = (
+        web_runner_registry
+        .get_by_ticker(
+            normalized_ticker
+        )
+    )
+
+    if not runners:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Active runner not found: "
+                f"{normalized_ticker}"
+            ),
+        )
+
+    drained = (
+        web_runner_registry
+        .drain_by_ticker(
+            normalized_ticker
+        )
+    )
+
+    api_usage_repository.record(
+        source="web",
+        operation="session_drain_requested",
+        weight=max(1, drained),
+        ticker=normalized_ticker,
+    )
+
+    return {
+        "ticker": normalized_ticker,
+        "status": "DRAINING",
+        "runners_affected": drained,
+        "message": (
+            "Текущая сетка продолжает работать штатно. "
+            "Когда открытых позиций станет 0, "
+            "сессия будет остановлена автоматически."
+        ),
+    }
+
+
+# ============================================================
 # START PLAN
 # ============================================================
 
@@ -1809,6 +2227,73 @@ def stop_session(
 def start_plan(
     request: StartPlanRequest,
 ):
+    available_cash = (
+        request.available_cash
+        if request.available_cash
+        is not None
+        else Decimal("0")
+    )
+
+    if (
+        request.trading_account_id
+        is not None
+    ):
+        try:
+            account = (
+                trading_account_service
+                .get(
+                    request
+                    .trading_account_id
+                )
+            )
+
+            credentials = (
+                trading_account_service
+                .get_credentials(
+                    account.id
+                )
+            )
+
+            adapter = (
+                broker_registry
+                .get(
+                    account.broker
+                )
+            )
+
+            portfolio = (
+                adapter.get_portfolio(
+                    credentials=credentials,
+                    broker_account_id=(
+                        account
+                        .broker_account_id
+                    ),
+                    mode=account.mode,
+                )
+            )
+
+            available_cash = (
+                portfolio.cash
+            )
+
+        except KeyError as error:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Trading account "
+                    "not found"
+                ),
+            ) from error
+
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Cannot read LIVE account "
+                    f"cash: {error!r}"
+                ),
+            ) from error
+
     config = (
         _build_multi_instrument_config(
             instruments=(
@@ -1877,8 +2362,7 @@ def start_plan(
             ),
 
             available_cash=(
-                request
-                .available_cash
+                available_cash
             ),
         )
     )
@@ -2633,27 +3117,46 @@ def _build_display_session(
         )
     )
 
-    if (
-        snapshot
-        is not None
-    ):
-        return (
+    if snapshot is not None:
+        result = (
             _snapshot_to_dict(
                 snapshot=snapshot,
-
                 web_session=(
                     web_session
                 ),
             )
         )
+    else:
+        result = (
+            _web_session_to_dict(
+                session=(
+                    web_session
+                ),
+            )
+        )
 
-    return (
-        _web_session_to_dict(
-            session=(
-                web_session
-            ),
+    # Surface runner lifecycle in the existing session UI.
+    # Until sessions become fully account/session_id-addressable,
+    # DRAINING has priority for a matching ticker.
+    runners = (
+        web_runner_registry
+        .get_by_ticker(
+            web_session.ticker
         )
     )
+
+    if any(
+        getattr(
+            runner,
+            "lifecycle_status",
+            "RUNNING",
+        )
+        == "DRAINING"
+        for runner in runners
+    ):
+        result["status"] = "DRAINING"
+
+    return result
 
 
 def _snapshot_to_dict(

@@ -3,6 +3,7 @@ import type {
     ApiUsage,
     Dashboard,
     Instrument,
+    InstrumentSearchResult,
     LiveStartValidationResult,
     LiveStatus,
     RunnerStatus,
@@ -100,6 +101,49 @@ export async function getInstruments():
 }
 
 
+export async function searchInstruments(
+    query: string,
+
+    tradingAccountId?:
+        string | null,
+
+    limit: number = 30
+): Promise<{
+    instruments: InstrumentSearchResult[]
+}> {
+    const params =
+        new URLSearchParams()
+
+    params.set(
+        "query",
+        query
+    )
+
+    params.set(
+        "limit",
+        String(limit)
+    )
+
+    if (
+        tradingAccountId
+    ) {
+        params.set(
+            "trading_account_id",
+            tradingAccountId
+        )
+    }
+
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instruments/search?${params.toString()}`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
 export async function getSessions():
     Promise<{
         sessions: ActiveSession[]
@@ -147,6 +191,28 @@ export async function stopSession(
 }
 
 
+export async function drainSession(
+    ticker: string
+): Promise<{
+    ticker: string
+    status: string
+    runners_affected: number
+    message: string
+}> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/drain-session/${encodeURIComponent(ticker)}`,
+            {
+                method: "POST",
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
 export async function calculateStartPlan(
     instruments: {
         ticker:
@@ -157,7 +223,13 @@ export async function calculateStartPlan(
 
         quantity:
         number
-    }[]
+    }[],
+
+    tradingAccountId?:
+        string | null,
+
+    sandboxAvailableCash:
+        number | null = 100000
 ): Promise<StartPlan> {
     const response =
         await fetch(
@@ -174,7 +246,13 @@ export async function calculateStartPlan(
                 body:
                     JSON.stringify({
                         available_cash:
-                            100000,
+                            tradingAccountId
+                                ? null
+                                : sandboxAvailableCash,
+
+                        trading_account_id:
+                            tradingAccountId
+                            ?? null,
 
                         instruments,
                     }),

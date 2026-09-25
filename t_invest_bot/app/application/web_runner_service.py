@@ -11,7 +11,7 @@ from threading import (
     Thread,
 )
 from time import sleep
-from typing import Any
+from typing import Any, Callable
 
 from application.sandbox_session_registry import (
     SandboxSessionRegistry,
@@ -32,6 +32,7 @@ class WebRunnerTickResult:
 @dataclass(slots=True)
 class WebRunnerStatus:
     is_running: bool
+    lifecycle_status: str
     last_tick_at: str | None
     last_error: str | None
 
@@ -69,6 +70,18 @@ class WebRunnerService:
     session_id: str | None = None
 
     trading_account_id: str | None = None
+
+    # Fixed capital required by the strategy at LIVE validation/start.
+    # It is persisted as TradingSessionState.initial_deposit.
+    planned_initial_capital: Decimal | None = None
+
+    # RUNNING or DRAINING. DRAINING does not change GridEngine logic;
+    # it only stops the runner when the last open position disappears.
+    lifecycle_status: str = "RUNNING"
+
+    on_auto_stopped: (
+        Callable[["WebRunnerService"], None] | None
+    ) = None
 
     is_running: bool = False
 
@@ -121,7 +134,7 @@ class WebRunnerService:
         # знать, что сессия существовала.
         #
         self._save_state(
-            status="RUNNING",
+            status=self.lifecycle_status,
         )
 
         self.thread = Thread(
@@ -173,6 +186,7 @@ class WebRunnerService:
     ) -> WebRunnerStatus:
         return WebRunnerStatus(
             is_running=self.is_running,
+            lifecycle_status=self.lifecycle_status,
 
             last_tick_at=(
                 self.last_tick_at
@@ -389,11 +403,113 @@ class WebRunnerService:
         # - reserves;
         # - realized profit.
         #
+        #
+        # DRAINING / «Сушка»:
+        # текущая сетка работает полностью штатно, пока есть хотя бы
+        # одна открытая позиция. Закрытые уровни могут покупаться снова,
+        # trailing и compensation не меняются.
+        #
+        # После poll_executions(), если последняя позиция закрылась,
+        # сессию завершаем до следующего price tick. context.session.stop()
+        # отменит возможные оставшиеся заявки и освободит резерв.
+        #
+        if (
+            self.lifecycle_status == "DRAINING"
+            and self._get_open_positions_count() == 0
+        ):
+            self._complete_drain()
+            return result
+
         self._save_state(
-            status="RUNNING",
+            status=self.lifecycle_status,
         )
 
         return result
+
+    def request_drain(self) -> None:
+        """
+        Перевести runner в режим DRAINING / «Сушка».
+
+        GridEngine продолжает работать без каких-либо ограничений,
+        пока существует хотя бы одна открытая позиция.
+        Если позиций уже нет, runner завершается сразу.
+        """
+        if not self.is_running:
+            return
+
+        self.lifecycle_status = "DRAINING"
+
+        if self._get_open_positions_count() == 0:
+            self._complete_drain()
+            return
+
+        self._save_state(
+            status="DRAINING",
+        )
+
+    def _get_open_positions_count(self) -> int:
+        total = 0
+
+        for trading_session in (
+            self.context.session.sessions.values()
+        ):
+            engine = getattr(
+                trading_session,
+                "grid_engine",
+                None,
+            )
+
+            if engine is None:
+                continue
+
+            total += len(
+                getattr(
+                    engine,
+                    "open_positions",
+                    {},
+                )
+            )
+
+        return total
+
+    def _complete_drain(self) -> None:
+        # Запрещаем следующий tick прежде, чем отменять остаточные заявки.
+        self.is_running = False
+        self.lifecycle_status = "STOPPED"
+
+        if hasattr(
+            self.context.session,
+            "stop",
+        ):
+            self.context.session.stop()
+
+        self._save_state(
+            status="STOPPED",
+            suppress_errors=True,
+        )
+
+        for ticker in list(
+            self.context.instrument_ids_by_ticker.keys()
+        ):
+            self.registry.unregister(
+                ticker=ticker,
+            )
+
+        try:
+            self.api_usage_repository.record(
+                source="runner",
+                operation="runner_drained",
+                weight=1,
+            )
+        except Exception:
+            pass
+
+        callback = self.on_auto_stopped
+        if callback is not None:
+            try:
+                callback(self)
+            except Exception:
+                pass
 
     def _run_loop(
         self,
@@ -424,7 +540,11 @@ class WebRunnerService:
                 # с брокером.
                 #
                 self._save_state(
-                    status="RECOVERY",
+                    status=(
+                        "DRAINING"
+                        if self.lifecycle_status == "DRAINING"
+                        else "RECOVERY"
+                    ),
                     suppress_errors=True,
                 )
 
@@ -472,6 +592,9 @@ class WebRunnerService:
                         .trading_account_id
                     ),
                     status=status,
+                    initial_deposit_override=(
+                        self.planned_initial_capital
+                    ),
                 )
 
             except Exception as error:

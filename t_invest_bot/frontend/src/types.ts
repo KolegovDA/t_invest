@@ -213,7 +213,16 @@ export type Dashboard = {
     reserved_cash?:
     number | null
 
+    invested_cash?:
+    number | null
+
     active_positions:
+    number
+
+    realized_profit?:
+    number
+
+    unrealized_profit?:
     number
 
     profit:
@@ -270,6 +279,9 @@ export type RunnerStatus = {
     is_running:
     boolean
 
+    lifecycle_status?:
+    string
+
     last_tick_at:
     string | null
 
@@ -305,6 +317,27 @@ export type Instrument = {
 
     required_capital:
     number
+}
+
+
+export type InstrumentSearchResult = {
+    instrument_uid:
+    string
+
+    ticker:
+    string
+
+    name:
+    string
+
+    currency:
+    string
+
+    lot_size:
+    number
+
+    min_price_step:
+    string
 }
 
 

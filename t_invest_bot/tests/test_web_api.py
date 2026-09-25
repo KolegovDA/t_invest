@@ -107,13 +107,14 @@ def test_instruments_endpoint_returns_instruments() -> None:
     data = response.json()
 
     assert (
-        len(data["instruments"])
-        == 3
+        "instruments"
+        in data
     )
 
+
     assert (
-        data["instruments"][0]["ticker"]
-        == "SBER"
+        data["instruments"]
+        == []
     )
 
 

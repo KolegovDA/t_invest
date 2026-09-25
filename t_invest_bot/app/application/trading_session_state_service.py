@@ -35,6 +35,7 @@ class TradingSessionStateService:
         session_id: str,
         trading_account_id: str,
         status: str = "RUNNING",
+        initial_deposit_override: Decimal | None = None,
     ) -> TradingSessionState:
         reservation_manager = (
             context
@@ -75,6 +76,18 @@ class TradingSessionStateService:
         )
 
         total_open_purchase_cost = (
+            Decimal("0")
+        )
+
+        #
+        # Фактически вложенный капитал:
+        # стоимость только ОТКРЫТЫХ BUY
+        # + BUY-комиссия этих позиций.
+        #
+        # Свободный cash брокерского счёта
+        # сюда НЕ входит.
+        #
+        current_open_invested_capital = (
             Decimal("0")
         )
 
@@ -173,6 +186,48 @@ class TradingSessionStateService:
                 engine_sell_commission
             )
 
+            #
+            # Берём позиции непосредственно
+            # из GridEngine: здесь есть
+            # фактическая цена BUY, количество
+            # и фактическая/расчётная комиссия.
+            #
+            for open_position in (
+                engine
+                .open_positions
+                .values()
+            ):
+                entry_price = Decimal(
+                    str(
+                        open_position
+                        .entry_price
+                    )
+                )
+
+                quantity = Decimal(
+                    str(
+                        open_position
+                        .quantity
+                    )
+                )
+
+                buy_commission = Decimal(
+                    str(
+                        getattr(
+                            open_position,
+                            "buy_commission",
+                            Decimal("0"),
+                        )
+                        or Decimal("0")
+                    )
+                )
+
+                current_open_invested_capital += (
+                    entry_price
+                    * quantity
+                    + buy_commission
+                )
+
             for position in (
                 instrument_state
                 .open_positions
@@ -192,8 +247,38 @@ class TradingSessionStateService:
             )
 
         #
-        # Initial deposit должен
-        # фиксироваться один раз.
+        # Капитал, реально задействованный
+        # стратегией прямо сейчас:
+        #
+        # 1. открытые BUY-позиции
+        #    по фактической цене покупки;
+        # 2. BUY-комиссии этих позиций;
+        # 3. капитал под ещё не исполненные
+        #    активные BUY-заявки.
+        #
+        # Старое поведение было ошибочным:
+        # сюда добавлялся ВЕСЬ свободный cash
+        # брокерского счёта, из-за чего на
+        # главной появлялись лишние 100 000 ₽.
+        #
+        # Значение пересчитываем каждый snapshot,
+        # поэтому старое ошибочное число в SQLite
+        # автоматически будет исправлено новым тиком.
+        #
+        current_reserved_cash = (
+            reservation_manager
+            .get_reserved_total()
+        )
+
+        #
+        # initial_deposit = расчётный капитал,
+        # который был необходим при ЗАПУСКЕ стратегии.
+        # Это фиксированная величина с LIVE validation,
+        # а не текущие вложения и не весь broker cash.
+        #
+        # Для новых сессий WebRunnerService передаёт
+        # initial_deposit_override. После этого значение
+        # хранится в snapshot и не меняется от тика к тику.
         #
         existing_state = (
             self.repository.get(
@@ -202,32 +287,29 @@ class TradingSessionStateService:
         )
 
         if (
-            existing_state
+            initial_deposit_override
             is not None
-            and existing_state
-            .initial_deposit
+        ):
+            initial_deposit = Decimal(
+                str(initial_deposit_override)
+            )
+
+        elif (
+            existing_state is not None
+            and existing_state.initial_deposit
             is not None
         ):
             initial_deposit = (
-                existing_state
-                .initial_deposit
+                existing_state.initial_deposit
             )
 
         else:
-            #
-            # При первом snapshot:
-            #
-            # cash
-            # +
-            # уже существующие позиции
-            # по фактической цене покупки.
-            #
+            # Legacy fallback для snapshots, созданных
+            # до появления фиксированного стартового капитала.
+            # Свободные деньги брокера сюда НЕ входят.
             initial_deposit = (
-                context
-                .portfolio_manager
-                .portfolio
-                .cash
-                + total_open_purchase_cost
+                current_open_invested_capital
+                + current_reserved_cash
             )
 
         return TradingSessionState(
@@ -255,8 +337,7 @@ class TradingSessionStateService:
             ),
 
             reserved_cash=(
-                reservation_manager
-                .get_reserved_total()
+                current_reserved_cash
             ),
 
             instruments=(
@@ -293,6 +374,7 @@ class TradingSessionStateService:
         session_id: str,
         trading_account_id: str,
         status: str = "RUNNING",
+        initial_deposit_override: Decimal | None = None,
     ) -> TradingSessionState:
         state = self.build_state(
             context=context,
@@ -304,6 +386,9 @@ class TradingSessionStateService:
             ),
 
             status=status,
+            initial_deposit_override=(
+                initial_deposit_override
+            ),
         )
 
         self.repository.save(

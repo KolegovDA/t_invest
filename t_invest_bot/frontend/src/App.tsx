@@ -5,6 +5,7 @@ import {
 
 import {
     calculateStartPlan,
+    drainSession,
     getApiUsage,
     getDashboard,
     getInstruments,
@@ -12,6 +13,7 @@ import {
     getRunnerStatus,
     getSession,
     getSessions,
+    searchInstruments,
     startLive,
     startSandbox,
     stopSession,
@@ -84,6 +86,7 @@ import type {
     ApiUsage,
     Dashboard,
     Instrument,
+    InstrumentSearchResult,
     LiveStartValidationResult,
     LiveStatus,
     RunnerStatus,
@@ -239,6 +242,20 @@ export default function App() {
         setNewBaseQuantity,
     ] = useState(
         "1"
+    )
+
+    const [
+        instrumentSearchResults,
+        setInstrumentSearchResults,
+    ] = useState<
+        InstrumentSearchResult[]
+    >([])
+
+    const [
+        isSearchingInstruments,
+        setIsSearchingInstruments,
+    ] = useState(
+        false
     )
 
     const [
@@ -457,6 +474,56 @@ export default function App() {
     }
 
 
+    async function searchAvailableInstruments(
+        value: string
+    ) {
+        const query =
+            value.trim()
+
+        if (!query) {
+            setInstrumentSearchResults([])
+            return
+        }
+
+        setIsSearchingInstruments(true)
+
+        try {
+            const data =
+                await searchInstruments(
+                    query,
+                    selectedTradingAccountId,
+                    30
+                )
+
+            setInstrumentSearchResults(
+                data.instruments
+            )
+
+        } catch (error) {
+            console.error(
+                "Instrument search error:",
+                error
+            )
+
+            setInstrumentSearchResults([])
+
+        } finally {
+            setIsSearchingInstruments(false)
+        }
+    }
+
+
+    function selectInstrumentSearchResult(
+        item: InstrumentSearchResult
+    ) {
+        setNewTicker(
+            item.ticker
+        )
+
+        setInstrumentSearchResults([])
+    }
+
+
     function addInstrument() {
         const ticker =
             newTicker
@@ -464,6 +531,20 @@ export default function App() {
                 .toUpperCase()
 
         if (!ticker) {
+            return
+        }
+
+        if (
+            instruments.some(
+                instrument =>
+                    instrument.ticker
+                        .toUpperCase()
+                    === ticker
+            )
+        ) {
+            setStartError(
+                `Инструмент ${ticker} уже добавлен.`
+            )
             return
         }
 
@@ -498,6 +579,7 @@ export default function App() {
         setNewTicker("")
         setNewLevels(20)
         setNewBaseQuantity("1")
+        setInstrumentSearchResults([])
 
         setStartPlan(null)
         setStartResult(null)
@@ -678,7 +760,15 @@ export default function App() {
         setStartError(null)
 
         calculateStartPlan(
-            buildStartInstruments()
+            buildStartInstruments(),
+
+            tradingMode === "live"
+                ? selectedTradingAccountId
+                : null,
+
+            tradingMode === "sandbox"
+                ? 100000
+                : null
         )
             .then(
                 plan => {
@@ -704,28 +794,30 @@ export default function App() {
 
 
     async function startStrategy() {
-        if (!startPlan) {
-            return
-        }
-
         if (
-            tradingMode
-            === "live"
-            && !liveTradingEnabled
+            tradingMode === "live"
         ) {
-            setStartError(
-                "Live trading отключен. "
-                + "LIVE_TRADING_ENABLED=0"
-            )
+            if (
+                !liveTradingEnabled
+            ) {
+                setStartError(
+                    "Live trading отключен. "
+                    + "LIVE_TRADING_ENABLED=0"
+                )
 
-            return
-        }
+                return
+            }
 
-        if (
-            tradingMode
-            === "live"
-            && selectedTradingAccountId
-        ) {
+            if (
+                !selectedTradingAccountId
+            ) {
+                setStartError(
+                    "Выберите ESM LIVE счёт."
+                )
+
+                return
+            }
+
             if (
                 !liveValidation
                 || !liveValidation.success
@@ -742,10 +834,14 @@ export default function App() {
 
                 return
             }
+        } else if (!startPlan) {
+            return
         }
 
         const force =
-            !startPlan.can_start
+            tradingMode === "live"
+                ? !liveValidation!.can_start
+                : !startPlan!.can_start
 
         const startInstruments =
             buildStartInstruments()
@@ -756,22 +852,15 @@ export default function App() {
 
         try {
             const result =
-                tradingMode
-                    === "live"
-
+                tradingMode === "live"
                     ? await startLive(
                         force,
-
                         startInstruments,
-
                         selectedTradingAccountId
                     )
-
                     : await startSandbox(
                         force,
-
                         startInstruments,
-
                         null
                     )
 
@@ -795,7 +884,6 @@ export default function App() {
                             "sessions"
                         )
                     },
-
                     1200
                 )
             }
@@ -857,6 +945,43 @@ export default function App() {
                 }
             )
     }
+
+    function drainSelectedSession(
+        ticker: string
+    ) {
+        setStartError(null)
+
+        drainSession(
+            ticker
+        )
+            .then(
+                result => {
+                    setSelectedSession(
+                        current => (
+                            current
+                                ? {
+                                    ...current,
+                                    status:
+                                        result.status,
+                                }
+                                : current
+                        )
+                    )
+
+                    refreshAll()
+                }
+            )
+            .catch(
+                error => {
+                    setStartError(
+                        error instanceof Error
+                            ? error.message
+                            : String(error)
+                    )
+                }
+            )
+    }
+
 
 
     if (!dashboard) {
@@ -1117,9 +1242,10 @@ export default function App() {
                     title=
                     "Добавить инструмент"
 
-                    onClose={() =>
+                    onClose={() => {
+                        setInstrumentSearchResults([])
                         setModal(null)
-                    }
+                    }}
                 >
                     <AddInstrumentForm
                         newTicker={
@@ -1134,8 +1260,24 @@ export default function App() {
                             newBaseQuantity
                         }
 
+                        searchResults={
+                            instrumentSearchResults
+                        }
+
+                        isSearching={
+                            isSearchingInstruments
+                        }
+
                         onTickerChange={
                             setNewTicker
+                        }
+
+                        onSearch={
+                            searchAvailableInstruments
+                        }
+
+                        onSelect={
+                            selectInstrumentSearchResult
                         }
 
                         onLevelsChange={
@@ -1150,9 +1292,10 @@ export default function App() {
                             addInstrument
                         }
 
-                        onCancel={() =>
+                        onCancel={() => {
+                            setInstrumentSearchResults([])
                             setModal(null)
-                        }
+                        }}
                     />
                 </AppModal>
             )}
@@ -1348,7 +1491,58 @@ export default function App() {
                         </div>
                     )}
 
-                    {!startPlan ? (
+                    {tradingMode === "live" ? (
+                        <>
+                            {liveValidation && (
+                                <div
+                                    style={
+                                        cardStyle
+                                    }
+                                >
+                                    <button
+                                        onClick={
+                                            startStrategy
+                                        }
+
+                                        disabled={
+                                            isStarting
+                                            || !liveValidation.success
+                                        }
+
+                                        style={{
+                                            ...primaryButton,
+                                            opacity:
+                                                isStarting
+                                                || !liveValidation.success
+                                                    ? 0.6
+                                                    : 1,
+                                        }}
+                                    >
+                                        {
+                                            isStarting
+                                                ? "Запуск..."
+                                                : liveValidation.can_start
+                                                    ? "Запустить LIVE"
+                                                    : "Запустить принудительно"
+                                        }
+                                    </button>
+
+                                    {!liveValidation.can_start && (
+                                        <div
+                                            style={{
+                                                marginTop: 8,
+                                                color: "#9a3412",
+                                                fontSize: 13,
+                                            }}
+                                        >
+                                            Свободных средств меньше расчётной суммы.
+                                            Запуск будет выполнен в принудительном режиме.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    ) : !startPlan ? (
                         <div
                             style={
                                 cardStyle
@@ -1363,7 +1557,7 @@ export default function App() {
                                     primaryButton
                                 }
                             >
-                                Рассчитать капитал
+                                Рассчитать капитал Sandbox
                             </button>
                         </div>
                     ) : (
@@ -1408,6 +1602,85 @@ export default function App() {
                             setModal(null)
                         }
                     >
+                        <div
+                            style={{
+                                marginBottom: 12,
+                                padding: 12,
+                                borderRadius: 12,
+                                background:
+                                    selectedSession.status
+                                    === "DRAINING"
+                                        ? "#fff7ed"
+                                        : "#f9fafb",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    fontWeight: 700,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                Управление сессией
+                            </div>
+
+                            <div
+                                style={{
+                                    color: "#6b7280",
+                                    fontSize: 13,
+                                    marginBottom: 10,
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                {
+                                    selectedSession.status
+                                    === "DRAINING"
+                                        ? "Режим сушки активен. Сетка работает как обычно, пока есть хотя бы одна открытая позиция. При выходе в 0 сессия остановится автоматически."
+                                        : "Сушка не меняет торговую логику текущей сетки. После полного выхода из позиций новая работа по активу не продолжится."
+                                }
+                            </div>
+
+                            <button
+                                onClick={() =>
+                                    drainSelectedSession(
+                                        selectedSession.ticker
+                                    )
+                                }
+                                disabled={
+                                    selectedSession.status
+                                    === "DRAINING"
+                                }
+                                style={{
+                                    width: "100%",
+                                    padding: 12,
+                                    borderRadius: 10,
+                                    border: "none",
+                                    background:
+                                        selectedSession.status
+                                        === "DRAINING"
+                                            ? "#d1d5db"
+                                            : "#f59e0b",
+                                    color:
+                                        selectedSession.status
+                                        === "DRAINING"
+                                            ? "#4b5563"
+                                            : "white",
+                                    fontWeight: 700,
+                                    cursor:
+                                        selectedSession.status
+                                        === "DRAINING"
+                                            ? "default"
+                                            : "pointer",
+                                }}
+                            >
+                                {
+                                    selectedSession.status
+                                    === "DRAINING"
+                                        ? "Сушка активна"
+                                        : "Включить сушку"
+                                }
+                            </button>
+                        </div>
+
                         <SessionDetailCard
                             session={
                                 selectedSession
@@ -1425,6 +1698,52 @@ export default function App() {
                 )
             }
         </div>
+    )
+}
+
+
+function formatDecimalValue(
+    value: string | number,
+    maximumFractionDigits = 2
+): string {
+    const numericValue = Number(
+        value
+    )
+
+    if (
+        Number.isNaN(
+            numericValue
+        )
+    ) {
+        return String(
+            value
+        )
+    }
+
+    return numericValue.toLocaleString(
+        "ru-RU",
+        {
+            minimumFractionDigits: 0,
+            maximumFractionDigits,
+        }
+    )
+}
+
+
+function formatMoneyValue(
+    value: string | number
+): string {
+    return (
+        `${formatDecimalValue(value, 2)} ₽`
+    )
+}
+
+
+function formatPercentValue(
+    value: string | number
+): string {
+    return (
+        `${formatDecimalValue(value, 2)}%`
     )
 }
 
@@ -1475,7 +1794,9 @@ function LiveValidationCard({
                 label="Свободные средства"
 
                 value={
-                    `${result.available_cash} ₽`
+                    formatMoneyValue(
+                        result.available_cash
+                    )
                 }
             />
 
@@ -1483,7 +1804,9 @@ function LiveValidationCard({
                 label="Необходимо"
 
                 value={
-                    `${result.total_required_deposit} ₽`
+                    formatMoneyValue(
+                        result.total_required_deposit
+                    )
                 }
             />
 
@@ -1491,7 +1814,9 @@ function LiveValidationCard({
                 label="Остаток"
 
                 value={
-                    `${result.remaining_cash} ₽`
+                    formatMoneyValue(
+                        result.remaining_cash
+                    )
                 }
             />
 
@@ -1499,7 +1824,9 @@ function LiveValidationCard({
                 label="Нехватка"
 
                 value={
-                    `${result.missing_cash} ₽`
+                    formatMoneyValue(
+                        result.missing_cash
+                    )
                 }
             />
 
@@ -1507,7 +1834,9 @@ function LiveValidationCard({
                 label="Комиссия BUY"
 
                 value={
-                    `${result.buy_commission_percent}%`
+                    formatPercentValue(
+                        result.buy_commission_percent
+                    )
                 }
             />
 
@@ -1515,7 +1844,9 @@ function LiveValidationCard({
                 label="Комиссия SELL"
 
                 value={
-                    `${result.sell_commission_percent}%`
+                    formatPercentValue(
+                        result.sell_commission_percent
+                    )
                 }
             />
 
@@ -1545,57 +1876,68 @@ function LiveValidationCard({
 
                             style={{
                                 padding:
-                                    "10px 0",
+                                    "12px 0",
 
                                 borderTop:
                                     "1px solid #e5e7eb",
                             }}
                         >
-                            <b>
+                            <div
+                                style={{
+                                    fontSize: 17,
+                                    fontWeight: 700,
+                                    marginBottom: 8,
+                                }}
+                            >
                                 {
                                     instrument.ticker
                                 }
-                            </b>
-
-                            <div>
-                                Цена:{" "}
-                                {
-                                    instrument
-                                        .current_price
-                                }
                             </div>
 
-                            <div>
-                                Минимум сетки:{" "}
-                                {
-                                    instrument
-                                        .min_grid_price
+                            <ValidationRow
+                                label="Текущая цена"
+                                value={
+                                    formatMoneyValue(
+                                        instrument.current_price
+                                    )
                                 }
-                            </div>
+                            />
 
-                            <div>
-                                Шаг:{" "}
-                                {
-                                    instrument
-                                        .grid_step
+                            <ValidationRow
+                                label="Нижняя граница сетки"
+                                value={
+                                    formatMoneyValue(
+                                        instrument.min_grid_price
+                                    )
                                 }
-                            </div>
+                            />
 
-                            <div>
-                                Уровней:{" "}
-                                {
-                                    instrument
-                                        .levels_count
+                            <ValidationRow
+                                label="Шаг сетки"
+                                value={
+                                    formatMoneyValue(
+                                        instrument.grid_step
+                                    )
                                 }
-                            </div>
+                            />
 
-                            <div>
-                                Количество:{" "}
-                                {
-                                    instrument
-                                        .quantity
+                            <ValidationRow
+                                label="Уровней"
+                                value={
+                                    String(
+                                        instrument.levels_count
+                                    )
                                 }
-                            </div>
+                            />
+
+                            <ValidationRow
+                                label="Количество"
+                                value={
+                                    String(
+                                        instrument.quantity
+                                    )
+                                }
+                            />
                         </div>
                     )
                 )}
@@ -1621,20 +1963,33 @@ function ValidationRow({
                 justifyContent:
                     "space-between",
 
+                alignItems:
+                    "flex-start",
+
                 gap:
-                    10,
+                    12,
 
                 padding:
-                    "5px 0",
+                    "6px 0",
             }}
         >
-            <span>
+            <span
+                style={{
+                    color:
+                        "#6b7280",
+                }}
+            >
                 {
                     label
                 }
             </span>
 
-            <b>
+            <b
+                style={{
+                    textAlign:
+                        "right",
+                }}
+            >
                 {
                     value
                 }
