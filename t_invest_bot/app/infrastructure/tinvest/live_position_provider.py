@@ -21,12 +21,29 @@ class LiveBrokerPosition:
 class TInvestLivePositionProvider:
     client_factory: TInvestClientFactory
 
+    use_sandbox: bool = False
+
     def get_positions(
         self,
         account_id: str,
     ) -> list[LiveBrokerPosition]:
+        client_factory = (
+            self.client_factory
+        )
+
         with (
-            self.client_factory.create_live_client()
+            (
+                client_factory
+                .create_sandbox_client()
+            )
+
+            if self.use_sandbox
+
+            else (
+                client_factory
+                .create_live_client()
+            )
+
             as client
         ):
             response = (

@@ -19,6 +19,11 @@ from domain.trading_account import (
     TradingAccountMode,
 )
 
+from infrastructure.brokers.base import (
+    BrokerAccountInfo,
+    BrokerPortfolioInfo,
+)
+
 
 class FakeCredentials:
     def __init__(
@@ -697,4 +702,356 @@ def test_unsupported_broker_cannot_be_added_yet(
     assert (
         response.status_code
         == 400
+    )
+
+
+class FakeBrokerAdapter:
+    def __init__(
+        self,
+        accounts,
+        portfolios=None,
+        error=None,
+    ) -> None:
+        self.accounts = (
+            accounts
+        )
+
+        self.portfolios = (
+            portfolios
+            or {}
+        )
+
+        self.error = error
+
+    def get_accounts(
+        self,
+        credentials,
+        mode,
+    ):
+        if (
+            self.error
+            is not None
+        ):
+            raise self.error
+
+        return self.accounts
+
+    def get_portfolio(
+        self,
+        credentials,
+        broker_account_id,
+        mode,
+    ):
+        if (
+            broker_account_id
+            not in (
+                self
+                .portfolios
+            )
+        ):
+            raise RuntimeError(
+                "portfolio unavailable"
+            )
+
+        return (
+            self
+            .portfolios[
+                broker_account_id
+            ]
+        )
+
+
+class FakeBrokerRegistry:
+    def __init__(
+        self,
+        adapter,
+    ) -> None:
+        self.adapter = (
+            adapter
+        )
+
+    def is_supported(
+        self,
+        broker,
+    ):
+        return (
+            broker
+            == (
+                BrokerType
+                .TINVEST
+            )
+        )
+
+    def get(
+        self,
+        broker,
+    ):
+        if not (
+            self
+            .is_supported(
+                broker
+            )
+        ):
+            raise KeyError(
+                broker
+            )
+
+        return (
+            self
+            .adapter
+        )
+
+
+def test_discover_accounts_returns_accounts_with_balances(
+    monkeypatch,
+) -> None:
+    adapter = (
+        FakeBrokerAdapter(
+            accounts=[
+                BrokerAccountInfo(
+                    broker_account_id=(
+                        "111"
+                    ),
+
+                    name=(
+                        "Основной"
+                    ),
+
+                    status="1",
+
+                    account_type=(
+                        "1"
+                    ),
+                ),
+
+                BrokerAccountInfo(
+                    broker_account_id=(
+                        "222"
+                    ),
+
+                    name=(
+                        "ИИС"
+                    ),
+
+                    status="1",
+
+                    account_type=(
+                        "2"
+                    ),
+                ),
+            ],
+
+            portfolios={
+                "111": (
+                    BrokerPortfolioInfo(
+                        cash=(
+                            Decimal(
+                                "15000.50"
+                            )
+                        ),
+
+                        total_value=(
+                            Decimal(
+                                "18000.00"
+                            )
+                        ),
+
+                        positions_count=3,
+                    )
+                ),
+            },
+        )
+    )
+
+    monkeypatch.setattr(
+        api_module,
+        "broker_registry",
+
+        FakeBrokerRegistry(
+            adapter
+        ),
+    )
+
+    client = TestClient(
+        api_module.app
+    )
+
+    response = client.post(
+        "/api/accounts/discover",
+
+        json={
+            "broker":
+                "tinvest",
+
+            "credentials": {
+                "token":
+                    "SECRET_TOKEN",
+            },
+
+            "mode":
+                "live",
+        },
+    )
+
+    assert (
+        response.status_code
+        == 200
+    )
+
+    data = (
+        response.json()
+    )
+
+    assert (
+        data["success"]
+        is True
+    )
+
+    assert (
+        data["error"]
+        is None
+    )
+
+    accounts = (
+        data["accounts"]
+    )
+
+    assert (
+        len(accounts)
+        == 2
+    )
+
+    assert (
+        accounts[0][
+            "broker_account_id"
+        ]
+        == "111"
+    )
+
+    assert (
+        accounts[0][
+            "name"
+        ]
+        == "Основной"
+    )
+
+    portfolio = (
+        accounts[0][
+            "portfolio"
+        ]
+    )
+
+    assert (
+        portfolio[
+            "cash"
+        ]
+        == "15000.50"
+    )
+
+    assert (
+        portfolio[
+            "total_value"
+        ]
+        == "18000.00"
+    )
+
+    assert (
+        portfolio[
+            "positions_count"
+        ]
+        == 3
+    )
+
+    #
+    # Баланс недоступен — счёт
+    # всё равно возвращаем.
+    #
+    assert (
+        accounts[1][
+            "portfolio"
+        ]
+        is None
+    )
+
+    #
+    # Токен не утекает
+    # в ответ.
+    #
+    assert (
+        "SECRET_TOKEN"
+        not in (
+            response.text
+        )
+    )
+
+
+def test_discover_accounts_reports_broker_error(
+    monkeypatch,
+) -> None:
+    adapter = (
+        FakeBrokerAdapter(
+            accounts=[],
+
+            error=(
+                RuntimeError(
+                    "CERTIFICATE_VERIFY_FAILED"
+                )
+            ),
+        )
+    )
+
+    monkeypatch.setattr(
+        api_module,
+        "broker_registry",
+
+        FakeBrokerRegistry(
+            adapter
+        ),
+    )
+
+    client = TestClient(
+        api_module.app
+    )
+
+    response = client.post(
+        "/api/accounts/discover",
+
+        json={
+            "broker":
+                "tinvest",
+
+            "credentials": {
+                "token":
+                    "SECRET_TOKEN",
+            },
+
+            "mode":
+                "live",
+        },
+    )
+
+    assert (
+        response.status_code
+        == 200
+    )
+
+    data = (
+        response.json()
+    )
+
+    assert (
+        data["success"]
+        is False
+    )
+
+    assert (
+        data["accounts"]
+        == []
+    )
+
+    assert (
+        "CERTIFICATE_VERIFY_FAILED"
+        in (
+            data["error"]
+        )
     )

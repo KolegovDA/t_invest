@@ -51,6 +51,10 @@ class WebRunnerRecoveryService:
     runner_registry: WebRunnerRegistry
     api_usage_repository: object
 
+    reconciliation_journal: (
+        object | None
+    ) = None
+
     polling_interval_seconds: int = 10
 
     def recover_active_runners(
@@ -186,6 +190,9 @@ class WebRunnerRecoveryService:
             context=context,
             api_usage_repository=(
                 self.api_usage_repository
+            ),
+            reconciliation_journal=(
+                self.reconciliation_journal
             ),
             polling_interval_seconds=(
                 self.polling_interval_seconds

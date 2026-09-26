@@ -5,8 +5,13 @@ import {
 } from "react"
 
 import {
+    AccountMovementsCard,
+} from "./AccountMovementsCard"
+
+import {
     createTradingAccount,
     deleteTradingAccount,
+    discoverBrokerAccounts,
     getBrokers,
     getTradingAccountPortfolio,
     getTradingAccounts,
@@ -18,8 +23,10 @@ import type {
     BrokerConnectionResult,
     BrokerInfo,
     BrokerPortfolio,
+    BrokerType,
     CommissionMode,
     CreateTradingAccountPayload,
+    DiscoveredBrokerAccount,
     TradingAccount,
     TradingAccountMode,
 } from "./types"
@@ -182,6 +189,27 @@ export function AccountsPanel() {
         string | null
     >(null)
 
+    const [
+        discovered,
+        setDiscovered,
+    ] = useState<
+        DiscoveredBrokerAccount[]
+    >([])
+
+    const [
+        discovering,
+        setDiscovering,
+    ] = useState(
+        false
+    )
+
+    const [
+        discoveryError,
+        setDiscoveryError,
+    ] = useState<
+        string | null
+    >(null)
+
 
     const selectedBroker =
         useMemo(
@@ -250,6 +278,14 @@ export function AccountsPanel() {
         setError(
             null
         )
+
+        setDiscovered(
+            []
+        )
+
+        setDiscoveryError(
+            null
+        )
     }
 
 
@@ -268,6 +304,159 @@ export function AccountsPanel() {
                     [key]:
                         value,
                 },
+            })
+        )
+
+        if (
+            key
+            === "token"
+        ) {
+            setDiscovered(
+                []
+            )
+
+            setDiscoveryError(
+                null
+            )
+        }
+    }
+
+
+    function clearDiscovered() {
+        setDiscovered(
+            []
+        )
+
+        setDiscoveryError(
+            null
+        )
+    }
+
+
+    async function loadBrokerAccounts() {
+        const token = (
+            form
+                .credentials[
+                "token"
+                ]
+                ?? ""
+        ).trim()
+
+        if (
+            token
+            === ""
+        ) {
+            setDiscovered(
+                []
+            )
+
+            setDiscoveryError(
+                null
+            )
+
+            return
+        }
+
+        setDiscovering(
+            true
+        )
+
+        setDiscoveryError(
+            null
+        )
+
+        try {
+            const result =
+                await discoverBrokerAccounts(
+                    {
+                        broker:
+                            form.broker as BrokerType,
+
+                        credentials: {
+                            token,
+                        },
+
+                        mode:
+                            form.mode,
+                    }
+                )
+
+            if (
+                !result
+                    .success
+            ) {
+                setDiscovered(
+                    []
+                )
+
+                setDiscoveryError(
+                    result
+                        .error
+                    ?? "Не удалось получить счета брокера"
+                )
+
+                return
+            }
+
+            setDiscovered(
+                result
+                    .accounts
+            )
+
+            if (
+                result
+                    .accounts
+                    .length
+                === 0
+            ) {
+                setDiscoveryError(
+                    "По этому токену счета не найдены"
+                )
+            }
+
+        } catch (
+        currentError
+        ) {
+            setDiscovered(
+                []
+            )
+
+            setDiscoveryError(
+                currentError
+                    instanceof Error
+                    ? currentError.message
+                    : String(
+                        currentError
+                    )
+            )
+
+        } finally {
+            setDiscovering(
+                false
+            )
+        }
+    }
+
+
+    function selectDiscoveredAccount(
+        account: DiscoveredBrokerAccount
+    ) {
+        setForm(
+            previous => ({
+                ...previous,
+
+                brokerAccountId:
+                    account
+                        .broker_account_id,
+
+                name:
+                    previous
+                        .name
+                        .trim()
+                    === ""
+                        ? account.name
+                        : previous
+                            .name,
             })
         )
     }
@@ -693,7 +882,7 @@ export function AccountsPanel() {
                                     0.65,
                             }}
                         >
-                            ESM Trade System v1.1.0-dev
+                                            ESM Trade System v1.2.0-dev
                         </div>
                     </div>
 
@@ -883,10 +1072,11 @@ export function AccountsPanel() {
                                     setForm(
                                         previous => ({
                                             ...previous,
-
                                             mode,
                                         })
                                     )
+
+                                    clearDiscovered()
                                 }
                             }
 
@@ -985,8 +1175,17 @@ export function AccountsPanel() {
 
                                                                 event
                                                                     .target
-                                                                    .value
+                                                                    .value,
                                                             )
+                                                    }
+
+                                                    onBlur={
+                                                        field.key
+                                                        === "token"
+                                                            ? () => {
+                                                                loadBrokerAccounts()
+                                                            }
+                                                            : undefined
                                                     }
 
                                                     placeholder={
@@ -1006,6 +1205,244 @@ export function AccountsPanel() {
                                             </label>
                                         )
                                     )
+                            }
+                        </div>
+                    )
+                }
+
+                {
+                    selectedBroker
+                    ?.supported
+                    && (
+                        <div
+                            style={{
+                                marginTop:
+                                    18,
+                            }}
+                        >
+                            <button
+                                type="button"
+
+                                onClick={
+                                    loadBrokerAccounts
+                                }
+
+                                disabled={
+                                    discovering
+                                    || (
+                                        form
+                                            .credentials[
+                                        "token"
+                                        ]
+                                        ?? ""
+                                    )
+                                        .trim()
+                                    === ""
+                                }
+                            >
+                                {
+                                    discovering
+                                        ? "Загрузка счетов..."
+                                        : "Показать счета по токену"
+                                }
+                            </button>
+
+                            {
+                                discoveryError
+                                && (
+                                    <div
+                                        style={{
+                                            marginTop:
+                                                10,
+
+                                            padding:
+                                                10,
+
+                                            borderRadius:
+                                                10,
+
+                                            background:
+                                                "#fff1f1",
+
+                                            color:
+                                                "#991b1b",
+
+                                            wordBreak:
+                                                "break-word",
+                                        }}
+                                    >
+                                        {
+                                            discoveryError
+                                        }
+                                    </div>
+                                )
+                            }
+
+                            {
+                                discovered
+                                    .length
+                                > 0
+                                && (
+                                    <div
+                                        style={{
+                                            marginTop:
+                                                10,
+
+                                            display:
+                                                "grid",
+
+                                            gap:
+                                                8,
+                                        }}
+                                    >
+                                        {
+                                            discovered.map(
+                                                account => {
+                                                    const selected =
+                                                        form
+                                                            .brokerAccountId
+                                                        === account
+                                                            .broker_account_id
+
+                                                    return (
+                                                        <button
+                                                            key={
+                                                                account
+                                                                    .broker_account_id
+                                                            }
+
+                                                            type="button"
+
+                                                            onClick={
+                                                                () =>
+                                                                    selectDiscoveredAccount(
+                                                                        account
+                                                                    )
+                                                            }
+
+                                                            style={{
+                                                                textAlign:
+                                                                    "left",
+
+                                                                background:
+                                                                    selected
+                                                                        ? "#effaf2"
+                                                                        : "#f8f9fa",
+
+                                                                border:
+                                                                    selected
+                                                                        ? "1px solid #2f9e5f"
+                                                                        : "1px solid #e0e0e0",
+
+                                                                borderRadius:
+                                                                    12,
+
+                                                                padding:
+                                                                    12,
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                <strong>
+                                                                    {
+                                                                        account
+                                                                            .name
+                                                                    }
+                                                                </strong>
+
+                                                                {" · "}
+
+                                                                {
+                                                                    account
+                                                                        .account_type
+                                                                }
+
+                                                                {
+                                                                    account
+                                                                        .status
+                                                                    === "1"
+                                                                        ? " · активен"
+                                                                        : ""
+                                                                }
+                                                            </div>
+
+                                                            <div
+                                                                style={{
+                                                                    opacity:
+                                                                        0.65,
+
+                                                                    fontSize:
+                                                                        13,
+
+                                                                    marginTop:
+                                                                        4,
+                                                                }}
+                                                            >
+                                                                ID:
+                                                                {" "}
+
+                                                                {
+                                                                    account
+                                                                        .broker_account_id
+                                                                }
+                                                            </div>
+
+                                                            {
+                                                                account
+                                                                    .portfolio
+                                                                && (
+                                                                    <div
+                                                                        style={{
+                                                                            fontSize:
+                                                                                13,
+
+                                                                            marginTop:
+                                                                                4,
+                                                                        }}
+                                                                    >
+                                                                        Свободно:
+                                                                        {" "}
+
+                                                                        {
+                                                                            formatMoney(
+                                                                                account
+                                                                                    .portfolio
+                                                                                    .cash
+                                                                            )
+                                                                        }
+
+                                                                        {" · "}
+
+                                                                        Портфель:
+                                                                        {" "}
+
+                                                                        {
+                                                                            formatMoney(
+                                                                                account
+                                                                                    .portfolio
+                                                                                    .total_value
+                                                                            )
+                                                                        }
+
+                                                                        {" · "}
+
+                                                                        Позиций:
+                                                                        {" "}
+
+                                                                        {
+                                                                            account
+                                                                                .portfolio
+                                                                                .positions_count
+                                                                        }
+                                                                    </div>
+                                                                )
+                                                            }
+                                                        </button>
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    </div>
+                                )
                             }
                         </div>
                     )
@@ -1201,19 +1638,23 @@ export function AccountsPanel() {
                             form.enabled
                         }
 
-                        onChange={
-                            event =>
-                                setForm(
-                                    previous => ({
-                                        ...previous,
+                            onChange={
+                                event => {
+                                    setForm(
+                                        previous => ({
+                                            ...previous,
+                                            broker:
+                                                event
+                                                    .target
+                                                    .value,
+                                            credentials:
+                                                {},
+                                        })
+                                    )
 
-                                        enabled:
-                                            event
-                                                .target
-                                                .checked,
-                                    })
-                                )
-                        }
+                                    clearDiscovered()
+                                }
+                            }
                     />
 
                     Счёт активен
@@ -1584,6 +2025,12 @@ export function AccountsPanel() {
                                             </div>
                                         )
                                     }
+
+                                    <AccountMovementsCard
+                                        accountId={
+                                            account.id
+                                        }
+                                    />
 
                                     <div
                                         style={{

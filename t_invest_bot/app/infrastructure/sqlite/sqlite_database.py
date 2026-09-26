@@ -87,5 +87,50 @@ class SQLiteDatabase:
                     session_id TEXT,
                     ticker TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS reconciliation_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    trading_account_id TEXT,
+                    instrument_id TEXT,
+                    event_type TEXT NOT NULL,
+                    details TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS operations_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    trading_account_id TEXT,
+                    instrument_id TEXT,
+                    ticker TEXT,
+                    event_type TEXT NOT NULL,
+                    details TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS money_movements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    trading_account_id TEXT NOT NULL,
+                    amount TEXT NOT NULL,
+                    note TEXT NOT NULL DEFAULT ''
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_money_movements_account
+                ON money_movements (
+                    trading_account_id
+                );
+
+                CREATE TABLE IF NOT EXISTS instrument_statistics (
+                    instrument_id TEXT PRIMARY KEY,
+                    total_cycles INTEGER NOT NULL,
+                    profitable_cycles INTEGER NOT NULL,
+                    losing_cycles INTEGER NOT NULL,
+                    total_profit TEXT NOT NULL,
+                    max_drawdown TEXT NOT NULL,
+                    average_cycle_profit TEXT NOT NULL,
+                    compensation_closes INTEGER NOT NULL,
+                    total_trades INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )

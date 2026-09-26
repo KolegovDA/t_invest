@@ -103,7 +103,145 @@ class SandboxTradingSession:
             placed_orders
         )
 
+        dropped_commands = (
+            self
+            .live_order_manager
+            .last_dropped_commands
+        )
+
+        if dropped_commands:
+            #
+            # Движок уже перевёл уровни
+            # в ORDER_PLACED, но заявки
+            # брокеру не ушли — откатываем,
+            # иначе уровень зависнет
+            # навсегда.
+            #
+            self._revert_levels_for_dropped_commands(
+                commands=(
+                    dropped_commands
+                ),
+            )
+
         return placed_orders
+
+    def _revert_levels_for_dropped_commands(
+        self,
+        commands: list,
+    ) -> None:
+        for command in commands:
+            if isinstance(
+                command,
+                PlaceBuyLimitCommand,
+            ):
+                level = (
+                    self
+                    .grid_engine
+                    ._get_level_by_index(
+                        command
+                        .level_index
+                    )
+                )
+
+                if (
+                    level is not None
+                    and level.status
+                    == GridLevelStatus
+                    .ORDER_PLACED
+                ):
+                    level.status = (
+                        GridLevelStatus
+                        .WAITING_PRICE
+                    )
+
+                    level.trailing_entry = (
+                        None
+                    )
+
+                print(
+                    "BUY ORDER DROPPED, "
+                    "LEVEL REVERTED:",
+                    command.instrument_id,
+                    "level=",
+                    command.level_index,
+                )
+
+                continue
+
+            if isinstance(
+                command,
+                PlaceSellLimitCommand,
+            ):
+                level = (
+                    self
+                    .grid_engine
+                    ._get_level_by_index(
+                        command
+                        .level_index
+                    )
+                )
+
+                if (
+                    level is not None
+                    and level.status
+                    == GridLevelStatus
+                    .ORDER_PLACED
+                ):
+                    if (
+                        command
+                        .level_index
+                        in self
+                        .grid_engine
+                        .open_positions
+                    ):
+                        level.status = (
+                            GridLevelStatus
+                            .POSITION_OPENED
+                        )
+
+                    else:
+                        level.status = (
+                            GridLevelStatus
+                            .WAITING_PRICE
+                        )
+
+                print(
+                    "SELL ORDER DROPPED, "
+                    "LEVEL REVERTED:",
+                    command.instrument_id,
+                    "level=",
+                    command.level_index,
+                )
+
+                continue
+
+            if isinstance(
+                command,
+                PlaceSellAllLimitCommand,
+            ):
+                #
+                # Компенсация не отправлена:
+                # разрешаем повторную попытку.
+                #
+                risk_manager = (
+                    self
+                    .grid_engine
+                    .risk_manager
+                )
+
+                if hasattr(
+                    risk_manager,
+                    "compensation_order_pending",
+                ):
+                    risk_manager\
+                        .compensation_order_pending = (
+                            False
+                        )
+
+                print(
+                    "SELL ALL ORDER DROPPED:",
+                    command.instrument_id,
+                )
 
     def poll_executions(
         self,

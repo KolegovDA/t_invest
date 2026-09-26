@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from application.sandbox_session_registry import (
     sandbox_session_registry,
 )
+import web.api as api_module
+
 from web.api import (
     app,
     session_registry,
@@ -46,7 +48,10 @@ def test_version_endpoint_returns_version() -> None:
 
     assert (
         response.json()["version"]
-        == "1.1.0-dev"
+        == (
+            api_module
+            .APP_VERSION
+        )
     )
 
 

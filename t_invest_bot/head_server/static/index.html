@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESM Head Server</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #f3f4f6;
+        margin: 0;
+        padding: 24px;
+        color: #111827;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+    .card {
+        background: #fff; border-radius: 14px; padding: 20px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.06); margin-bottom: 20px;
+    }
+    input {
+        display: block; width: 100%; max-width: 320px;
+        padding: 10px; margin: 6px 0 12px;
+        border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;
+    }
+    button {
+        padding: 10px 18px; border: none; border-radius: 8px;
+        background: #2563eb; color: #fff; font-weight: 700;
+        cursor: pointer; font-size: 14px;
+    }
+    button.secondary { background: #e5e7eb; color: #111827; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    th { color: #6b7280; font-weight: 600; white-space: nowrap; }
+    .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .green { color: #15803d; }
+    .red { color: #b91c1c; }
+    .muted { color: #9ca3af; }
+    .tag {
+        display: inline-block; background: #eff6ff; color: #1d4ed8;
+        border-radius: 6px; padding: 1px 7px; margin: 1px 2px; font-size: 12px;
+    }
+    #error { color: #b91c1c; font-size: 13px; margin-top: 8px; }
+    pre {
+        background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+        padding: 12px; font-size: 12px; overflow: auto; max-height: 420px;
+    }
+    .hidden { display: none; }
+</style>
+</head>
+<body>
+    <h1>ESM Head Server</h1>
+    <div class="sub">Головной сервер: клиенты, счета, платформы, прибыль. v<span id="version">—</span></div>
+
+    <div id="loginCard" class="card">
+        <b>Вход для администратора</b>
+        <input id="adminLogin" placeholder="Логин" value="admin">
+        <input id="adminPassword" type="password" placeholder="Пароль">
+        <button onclick="login()">Войти</button>
+        <div id="error"></div>
+    </div>
+
+    <div id="main" class="hidden">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <b>Клиенты</b>
+                <button class="secondary" onclick="loadClients()">Обновить</button>
+            </div>
+            <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>ФИО</th>
+                        <th>Логин</th>
+                        <th>Телефон</th>
+                        <th>Email</th>
+                        <th>Дата рожд.</th>
+                        <th>Платформы</th>
+                        <th>Счета</th>
+                        <th>Инструменты</th>
+                        <th>Нач. баланс</th>
+                        <th>Тек. баланс</th>
+                        <th>Прибыль</th>
+                        <th>ROE</th>
+                        <th>Синк</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="clientsBody"></tbody>
+            </table>
+            </div>
+        </div>
+
+        <div id="detailCard" class="card hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <b id="detailTitle">История синхронизаций</b>
+                <button class="secondary" onclick="hideDetail()">Закрыть</button>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+<script>
+async function api(path, options) {
+    const response = await fetch(path, options);
+    if (!response.ok) {
+        let message = "HTTP " + response.status;
+        try {
+            const data = await response.json();
+            if (data && data.detail) message = data.detail;
+        } catch (e) {}
+        throw new Error(message);
+    }
+    return response.json();
+}
+
+function fmt(value, suffix) {
+    if (value === null || value === undefined) return "—";
+    const num = Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return num.toLocaleString("ru-RU", {maximumFractionDigits: 2}) + (suffix || "");
+}
+
+function esc(text) {
+    return String(text ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+}
+
+async function login() {
+    document.getElementById("error").textContent = "";
+    try {
+        await api("/head/api/admin/login", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                login: document.getElementById("adminLogin").value,
+                password: document.getElementById("adminPassword").value
+            })
+        });
+        showMain();
+    } catch (e) {
+        document.getElementById("error").textContent = e.message;
+    }
+}
+
+async function showMain() {
+    document.getElementById("loginCard").classList.add("hidden");
+    document.getElementById("main").classList.remove("hidden");
+    const health = await api("/head/api/health");
+    document.getElementById("version").textContent = health.version;
+    await loadClients();
+}
+
+async function loadClients() {
+    const data = await api("/head/api/admin/clients");
+    const body = document.getElementById("clientsBody");
+    body.innerHTML = "";
+    for (const client of data.clients) {
+        const tr = document.createElement("tr");
+        const platforms = (client.platforms || []).map(p => `<span class="tag">${esc(p)}</span>`).join(" ") || "—";
+        const accounts = (client.account_ids || []).map(a => `<span class="tag">${esc(a)}</span>`).join(" ") || "—";
+        const instruments = (client.instruments || []).map(i => `<span class="tag">${esc(i)}</span>`).join(" ") || "—";
+        const profit = Number(client.total_profit || 0);
+        tr.innerHTML = `
+            <td class="num">${client.id}</td>
+            <td>${esc(client.full_name)}</td>
+            <td>${esc(client.login)}</td>
+            <td class="num">${esc(client.phone)}</td>
+            <td>${esc(client.email)}</td>
+            <td class="num">${esc(client.birth_date)}</td>
+            <td>${platforms}</td>
+            <td>${accounts}</td>
+            <td>${instruments}</td>
+            <td class="num">${fmt(client.initial_balance, " ₽")}</td>
+            <td class="num"><b>${fmt(client.current_balance, " ₽")}</b></td>
+            <td class="num ${profit >= 0 ? "green" : "red"}">${fmt(client.total_profit, " ₽")}</td>
+            <td class="num">${fmt(client.roe_percent, "%")}</td>
+            <td class="muted num">${client.last_sync_at ? new Date(client.last_sync_at).toLocaleString("ru-RU") : "нет"}</td>
+            <td><button class="secondary" onclick="showDetail(${client.id}, '${esc(client.login)}')">Синки</button></td>
+        `;
+        body.appendChild(tr);
+    }
+}
+
+async function showDetail(clientId, login) {
+    const data = await api(`/head/api/admin/clients/${clientId}/syncs`);
+    document.getElementById("detailTitle").textContent = "История синхронизаций: " + login;
+    const content = document.getElementById("detailContent");
+    content.innerHTML = "";
+    for (const sync of data.syncs) {
+        const block = document.createElement("div");
+        block.style.marginBottom = "12px";
+        const time = new Date(sync.created_at).toLocaleString("ru-RU");
+        block.innerHTML = `<div class="muted" style="margin:6px 0 4px;">${time}</div><pre>${esc(JSON.stringify(sync.payload, null, 2))}</pre>`;
+        content.appendChild(block);
+    }
+    if (!data.syncs.length) {
+        content.innerHTML = '<div class="muted">Синхронизаций ещё не было.</div>';
+    }
+    document.getElementById("detailCard").classList.remove("hidden");
+}
+
+function hideDetail() {
+    document.getElementById("detailCard").classList.add("hidden");
+}
+
+(async () => {
+    try {
+        await api("/head/api/admin/clients");
+        showMain();
+    } catch (e) {
+        // не авторизован — покажем форму входа
+    }
+})();
+</script>
+</body>
+</html>

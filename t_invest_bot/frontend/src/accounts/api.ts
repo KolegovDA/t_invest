@@ -2,8 +2,12 @@ import type {
     BrokerConnectionResult,
     BrokerInfo,
     BrokerPortfolio,
+    BrokerType,
     CreateTradingAccountPayload,
+    DiscoverBrokerAccountsResponse,
+    MoneyMovementsResponse,
     TradingAccount,
+    TradingAccountMode,
     UpdateTradingAccountPayload,
 } from "./types"
 
@@ -183,12 +187,91 @@ export async function testTradingAccount(
 }
 
 
+export async function discoverBrokerAccounts(
+    payload: {
+        broker: BrokerType
+        credentials: Record<string, string>
+        mode: TradingAccountMode
+    }
+): Promise<DiscoverBrokerAccountsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/discover`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify(
+                        payload
+                    ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
 export async function getTradingAccountPortfolio(
     accountId: string
 ): Promise<BrokerPortfolio> {
     const response =
         await fetch(
             `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/portfolio`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getMoneyMovements(
+    accountId: string
+): Promise<MoneyMovementsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/movements`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function addMoneyMovement(
+    accountId: string,
+
+    amount: string,
+
+    note: string
+): Promise<MoneyMovementsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/movements`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        amount,
+                        note,
+                    }),
+            }
         )
 
     return parseJsonResponse(

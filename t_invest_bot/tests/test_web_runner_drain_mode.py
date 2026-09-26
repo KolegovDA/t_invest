@@ -110,3 +110,62 @@ def test_registry_can_request_drain_by_ticker() -> None:
 
     assert affected == 1
     assert runner.lifecycle_status == "DRAINING"
+
+
+def test_resume_returns_draining_runner_to_running() -> None:
+    runner, session = create_runner(
+        positions_count=1,
+    )
+
+    runner.request_drain()
+
+    assert runner.lifecycle_status == "DRAINING"
+
+    runner.request_resume()
+
+    assert runner.is_running is True
+    assert runner.lifecycle_status == "RUNNING"
+    assert session.stopped is False
+
+
+def test_resume_ignores_running_runner() -> None:
+    runner, _ = create_runner(
+        positions_count=1,
+    )
+
+    runner.request_resume()
+
+    assert runner.lifecycle_status == "RUNNING"
+
+
+def test_registry_can_request_resume_by_ticker() -> None:
+    runner, _ = create_runner(
+        positions_count=1,
+    )
+
+    runner.request_drain()
+
+    registry = WebRunnerRegistry()
+    registry.register(runner)
+
+    affected = registry.resume_by_ticker(
+        "SBER"
+    )
+
+    assert affected == 1
+    assert runner.lifecycle_status == "RUNNING"
+
+
+def test_resume_does_not_revive_stopped_runner() -> None:
+    runner, _ = create_runner(
+        positions_count=0,
+    )
+
+    runner.request_drain()
+
+    assert runner.is_running is False
+
+    runner.request_resume()
+
+    assert runner.is_running is False
+    assert runner.lifecycle_status == "STOPPED"

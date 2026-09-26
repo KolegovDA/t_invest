@@ -1,10 +1,9 @@
 export type AppTab =
     | "home"
     | "sessions"
-    | "instruments"
     | "accounts"
-    | "api"
     | "settings"
+    | "api"
 
 
 type Props = {
@@ -29,24 +28,19 @@ const items: {
             label: "Сессии",
         },
         {
-            tab: "instruments",
-            icon: "≋",
-            label: "Инструменты",
-        },
-        {
             tab: "accounts",
             icon: "▣",
             label: "Счета",
         },
         {
-            tab: "api",
-            icon: "↕",
-            label: "API",
-        },
-        {
             tab: "settings",
             icon: "⚙",
             label: "Настройки",
+        },
+        {
+            tab: "api",
+            icon: "↕",
+            label: "API",
         },
     ]
 
@@ -82,7 +76,7 @@ export function BottomNavigation({
                     display: "grid",
 
                     gridTemplateColumns:
-                        "repeat(6, 1fr)",
+                        "repeat(5, 1fr)",
 
                     paddingBottom:
                         "env(safe-area-inset-bottom)",

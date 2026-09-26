@@ -7,7 +7,10 @@ from t_tech.invest import (
     OrderType,
 )
 
-from domain.order_execution import PlacedOrder
+from domain.order_execution import (
+    BrokerActiveOrder,
+    PlacedOrder,
+)
 from infrastructure.tinvest.client_factory import (
     TInvestClientFactory,
 )
@@ -62,6 +65,152 @@ class TInvestLiveOrderExecutor:
                 return True
 
         return False
+
+    def list_active_orders(
+        self,
+        account_id: str,
+    ) -> list[BrokerActiveOrder]:
+        """
+        Все активные заявки счёта.
+
+        Источник истины для сверки
+        фантомных ORDER_PLACED уровней.
+        """
+
+        with (
+            self.client_factory.create_live_client()
+            as client
+        ):
+            response = client.orders.get_orders(
+                account_id=account_id,
+            )
+
+        result: list[
+            BrokerActiveOrder
+        ] = []
+
+        for order in response.orders:
+            order_id = str(
+                getattr(
+                    order,
+                    "order_id",
+                    "",
+                )
+                or ""
+            )
+
+            instrument_id = str(
+                getattr(
+                    order,
+                    "instrument_uid",
+                    "",
+                )
+                or getattr(
+                    order,
+                    "figi",
+                    "",
+                )
+            )
+
+            if (
+                not order_id
+                or not instrument_id
+            ):
+                continue
+
+            direction = (
+                self
+                ._normalize_direction(
+                    getattr(
+                        order,
+                        "direction",
+                        None,
+                    )
+                )
+            )
+
+            if direction is None:
+                continue
+
+            quantity_lots = int(
+                getattr(
+                    order,
+                    "lots_requested",
+                    0,
+                )
+                or 0
+            )
+
+            price_quotation = (
+                getattr(
+                    order,
+                    "initial_order_price",
+                    None,
+                )
+                or getattr(
+                    order,
+                    "executed_order_price",
+                    None,
+                )
+            )
+
+            price = (
+                self
+                .quotation_mapper
+                .quotation_to_decimal(
+                    price_quotation
+                )
+
+                if (
+                    price_quotation
+                    is not None
+                )
+
+                else Decimal("0")
+            )
+
+            result.append(
+                BrokerActiveOrder(
+                    order_id=(
+                        order_id
+                    ),
+                    instrument_id=(
+                        instrument_id
+                    ),
+                    direction=(
+                        direction
+                    ),
+                    quantity_lots=(
+                        quantity_lots
+                    ),
+                    price=price,
+                )
+            )
+
+        return result
+
+    @staticmethod
+    def _normalize_direction(
+        raw_direction,
+    ) -> str | None:
+        if raw_direction is None:
+            return None
+
+        name = str(
+            getattr(
+                raw_direction,
+                "name",
+                raw_direction,
+            )
+        )
+
+        if "SELL" in name:
+            return "SELL"
+
+        if "BUY" in name:
+            return "BUY"
+
+        return None
 
     def place_limit_buy(
         self,

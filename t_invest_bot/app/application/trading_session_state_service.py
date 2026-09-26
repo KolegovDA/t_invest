@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from application.grid_engine_state_mapper import (
     GridEngineStateMapper,
@@ -28,6 +29,16 @@ class TradingSessionStateService:
     mapper: GridEngineStateMapper = (
         GridEngineStateMapper()
     )
+
+    #
+    # Журнал операций v1.2:
+    # сюда падают события TRAILING —
+    # история движения траллов
+    # для графика (п. 2 плана).
+    #
+    operation_log: (
+        Any | None
+    ) = None
 
     def build_state(
         self,
@@ -376,6 +387,12 @@ class TradingSessionStateService:
         status: str = "RUNNING",
         initial_deposit_override: Decimal | None = None,
     ) -> TradingSessionState:
+        previous_state = (
+            self.repository.get(
+                session_id
+            )
+        )
+
         state = self.build_state(
             context=context,
 
@@ -395,7 +412,151 @@ class TradingSessionStateService:
             state
         )
 
+        self._record_trailing_moves(
+            previous_state=(
+                previous_state
+            ),
+
+            state=state,
+        )
+
         return state
+
+    def _record_trailing_moves(
+        self,
+        previous_state: (
+            TradingSessionState | None
+        ),
+
+        state: TradingSessionState,
+    ) -> None:
+        """
+        История движения траллов
+        (п. 2 плана v1.2): каждый
+        новый максимум trailing_exit
+        (highest_price — фактическая
+        линия тралла) пишется в
+        журнал операций как TRAILING
+        и затем показывается точками
+        на графике сессии.
+
+        Первый snapshot сессии —
+        база без событий.
+        """
+
+        if (
+            self.operation_log
+            is None
+        ):
+            return
+
+        if (
+            previous_state
+            is None
+        ):
+            return
+
+        previous_trails = {}
+
+        for instrument in (
+            previous_state
+            .instruments
+        ):
+            for position in (
+                instrument
+                .open_positions
+            ):
+                if (
+                    position
+                    .trailing_exit_highest_price
+                    is None
+                ):
+                    continue
+
+                previous_trails[
+                    (
+                        instrument
+                        .instrument_uid,
+
+                        position
+                        .level_index,
+                    )
+                ] = (
+                    position
+                    .trailing_exit_highest_price
+                )
+
+        for instrument in (
+            state
+            .instruments
+        ):
+            for position in (
+                instrument
+                .open_positions
+            ):
+                trail = (
+                    position
+                    .trailing_exit_highest_price
+                )
+
+                if (
+                    trail
+                    is None
+                ):
+                    continue
+
+                previous_trail = (
+                    previous_trails
+                    .get(
+                        (
+                            instrument
+                            .instrument_uid,
+
+                            position
+                            .level_index,
+                        )
+                    )
+                )
+
+                if (
+                    previous_trail
+                    is not None
+
+                    and (
+                        previous_trail
+                        >= trail
+                    )
+                ):
+                    continue
+
+                self.operation_log.record(
+                    event_type=(
+                        "TRAILING"
+                    ),
+
+                    trading_account_id=(
+                        state
+                        .trading_account_id
+                    ),
+
+                    instrument_id=(
+                        instrument
+                        .instrument_uid
+                    ),
+
+                    ticker=(
+                        instrument
+                        .ticker
+                    ),
+
+                    details=(
+                        "уровень="
+                        f"{position.level_index} "
+
+                        "цена="
+                        f"{trail}"
+                    ),
+                )
 
     def restore(
         self,

@@ -2,11 +2,21 @@ import type {
     ActiveSession,
     ApiUsage,
     Dashboard,
+    GridSelectionPlan,
     Instrument,
     InstrumentSearchResult,
+    InstrumentSelectionPreview,
+    KnowledgeInstrumentsResponse,
     LiveStartValidationResult,
     LiveStatus,
+    OperationsResponse,
+    PhantomsResponse,
+    PhantomResolveItemRequest,
+    PhantomResolveResponse,
+    ReconciliationEventsResponse,
     RunnerStatus,
+    SelectionOptions,
+    SessionChartResponse,
     StartPlan,
     StartSandboxResult,
 } from "./types"
@@ -58,11 +68,205 @@ export async function getDashboard():
 }
 
 
+export async function getOperations(
+    limit: number = 100
+): Promise<OperationsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/operations?limit=${limit}`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getSelectionOptions():
+    Promise<SelectionOptions> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instrument-selection/options`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function previewIndexSelection(
+    request: {
+        index_id:
+        string
+
+        capital:
+        string
+
+        quantity:
+        number
+
+        trading_account_id?:
+        string | null
+    }
+): Promise<GridSelectionPlan> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instrument-selection/index`,
+            {
+                method:
+                "POST",
+
+                headers: {
+                    "Content-Type":
+                    "application/json",
+                },
+
+                body:
+                JSON.stringify(
+                    request
+                ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function previewAutoSelection(
+    request: {
+        capital:
+        string
+
+        quantity:
+        number
+
+        max_price?:
+        string | null
+
+        max_instruments:
+        number
+
+        desired_levels?:
+        number
+
+        min_levels?:
+        number
+
+        trading_account_id?:
+        string | null
+    }
+): Promise<GridSelectionPlan> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instrument-selection/auto`,
+            {
+                method:
+                "POST",
+
+                headers: {
+                    "Content-Type":
+                    "application/json",
+                },
+
+                body:
+                JSON.stringify(
+                    request
+                ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
 export async function getApiUsage():
     Promise<ApiUsage> {
     const response =
         await fetch(
             `${API_BASE_URL}/api/api-usage`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getReconciliationEvents(
+    limit: number = 50
+): Promise<ReconciliationEventsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/reconciliation/events?limit=${limit}`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function previewInstrumentSelection(
+    request: {
+        capital:
+        string
+
+        max_instruments:
+        number
+
+        min_confidence:
+        string
+
+        allow_high_risk:
+        boolean
+
+        candidates: {
+            ticker:
+            string
+
+            risk_value:
+            string
+
+            confidence_value:
+            string
+        }[]
+    }
+): Promise<InstrumentSelectionPreview> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/instrument-selection/preview`,
+            {
+                method:
+                "POST",
+
+                headers: {
+                    "Content-Type":
+                    "application/json",
+                },
+
+                body:
+                JSON.stringify(
+                    request
+                ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getKnowledgeInstruments():
+    Promise<KnowledgeInstrumentsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/knowledge/instruments`
         )
 
     return parseJsonResponse(
@@ -203,7 +407,31 @@ export async function drainSession(
         await fetch(
             `${API_BASE_URL}/api/drain-session/${encodeURIComponent(ticker)}`,
             {
-                method: "POST",
+                method:
+                "POST",
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function resumeSession(
+    ticker: string
+): Promise<{
+    ticker: string
+    status: string
+    runners_affected: number
+    message: string
+}> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/resume-session/${encodeURIComponent(ticker)}`,
+            {
+                method:
+                "POST",
             }
         )
 
@@ -454,6 +682,63 @@ export async function getHealth():
     const response =
         await fetch(
             `${API_BASE_URL}/api/health`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getPhantoms():
+    Promise<PhantomsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/phantoms`
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function resolvePhantoms(
+    items: PhantomResolveItemRequest[]
+): Promise<PhantomResolveResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/phantoms/resolve`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        items,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getSessionChart(
+    ticker: string,
+
+    days: number = 60
+): Promise<SessionChartResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/session/${encodeURIComponent(ticker)}/chart?days=${days}`
         )
 
     return parseJsonResponse(

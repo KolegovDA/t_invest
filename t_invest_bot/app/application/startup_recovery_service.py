@@ -50,6 +50,10 @@ class StartupRecoveryService:
 
     api_usage_repository: object
 
+    reconciliation_journal: (
+        object | None
+    ) = None
+
     runner_registry: (
         WebRunnerRegistry
     )
@@ -291,6 +295,11 @@ class StartupRecoveryService:
             api_usage_repository=(
                 self
                 .api_usage_repository
+            ),
+
+            reconciliation_journal=(
+                self
+                .reconciliation_journal
             ),
 
             polling_interval_seconds=(

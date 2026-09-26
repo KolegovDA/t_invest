@@ -13,6 +13,9 @@ from threading import (
 from time import sleep
 from typing import Any, Callable
 
+from application.broker_position_reconciler import (
+    BrokerPositionReconciler,
+)
 from application.sandbox_session_registry import (
     SandboxSessionRegistry,
     sandbox_session_registry,
@@ -57,6 +60,16 @@ class WebRunnerService:
     polling_interval_seconds: int = 10
 
     #
+    # Периодическая сверка open_positions
+    # с позициями брокера: первый тик
+    # и далее раз в час при интервале
+    # 10 секунд.
+    #
+    position_reconcile_interval_ticks: (
+        int
+    ) = 360
+
+    #
     # Persistence 1.1
     #
     # Пока параметры опциональные,
@@ -65,6 +78,14 @@ class WebRunnerService:
     #
     state_service: (
         TradingSessionStateService | None
+    ) = None
+
+    #
+    # Журнал сверки с брокером
+    # (v1.1 стабилизация).
+    #
+    reconciliation_journal: (
+        Any | None
     ) = None
 
     session_id: str | None = None
@@ -83,7 +104,29 @@ class WebRunnerService:
         Callable[["WebRunnerService"], None] | None
     ) = None
 
+    #
+    # Ребаланс авторежима v1.1:
+    # после полного закрытия сетки
+    # по инструменту — замена на
+    # более волатильную акцию и
+    # добор активов до лимита.
+    #
+    auto_rebalance: Any | None = None
+
+    #
+    # Журнал операций v1.2:
+    # протоколирование выставленных
+    # ордеров для истории на Главной.
+    #
+    operation_log: Any | None = None
+
     is_running: bool = False
+
+    _had_open_positions: dict = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
 
     thread: Thread | None = field(
         default=None,
@@ -231,6 +274,30 @@ class WebRunnerService:
             weight=1,
         )
 
+        #
+        # Сверка фантомных ORDER_PLACED
+        # уровней с реальными заявками
+        # брокера ДО новых команд:
+        # усыновление живых заявок,
+        # откат зависших уровней.
+        #
+        self._reconcile_broker_orders_safe()
+
+        if (
+            self
+            .position_reconcile_interval_ticks
+            > 0
+
+            and (
+                self.ticks_count
+                % (
+                    self
+                    .position_reconcile_interval_ticks
+                )
+            ) == 0
+        ):
+            self._reconcile_broker_positions_safe()
+
         result = (
             WebRunnerTickResult()
         )
@@ -326,6 +393,33 @@ class WebRunnerService:
                     ticker=ticker,
                 )
 
+                if (
+                    self
+                    .operation_log
+                    is not None
+                ):
+                    for order in placed_orders:
+                        self\
+                            .operation_log\
+                            .record_order_placed(
+                                trading_account_id=(
+                                    self
+                                    .trading_account_id
+                                ),
+
+                                instrument_id=(
+                                    instrument_id
+                                ),
+
+                                ticker=(
+                                    ticker
+                                ),
+
+                                order=(
+                                    order
+                                ),
+                            )
+
             result.prices_checked += 1
 
             result.orders_placed += (
@@ -391,6 +485,13 @@ class WebRunnerService:
         )
 
         #
+        # Ребаланс авторежима v1.1:
+        # полное закрытие сетки
+        # по инструменту.
+        #
+        self._maybe_auto_rebalance()
+
+        #
         # КЛЮЧЕВОЙ МОМЕНТ 1.1:
         #
         # После полного завершения тика
@@ -446,6 +547,208 @@ class WebRunnerService:
         self._save_state(
             status="DRAINING",
         )
+
+    def request_resume(self) -> None:
+        """
+        Отменить сушку: вернуть runner
+        в режим RUNNING до закрытия
+        последних позиций.
+
+        Работает только пока runner жив
+        и находится в DRAINING.
+        """
+        if not self.is_running:
+            return
+
+        if (
+            self
+            .lifecycle_status
+            != "DRAINING"
+        ):
+            return
+
+        self.lifecycle_status = (
+            "RUNNING"
+        )
+
+        self._save_state(
+            status="RUNNING",
+        )
+
+    def _maybe_auto_rebalance(
+        self,
+    ) -> None:
+        service = (
+            self
+            .auto_rebalance
+        )
+
+        if (
+            service is None
+        ):
+            return
+
+        if (
+            self
+            .lifecycle_status
+            == "DRAINING"
+        ):
+            return
+
+        sessions = getattr(
+            getattr(
+                self
+                .context,
+
+                "session",
+            ),
+
+            "sessions",
+
+            None,
+        )
+
+        if not sessions:
+            return
+
+        context = (
+            self
+            .context
+        )
+
+        for (
+            instrument_id,
+
+            trading_session,
+        ) in list(
+            sessions
+            .items()
+        ):
+            engine = getattr(
+                trading_session,
+
+                "grid_engine",
+
+                None,
+            )
+
+            positions = getattr(
+                engine,
+
+                "open_positions",
+
+                None,
+            )
+
+            count = (
+                len(
+                    positions
+                )
+
+                if (
+                    positions
+                    is not None
+                )
+
+                else 0
+            )
+
+            had = (
+                self
+                ._had_open_positions
+                .get(
+                    instrument_id,
+
+                    0,
+                )
+            )
+
+            self\
+                ._had_open_positions[
+                    instrument_id
+                ] = count
+
+            if (
+                had <= 0
+                or (
+                    count
+                    != 0
+                )
+            ):
+                continue
+
+            ticker = (
+                context
+                .tickers_by_instrument_id
+                .get(
+                    instrument_id
+                )
+            )
+
+            if not ticker:
+                continue
+
+            engine_config = getattr(
+                engine,
+
+                "config",
+
+                None,
+            )
+
+            closed_quantity = (
+                getattr(
+                    engine_config,
+
+                    "quantity",
+
+                    1,
+                )
+
+                or 1
+            )
+
+            try:
+                service\
+                    .handle_grid_closed(
+                        context=(
+                            context
+                        ),
+
+                        closed_ticker=(
+                            ticker
+                        ),
+
+                        closed_quantity=(
+                            closed_quantity
+                        ),
+
+                        api_usage_repository=(
+                            self
+                            .api_usage_repository
+                        ),
+
+                        registry=(
+                            self
+                            .registry
+                        ),
+                    )
+
+            except Exception as error:
+                self\
+                    .last_error = (
+                        repr(
+                            error
+                        )
+                    )
+
+            self\
+                ._had_open_positions\
+                .pop(
+                    instrument_id,
+
+                    None,
+                )
 
     def _get_open_positions_count(self) -> int:
         total = 0
@@ -551,6 +854,194 @@ class WebRunnerService:
             sleep(
                 self.polling_interval_seconds,
             )
+
+    def _reconcile_broker_orders_safe(
+        self,
+    ) -> None:
+        reconcile = getattr(
+            self.context.session,
+            "reconcile_broker_orders",
+            None,
+        )
+
+        if reconcile is None:
+            return
+
+        try:
+            results = reconcile()
+
+            for result in results:
+                if not result.has_changes:
+                    continue
+
+                print(
+                    "ORDER RECONCILE:",
+                    result.instrument_id,
+                    "adopted=",
+                    result.adopted_orders,
+                    "reverted_entry=",
+                    result.reverted_entry_levels,
+                    "reverted_exit=",
+                    result.reverted_exit_levels,
+                    "unknown_broker_orders=",
+                    result.unknown_broker_orders,
+                )
+
+                try:
+                    self\
+                        .api_usage_repository\
+                        .record(
+                            source="runner",
+                            operation=(
+                                "order_reconcile"
+                            ),
+                            weight=1,
+                        )
+                except Exception:
+                    pass
+
+                if (
+                    self
+                    .reconciliation_journal
+                    is not None
+                ):
+                    self\
+                        .reconciliation_journal\
+                        .record_order_result(
+                            trading_account_id=(
+                                self
+                                .trading_account_id
+                            ),
+
+                            result=result,
+                        )
+
+        except Exception as error:
+            #
+            # Ошибка сверки не должна
+            # останавливать торговый тик.
+            #
+            print(
+                "BROKER ORDER RECONCILE "
+                "ERROR:",
+                repr(error),
+            )
+
+            if (
+                self
+                .reconciliation_journal
+                is not None
+            ):
+                self\
+                    .reconciliation_journal\
+                    .record_error(
+                        trading_account_id=(
+                            self
+                            .trading_account_id
+                        ),
+
+                        stage="orders",
+
+                        error=error,
+                    )
+
+    def _reconcile_broker_positions_safe(
+        self,
+    ) -> None:
+        position_provider = getattr(
+            self.context,
+            "position_provider",
+            None,
+        )
+
+        if position_provider is None:
+            return
+
+        try:
+            report = (
+                BrokerPositionReconciler()
+                .reconcile(
+                    sessions=(
+                        self
+                        .context
+                        .session
+                        .sessions
+                    ),
+
+                    account_id=(
+                        self
+                        .context
+                        .account_id
+                    ),
+
+                    position_provider=(
+                        position_provider
+                    ),
+                )
+            )
+
+            if (
+                report.instruments_cleared
+                or report
+                .mismatch_warnings
+            ):
+                try:
+                    self\
+                        .api_usage_repository\
+                        .record(
+                            source="runner",
+                            operation=(
+                                "position_reconcile"
+                            ),
+                            weight=1,
+                        )
+                except Exception:
+                    pass
+
+                if (
+                    self
+                    .reconciliation_journal
+                    is not None
+                ):
+                    self\
+                        .reconciliation_journal\
+                        .record_position_report(
+                            trading_account_id=(
+                                self
+                                .trading_account_id
+                            ),
+
+                            report=report,
+                        )
+
+        except Exception as error:
+            #
+            # Ошибка сверки не должна
+            # останавливать торговый тик.
+            #
+            print(
+                "BROKER POSITION RECONCILE "
+                "ERROR:",
+                repr(error),
+            )
+
+            if (
+                self
+                .reconciliation_journal
+                is not None
+            ):
+                self\
+                    .reconciliation_journal\
+                    .record_error(
+                        trading_account_id=(
+                            self
+                            .trading_account_id
+                        ),
+
+                        stage="positions",
+
+                        error=error,
+                    )
 
     def _save_state(
         self,

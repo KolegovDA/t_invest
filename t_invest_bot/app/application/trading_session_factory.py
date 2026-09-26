@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from application.grid_session_config import GridSessionConfig
+from application.knowledge_engine import KnowledgeEngine
 from application.portfolio_manager import PortfolioManager
 from application.sandbox_trading_session import SandboxTradingSession
 from application.trade_capital_service import TradeCapitalService
@@ -60,6 +61,10 @@ class SandboxTradingSessionContext:
 @dataclass(slots=True)
 class TradingSessionFactory:
     settings: Settings
+
+    knowledge_engine: (
+        KnowledgeEngine | None
+    ) = None
 
     def create_sandbox_session(
         self,
@@ -184,6 +189,9 @@ class TradingSessionFactory:
             execution_event_mapper=OrderExecutionEventMapper(),
             trade_event_handler=TradeEventHandler(
                 portfolio_manager=portfolio_manager,
+                knowledge_engine=(
+                    self.knowledge_engine
+                ),
             ),
         )
 

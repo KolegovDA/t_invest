@@ -208,6 +208,31 @@ class TradingStateRepository:
             for row in rows
         ]
 
+    def get_all(
+        self,
+    ) -> list[
+        TradingSessionState
+    ]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload_json
+                FROM trading_state_snapshots
+                ORDER BY updated_at DESC
+                """
+            ).fetchall()
+
+        return [
+            TradingSessionState.from_dict(
+                json.loads(
+                    row[
+                        "payload_json"
+                    ]
+                )
+            )
+            for row in rows
+        ]
+
     def delete(
         self,
         session_id: str,

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from application.multi_instrument_sandbox_session import (
     MultiInstrumentSandboxSession,
@@ -8,6 +9,9 @@ from application.portfolio_manager import PortfolioManager
 from application.trade_capital_service import TradeCapitalService
 from infrastructure.tinvest.last_price_provider import (
     TInvestLastPriceProvider,
+)
+from infrastructure.tinvest.live_position_provider import (
+    TInvestLivePositionProvider,
 )
 from infrastructure.tinvest.sandbox_account_provider import (
     TInvestSandboxAccountProvider,
@@ -33,6 +37,19 @@ class MultiInstrumentSessionContext:
 
     is_live: bool = False
     close_account_on_close: bool = False
+
+    # Только для LIVE: периодическая
+    # сверка open_positions с брокером.
+    position_provider: (
+        TInvestLivePositionProvider | None
+    ) = None
+
+    # Для добавления инструментов
+    # в работающую сессию (ребаланс
+    # авторежима v1.1).
+    order_executor: Any | None = None
+
+    order_state_provider: Any | None = None
 
     @property
     def account_id(self) -> str:

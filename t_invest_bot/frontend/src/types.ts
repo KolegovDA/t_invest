@@ -6,6 +6,221 @@ export type BrokerType =
     | "other"
 
 
+export interface ReconciliationEvent {
+    created_at:
+    string
+
+    trading_account_id:
+    string | null
+
+    instrument_id:
+    string | null
+
+    event_type:
+    string
+
+    details:
+    string
+}
+
+
+export interface ReconciliationEventsResponse {
+    events:
+    ReconciliationEvent[]
+
+    counts_by_type:
+    Record<string, number>
+}
+
+
+export interface InstrumentSelectionItem {
+    ticker:
+    string
+
+    instrument_uid:
+    string
+
+    name:
+    string
+
+    weight_percent:
+    string
+
+    allocated_capital:
+    string
+
+    confidence_value:
+    string | null
+
+    risk_band:
+    string | null
+}
+
+
+export interface InstrumentSelectionPreview {
+    capital:
+    string
+
+    selections:
+    InstrumentSelectionItem[]
+
+    rejected: {
+        ticker:
+        string
+
+        reason:
+        string
+    }[]
+}
+
+
+export interface GridSelectionItem {
+    ticker:
+    string
+
+    instrument_uid:
+    string
+
+    name:
+    string
+
+    currency:
+    string
+
+    price:
+    string
+
+    lot_size:
+    number
+
+    quantity:
+    number
+
+    levels:
+    number
+
+    volatility_percent:
+    string
+
+    risk_band:
+    string
+
+    estimated_cost:
+    string
+
+    allocated_capital:
+    string
+}
+
+
+export interface GridSelectionPlan {
+    mode:
+    string
+
+    index_id:
+    string | null
+
+    capital:
+    string
+
+    selections:
+    GridSelectionItem[]
+
+    rejected: {
+        ticker:
+        string
+
+        reason:
+        string
+    }[]
+
+    spent_capital:
+    string
+
+    remaining_capital:
+    string
+}
+
+
+export interface IndexPresetInfo {
+    index_id:
+    string
+
+    name:
+    string
+
+    description:
+    string
+
+    tickers_count:
+    number
+
+    tickers:
+    string[]
+}
+
+
+export interface SelectionOptions {
+    indexes:
+    IndexPresetInfo[]
+
+    auto: {
+        universe_tickers_count:
+        number
+    }
+
+    defaults: {
+        desired_levels:
+        number
+
+        min_levels:
+        number
+
+        max_instruments:
+        number
+
+        quantity:
+        number
+    }
+}
+
+
+export interface KnowledgeInstrument {
+    instrument_id:
+    string
+
+    total_cycles:
+    number
+
+    profitable_cycles:
+    number
+
+    losing_cycles:
+    number
+
+    total_profit:
+    string
+
+    max_drawdown:
+    string
+
+    average_cycle_profit:
+    string
+
+    compensation_closes:
+    number
+
+    total_trades:
+    number
+}
+
+
+export interface KnowledgeInstrumentsResponse {
+    instruments:
+    KnowledgeInstrument[]
+}
+
+
 export type TradingAccountMode =
     | "live"
     | "sandbox"
@@ -587,4 +802,183 @@ export type LiveStatus = {
 
     error:
     string | null
+}
+
+
+export type OperationLogEntry = {
+    created_at:
+    string
+
+    trading_account_id:
+    string | null
+
+    instrument_id:
+    string | null
+
+    ticker:
+    string | null
+
+    event_type:
+    string
+
+    details:
+    string
+}
+
+
+export type OperationsResponse = {
+    operations:
+    OperationLogEntry[]
+}
+
+
+export type PhantomEntry = {
+    session_id:
+    string
+
+    trading_account_id:
+    string
+
+    broker_account_id:
+    string
+
+    mode:
+    string
+
+    status:
+    string
+
+    ticker:
+    string
+
+    instrument_uid:
+    string
+
+    open_positions:
+    number
+
+    open_lots:
+    number
+
+    active_orders:
+    number
+
+    broker_lots:
+    number
+}
+
+
+export type PhantomsResponse = {
+    phantoms:
+    PhantomEntry[]
+
+    errors:
+    string[]
+
+    checked_accounts:
+    string[]
+}
+
+
+export type PhantomResolveItemRequest = {
+    session_id:
+    string
+
+    instrument_uids:
+    string[]
+}
+
+
+export type PhantomResolveResponse = {
+    resolved: {
+        session_id:
+        string
+
+        removed_instruments:
+        number
+
+        snapshot_deleted:
+        boolean
+    }[]
+}
+
+
+export type ChartCandle = {
+    time:
+    string
+
+    open:
+    string
+
+    high:
+    string
+
+    low:
+    string
+
+    close:
+    string
+}
+
+
+export type ChartLevel = {
+    level_index:
+    number
+
+    price:
+    string
+
+    status:
+    string
+}
+
+
+export type ChartPosition = {
+    level_index:
+    number
+
+    entry_price:
+    string
+
+    quantity:
+    number
+
+    trailing_exit_target_price:
+    string | null
+
+    trailing_exit_highest_price:
+    string | null
+}
+
+
+export type ChartTrade = {
+    time:
+    string
+
+    side:
+    string
+
+    price:
+    string
+}
+
+
+export type SessionChartResponse = {
+    ticker:
+    string
+
+    session_id:
+    string | null
+
+    candles:
+    ChartCandle[]
+
+    levels:
+    ChartLevel[]
+
+    positions:
+    ChartPosition[]
+
+    trades:
+    ChartTrade[]
 }

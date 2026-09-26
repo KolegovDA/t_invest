@@ -10,9 +10,11 @@ import {
     getDashboard,
     getInstruments,
     getLiveStatus,
+    getOperations,
     getRunnerStatus,
     getSession,
     getSessions,
+    resumeSession,
     searchInstruments,
     startLive,
     startSandbox,
@@ -58,12 +60,40 @@ import {
 } from "./components/InstrumentSettingsForm"
 
 import {
+    InstrumentSelectionCard,
+} from "./components/InstrumentSelectionCard"
+
+import {
+    KnowledgeCard,
+} from "./components/KnowledgeCard"
+
+import {
     LiveStatusCard,
 } from "./components/LiveStatusCard"
 
 import {
+    NotificationSettingsCard,
+} from "./components/NotificationSettingsCard"
+
+import {
+    OperationsHistoryCard,
+} from "./components/OperationsHistoryCard"
+
+import {
+    PhantomAuditCard,
+} from "./components/PhantomAuditCard"
+
+import {
+    ReconciliationCard,
+} from "./components/ReconciliationCard"
+
+import {
     RunnerStatusCard,
 } from "./components/RunnerStatusCard"
+
+import {
+    SessionChartCard,
+} from "./components/SessionChartCard"
 
 import {
     SessionDetailCard,
@@ -89,6 +119,7 @@ import type {
     InstrumentSearchResult,
     LiveStartValidationResult,
     LiveStatus,
+    OperationLogEntry,
     RunnerStatus,
     StartPlan,
     StartSandboxResult,
@@ -147,6 +178,13 @@ export default function App() {
     >(null)
 
     const [
+        operations,
+        setOperations,
+    ] = useState<
+        OperationLogEntry[]
+    >([])
+
+    const [
         tradingAccounts,
         setTradingAccounts,
     ] = useState<
@@ -156,6 +194,13 @@ export default function App() {
     const [
         selectedTradingAccountId,
         setSelectedTradingAccountId,
+    ] = useState<
+        string | null
+    >(null)
+
+    const [
+        selectedSandboxAccountId,
+        setSelectedSandboxAccountId,
     ] = useState<
         string | null
     >(null)
@@ -304,6 +349,16 @@ export default function App() {
             )
 
 
+    const enabledSandboxAccounts =
+        tradingAccounts
+            .filter(
+                account =>
+                    account.enabled
+                    && account.mode
+                    === "sandbox"
+            )
+
+
     useEffect(
         () => {
             refreshAll()
@@ -356,6 +411,177 @@ export default function App() {
         refreshSessions()
         refreshApiUsage()
         refreshRunnerStatus()
+        refreshOperations()
+    }
+
+    function refreshOperations() {
+        getOperations(
+            100
+        )
+            .then(
+                data => {
+                    setOperations(
+                        data.operations
+                    )
+
+                    notifyNewTrades(
+                        data.operations
+                    )
+                }
+            )
+    }
+
+
+    function notifyNewTrades(
+        operations: OperationLogEntry[]
+    ) {
+        if (
+            typeof Notification
+            === "undefined"
+        ) {
+            return
+        }
+
+        if (
+            Notification.permission
+            !== "granted"
+        ) {
+            return
+        }
+
+        const storageKey = (
+            "esmLastOperationSeenAt"
+        )
+
+        const stored = (
+            window
+            .localStorage
+            .getItem(
+                storageKey
+            )
+        )
+
+        const lastSeen = (
+            stored
+            ? Date.parse(
+                stored
+            )
+            : null
+        )
+
+        let maxTs: (
+            number | null
+        ) = lastSeen
+
+        for (
+            const operation
+            of operations
+        ) {
+            const ts = (
+                Date.parse(
+                    operation
+                    .created_at
+                )
+            )
+
+            if (
+                Number.isNaN(
+                    ts
+                )
+            ) {
+                continue
+            }
+
+            if (
+                maxTs
+                === null
+                || ts
+                > maxTs
+            ) {
+                maxTs = ts
+            }
+
+            if (
+                lastSeen
+                === null
+            ) {
+                //
+                // Первый запуск:
+                // фиксируем базовую
+                // линию без спама.
+                //
+                continue
+            }
+
+            if (
+                ts
+                <= lastSeen
+            ) {
+                continue
+            }
+
+            if (
+                operation
+                .event_type
+                !== "BUY"
+
+                && (
+                    operation
+                    .event_type
+                    !== "SELL"
+                )
+            ) {
+                continue
+            }
+
+            try {
+                new Notification(
+                    "ESM: "
+                    + (
+                        operation
+                        .event_type
+                        === "BUY"
+                            ? "Покупка"
+                            : "Продажа"
+                    )
+                    + " "
+                    + (
+                        operation
+                        .ticker
+                        ?? ""
+                    ),
+
+                    {
+                        body: (
+                            operation
+                            .details
+                        ),
+                    }
+                )
+            } catch {
+                //
+                // Уведомление не
+                // имеет права ломать
+                // интерфейс.
+                //
+            }
+        }
+
+        if (
+            maxTs
+            !== null
+        ) {
+            window
+            .localStorage
+            .setItem(
+                storageKey,
+
+                new Date(
+                    maxTs
+                )
+                .toISOString()
+            )
+        }
     }
 
 
@@ -458,6 +684,32 @@ export default function App() {
                             return null
                         }
                     )
+
+                    const sandboxAccounts =
+                        accounts.filter(
+                            account =>
+                                account.enabled
+                                && account.mode
+                                === "sandbox"
+                        )
+
+                    setSelectedSandboxAccountId(
+                        current => {
+                            if (
+                                current
+                                && sandboxAccounts
+                                    .some(
+                                        account =>
+                                            account.id
+                                            === current
+                                    )
+                            ) {
+                                return current
+                            }
+
+                            return null
+                        }
+                    )
                 }
             )
     }
@@ -491,7 +743,9 @@ export default function App() {
             const data =
                 await searchInstruments(
                     query,
-                    selectedTradingAccountId,
+                    tradingMode === "live"
+                        ? selectedTradingAccountId
+                        : selectedSandboxAccountId,
                     30
                 )
 
@@ -861,7 +1115,7 @@ export default function App() {
                     : await startSandbox(
                         force,
                         startInstruments,
-                        null
+                        selectedSandboxAccountId
                     )
 
             setStartResult(
@@ -976,12 +1230,51 @@ export default function App() {
                     setStartError(
                         error instanceof Error
                             ? error.message
-                            : String(error)
+                            : String(
+                                error
+                            )
                     )
                 }
             )
     }
 
+    function resumeSelectedSession(
+        ticker: string
+    ) {
+        setStartError(null)
+
+        resumeSession(
+            ticker
+        )
+            .then(
+                result => {
+                    setSelectedSession(
+                        current => (
+                            current
+                                ? {
+                                    ...current,
+                                    status:
+                                        result.status,
+                                }
+                                : current
+                        )
+                    )
+
+                    refreshAll()
+                }
+            )
+            .catch(
+                error => {
+                    setStartError(
+                        error instanceof Error
+                            ? error.message
+                            : String(
+                                error
+                            )
+                    )
+                }
+            )
+    }
 
 
     if (!dashboard) {
@@ -1058,9 +1351,21 @@ export default function App() {
                             }
                         />
 
-                        <RunnerStatusCard
-                            runners={
-                                runners
+                        <AccountsSummary
+                            accounts={
+                                tradingAccounts
+                            }
+
+                            onAccounts={() =>
+                                setActiveTab(
+                                    "accounts"
+                                )
+                            }
+                        />
+
+                        <OperationsHistoryCard
+                            operations={
+                                operations
                             }
                         />
                     </>
@@ -1102,73 +1407,80 @@ export default function App() {
                                 }
                             />
                         )}
-                    </>
-                )}
 
-                {activeTab === "instruments" && (
-                    <>
-                        <SectionTitle
-                            title="Инструменты"
-
-                            subtitle={
-                                `${instruments.length} выбрано`
-                            }
-
-                            action={
-                                <button
-                                    onClick={() =>
-                                        setModal(
-                                            "add-instrument"
-                                        )
-                                    }
-
-                                    style={
-                                        smallPrimaryButton
-                                    }
-                                >
-                                    + Добавить
-                                </button>
-                            }
-                        />
-
-                        {instruments.map(
-                            instrument => (
-                                <InstrumentCard
-                                    key={
-                                        instrument.ticker
-                                    }
-
-                                    instrument={
-                                        instrument
-                                    }
-
-                                    onConfigure={
-                                        openInstrumentSettings
-                                    }
-
-                                    onRemove={
-                                        removeInstrument
-                                    }
-                                />
-                            )
-                        )}
-
-                        <button
-                            onClick={
-                                openStartModal
-                            }
-
-                            disabled={
-                                instruments.length
-                                === 0
-                            }
-
-                            style={
-                                primaryButton
-                            }
+                        <div
+                            style={{
+                                marginTop:
+                                    28,
+                            }}
                         >
-                            Запустить
-                        </button>
+                            <SectionTitle
+                                title="Подбор инструментов"
+
+                                subtitle={
+                                    `${instruments.length} выбрано`
+                                }
+
+                                action={
+                                    <button
+                                        onClick={() =>
+                                            setModal(
+                                                "add-instrument"
+                                            )
+                                        }
+
+                                        style={
+                                            smallPrimaryButton
+                                        }
+                                    >
+                                        + Добавить
+                                    </button>
+                                }
+                            />
+
+                            <InstrumentSelectionCard />
+
+                            <KnowledgeCard />
+
+                            {instruments.map(
+                                instrument => (
+                                    <InstrumentCard
+                                        key={
+                                            instrument.ticker
+                                        }
+
+                                        instrument={
+                                            instrument
+                                        }
+
+                                        onConfigure={
+                                            openInstrumentSettings
+                                        }
+
+                                        onRemove={
+                                            removeInstrument
+                                        }
+                                    />
+                                )
+                            )}
+
+                            <button
+                                onClick={
+                                    openStartModal
+                                }
+
+                                disabled={
+                                    instruments.length
+                                    === 0
+                                }
+
+                                style={
+                                    primaryButton
+                                }
+                            >
+                                Запустить
+                            </button>
+                        </div>
                     </>
                 )}
 
@@ -1178,10 +1490,18 @@ export default function App() {
                             title="Счета"
 
                             subtitle=
-                            "Управление торговыми аккаунтами"
+                                "Управление торговыми аккаунтами"
                         />
 
                         <AccountsPanel />
+
+                        <PhantomAuditCard
+                            onResolved={() => {
+                                refreshAll()
+
+                                refreshOperations()
+                            }}
+                        />
                     </>
                 )}
 
@@ -1201,6 +1521,8 @@ export default function App() {
                             }
                         />
 
+                        <ReconciliationCard />
+
                         <RunnerStatusCard
                             runners={
                                 runners
@@ -1215,7 +1537,7 @@ export default function App() {
                             title="Настройки"
 
                             subtitle=
-                            "ESM Trade System v1.1.0-dev"
+                                "ESM Trade System v1.2.0-dev"
                         />
 
                         <LiveStatusCard
@@ -1223,6 +1545,8 @@ export default function App() {
                                 liveStatus
                             }
                         />
+
+                        <NotificationSettingsCard />
                     </>
                 )}
             </div>
@@ -1471,6 +1795,99 @@ export default function App() {
                         </div>
                     )}
 
+                    {tradingMode === "sandbox" && (
+                        <div
+                            style={
+                                cardStyle
+                            }
+                        >
+                            <div>
+                                Торговый счёт
+                            </div>
+
+                            <select
+                                value={
+                                    selectedSandboxAccountId
+                                    ?? ""
+                                }
+
+                                onChange={
+                                    event => {
+                                        setSelectedSandboxAccountId(
+                                            event
+                                                .target
+                                                .value
+                                            || null
+                                        )
+
+                                        setStartResult(
+                                            null
+                                        )
+                                    }
+                                }
+
+                                style={{
+                                    width:
+                                        "100%",
+
+                                    marginTop:
+                                        8,
+
+                                    padding:
+                                        10,
+                                }}
+                            >
+                                <option
+                                    value=""
+                                >
+                                    Авто-выбор счёта
+                                </option>
+
+                                {enabledSandboxAccounts.map(
+                                    account => (
+                                        <option
+                                            key={
+                                                account.id
+                                            }
+
+                                            value={
+                                                account.id
+                                            }
+                                        >
+                                            {
+                                                account.name
+                                            }
+                                            {" · "}
+                                            {
+                                                account
+                                                    .broker_account_id
+                                            }
+                                        </option>
+                                    )
+                                )}
+                            </select>
+
+                            <div
+                                style={{
+                                    marginTop:
+                                        8,
+
+                                    fontSize:
+                                        13,
+
+                                    color:
+                                        "#6b7280",
+                                }}
+                            >
+                                {
+                                    selectedSandboxAccountId
+                                        ? "Токен и sandbox-счёт берутся из выбранного счёта."
+                                        : "Счёт и токен выбираются автоматически: первый активный T-Invest SANDBOX (токен из настроек счёта, .env не нужен)."
+                                }
+                            </div>
+                        </div>
+                    )}
+
                     {liveValidation && (
                         <LiveValidationCard
                             result={
@@ -1641,14 +2058,16 @@ export default function App() {
 
                             <button
                                 onClick={() =>
-                                    drainSelectedSession(
-                                        selectedSession.ticker
-                                    )
-                                }
-                                disabled={
                                     selectedSession.status
                                     === "DRAINING"
+                                        ? resumeSelectedSession(
+                                            selectedSession.ticker
+                                        )
+                                        : drainSelectedSession(
+                                            selectedSession.ticker
+                                        )
                                 }
+
                                 style={{
                                     width: "100%",
                                     padding: 12,
@@ -1657,25 +2076,19 @@ export default function App() {
                                     background:
                                         selectedSession.status
                                         === "DRAINING"
-                                            ? "#d1d5db"
+                                            ? "#2563eb"
                                             : "#f59e0b",
                                     color:
-                                        selectedSession.status
-                                        === "DRAINING"
-                                            ? "#4b5563"
-                                            : "white",
+                                        "white",
                                     fontWeight: 700,
                                     cursor:
-                                        selectedSession.status
-                                        === "DRAINING"
-                                            ? "default"
-                                            : "pointer",
+                                        "pointer",
                                 }}
                             >
                                 {
                                     selectedSession.status
                                     === "DRAINING"
-                                        ? "Сушка активна"
+                                        ? "Отменить сушку"
                                         : "Включить сушку"
                                 }
                             </button>
@@ -1692,6 +2105,12 @@ export default function App() {
 
                             onStop={
                                 stopSelectedSession
+                            }
+                        />
+
+                        <SessionChartCard
+                            ticker={
+                                selectedSession.ticker
                             }
                         />
                     </AppModal>
@@ -2134,6 +2553,233 @@ function QuickActions({
                 }
                 )
             </button>
+        </div>
+    )
+}
+
+
+function AccountsSummary({
+    accounts,
+    onAccounts,
+}: {
+    accounts:
+    TradingAccount[]
+
+    onAccounts:
+    () => void
+}) {
+    return (
+        <div
+            style={{
+                background:
+                "white",
+
+                borderRadius:
+                14,
+
+                padding:
+                13,
+
+                marginTop:
+                10,
+            }}
+        >
+            <div
+                style={{
+                    display:
+                    "flex",
+
+                    justifyContent:
+                    "space-between",
+
+                    alignItems:
+                    "center",
+
+                    marginBottom:
+                    10,
+                }}
+            >
+                <h3
+                    style={{
+                        margin:
+                        0,
+                    }}
+                >
+                    Счета
+                </h3>
+
+                <button
+                    onClick={
+                        onAccounts
+                    }
+
+                    style={{
+                        border:
+                        "1px solid #d1d5db",
+
+                        background:
+                        "white",
+
+                        borderRadius:
+                        9,
+
+                        padding:
+                        "6px 10px",
+
+                        fontSize:
+                        12,
+
+                        fontWeight:
+                        600,
+
+                        color:
+                        "#2563eb",
+
+                        cursor:
+                        "pointer",
+                    }}
+                >
+                    Все счета (
+                    {
+                        accounts.length
+                    }
+                    )
+                </button>
+            </div>
+
+            {accounts.length === 0 ? (
+                <div
+                    style={{
+                        color:
+                        "#6b7280",
+
+                        fontSize:
+                        13,
+                    }}
+                >
+                    Счета не добавлены.
+                </div>
+            ) : (
+                accounts.map(
+                    account => (
+                        <div
+                            key={
+                                account.id
+                            }
+
+                            style={{
+                                display:
+                                "flex",
+
+                                justifyContent:
+                                "space-between",
+
+                                alignItems:
+                                "center",
+
+                                gap:
+                                8,
+
+                                padding:
+                                "8px 0",
+
+                                borderTop:
+                                "1px solid #e5e7eb",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    minWidth:
+                                    0,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontWeight:
+                                        600,
+
+                                        fontSize:
+                                        14,
+                                    }}
+                                >
+                                    {
+                                        account.name
+                                    }
+                                </div>
+
+                                <div
+                                    style={{
+                                        color:
+                                        "#6b7280",
+
+                                        fontSize:
+                                        12,
+                                    }}
+                                >
+                                    {
+                                        account.broker
+                                    }
+                                    {" · "}
+                                    {
+                                        account
+                                            .broker_account_id
+                                    }
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    fontSize:
+                                    11,
+
+                                    fontWeight:
+                                    700,
+
+                                    padding:
+                                    "3px 8px",
+
+                                    borderRadius:
+                                    8,
+
+                                    background:
+                                    account
+                                        .mode
+                                        === "live"
+                                        ? "#dbeafe"
+                                        : "#f3f4f6",
+
+                                    color:
+                                    account
+                                        .mode
+                                        === "live"
+                                        ? "#1d4ed8"
+                                        : "#6b7280",
+
+                                    whiteSpace:
+                                    "nowrap",
+                                }}
+                            >
+                                {
+                                    account
+                                        .mode
+                                        === "live"
+                                        ? "LIVE"
+                                        : "SANDBOX"
+                                }
+
+                                {
+                                    !(
+                                        account.enabled
+                                    )
+                                    && (
+                                        " · выкл"
+                                    )
+                                }
+                            </div>
+                        </div>
+                    )
+                )
+            )}
         </div>
     )
 }

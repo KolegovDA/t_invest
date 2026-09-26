@@ -139,15 +139,17 @@ def _quote_windows_argument(
     )
 
 
-def _restart_as_admin() -> None:
+def _restart_as_admin() -> (
+    bool
+):
     if (
         os.name
         != "nt"
     ):
-        return
+        return False
 
     if _is_admin():
-        return
+        return False
 
     if getattr(
         sys,
@@ -211,72 +213,148 @@ def _restart_as_admin() -> None:
         result
         <= 32
     ):
-        raise RuntimeError(
-            "Failed to request "
-            "administrator privileges. "
-            f"ShellExecuteW code: {result}"
+        #
+        # Отказ/невозможность
+        # повышения прав НЕ должен
+        # останавливать сервер:
+        # продолжаем на localhost.
+        #
+        print(
+            "[STARTUP] Elevation failed "
+            f"or declined. Code: {result}"
         )
+
+        return False
 
     print(
         "[STARTUP] Administrator "
         "instance requested."
     )
 
-    raise SystemExit(
-        0
+    return True
+
+
+def _warn_no_firewall_rule(
+    port: int,
+) -> None:
+    print(
+        "[FIREWALL] WARNING: rule "
+        f"for TCP port {port} "
+        "was NOT created."
+    )
+
+    print(
+        "[FIREWALL] Server continues "
+        "anyway, available on this "
+        "PC only:"
+    )
+
+    print(
+        f"[FIREWALL] http://127.0.0.1:{port}"
+    )
+
+    print(
+        "[FIREWALL] To open access from "
+        "the local network, run once "
+        "as Administrator or execute:"
+    )
+
+    print(
+        '[FIREWALL] netsh advfirewall firewall add rule name="ESM Trade System TCP '
+        + str(port)
+        + '" dir=in action=allow protocol=TCP localport='
+        + str(port)
+        + " profile=any enable=yes"
     )
 
 
 def _ensure_firewall(
     port: int,
 ) -> None:
+    """
+    Правило файрвола нужно только
+    для доступа к Web UI из локальной
+    сети. Любая неудача здесь —
+    предупреждение, а не остановка
+    сервера: он обязан запускаться
+    всегда (минимум на localhost).
+    """
     if (
         os.name
         != "nt"
     ):
         return
 
-    firewall = (
-        WindowsFirewallService(
-            port=port,
+    try:
+        firewall = (
+            WindowsFirewallService(
+                port=port,
+            )
         )
-    )
 
-    if (
-        firewall
-        .rule_exists()
-    ):
+        if (
+            firewall
+            .rule_exists()
+        ):
+            print(
+                "[FIREWALL] Ready:",
+                firewall.rule_name,
+            )
+
+            return
+
         print(
-            "[FIREWALL] Ready:",
-            firewall.rule_name,
+            "[FIREWALL] Rule is missing."
         )
 
-        return
+        if (
+            firewall
+            .is_admin()
+        ):
+            if (
+                firewall
+                .ensure_rule()
+            ):
+                return
 
-    print(
-        "[FIREWALL] Rule is missing."
-    )
+            _warn_no_firewall_rule(
+                port=port,
+            )
 
-    #
-    # Только если правило отсутствует,
-    # запрашиваем повышение прав.
-    #
-    if not firewall.is_admin():
+            return
+
         print(
             "[FIREWALL] Requesting "
             "administrator privileges..."
         )
 
-        _restart_as_admin()
+        #
+        # Только если правило отсутствует,
+        # запрашиваем повышение прав.
+        # Отказ — не ошибка: продолжаем.
+        #
+        if (
+            _restart_as_admin()
+        ):
+            raise SystemExit(
+                0
+            )
 
-    if not (
-        firewall
-        .ensure_rule()
-    ):
-        raise RuntimeError(
-            "Windows Firewall rule "
-            f"for TCP port {port} "
-            "could not be created."
+        _warn_no_firewall_rule(
+            port=port,
+        )
+
+    except SystemExit:
+        raise
+
+    except Exception as error:
+        print(
+            "[FIREWALL] Check failed:",
+            repr(error),
+        )
+
+        _warn_no_firewall_rule(
+            port=port,
         )
 
 
@@ -336,7 +414,7 @@ def main() -> None:
     )
 
     print(
-        "Version: 1.1.0-dev"
+        "Version: 1.2.0-dev"
     )
 
     print(

@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from application.trading_account_service import TradingAccountService
 from config.settings import Settings
-from domain.trading_account import BrokerType
+from domain.trading_account import BrokerType, TradingAccountMode
 from infrastructure.tinvest.client_factory import TInvestClientFactory
 from infrastructure.tinvest.instrument_mapper import TInvestInstrumentMapper
 from infrastructure.tinvest.instrument_provider import TInvestInstrumentProvider
@@ -103,7 +103,41 @@ class InstrumentCatalogService:
                 "token"
             )
 
-        token = self.settings.tinvest_token
+        accounts = [
+            account
+            for account
+            in self.trading_account_service
+            .get_enabled()
+            if account.broker
+            == BrokerType.TINVEST
+        ]
+
+        accounts.sort(
+            key=lambda account: (
+                account.mode
+                != TradingAccountMode.SANDBOX
+            )
+        )
+
+        for account in accounts:
+            try:
+                credentials = (
+                    self.trading_account_service
+                    .get_credentials(
+                        account.id
+                    )
+                )
+
+                return credentials.require(
+                    "token"
+                )
+            except ValueError:
+                continue
+
+        token = (
+            self.settings.tinvest_sandbox_token
+            or self.settings.tinvest_token
+        )
 
         if not token:
             raise ValueError(

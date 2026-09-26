@@ -7,6 +7,9 @@ from datetime import (
 from decimal import Decimal
 from typing import Any
 
+from application.knowledge_engine import (
+    KnowledgeEngine,
+)
 from application.multi_instrument_sandbox_session import (
     MultiInstrumentSandboxSession,
 )
@@ -100,22 +103,44 @@ from infrastructure.tinvest.live_position_provider import (
 class MultiInstrumentTradingSessionFactory:
     settings: Settings
 
+    knowledge_engine: (
+        KnowledgeEngine | None
+    ) = None
+
+    #
+    # Журнал операций v1.2:
+    # протоколирование сделок
+    # каждой сессии.
+    #
+    operation_log: Any = None
+
+    #
+    # Push-уведомления v1.2 (п. 3):
+    # уведомления об исполненных
+    # ордерах (Telegram по
+    # умолчанию).
+    #
+    notifier: Any = None
+
     def create_sandbox_session(
         self,
         config: MultiInstrumentSessionConfig,
+        token: str | None = None,
+        sandbox_account_id: str | None = None,
     ) -> MultiInstrumentSessionContext:
-        token = (
-            self.settings.tinvest_sandbox_token
+        resolved_token = (
+            token
+            or self.settings.tinvest_sandbox_token
             or self.settings.tinvest_token
         )
 
-        if not token:
+        if not resolved_token:
             raise ValueError(
                 "T-Invest sandbox token is not configured"
             )
 
         client_factory = TInvestClientFactory(
-            token=token,
+            token=resolved_token,
         )
 
         sandbox_account_provider = (
@@ -124,9 +149,10 @@ class MultiInstrumentTradingSessionFactory:
             )
         )
 
-        sandbox_account_id = (
-            self.settings.selected_sandbox_account_id
-        )
+        if sandbox_account_id is None:
+            sandbox_account_id = (
+                self.settings.selected_sandbox_account_id
+            )
 
         created_sandbox_account = False
 
@@ -570,9 +596,41 @@ class MultiInstrumentTradingSessionFactory:
                         portfolio_manager=(
                             portfolio_manager
                         ),
+
+                        knowledge_engine=(
+                            self.knowledge_engine
+                        ),
+
+                        operation_log=(
+                            self.operation_log
+                        ),
+
+                        notifier=(
+                            self.notifier
+                        ),
+
+                        ticker=(
+                            instrument.ticker
+                        ),
+
+                        trading_account_id=(
+                            account_id
+                        ),
                     )
                 ),
             )
+
+        position_provider = (
+            TInvestLivePositionProvider(
+                client_factory=(
+                    client_factory
+                ),
+            )
+
+            if is_live
+
+            else None
+        )
 
         return MultiInstrumentSessionContext(
             session=(
@@ -605,5 +663,17 @@ class MultiInstrumentTradingSessionFactory:
             is_live=is_live,
             close_account_on_close=(
                 close_account_on_close
+            ),
+
+            position_provider=(
+                position_provider
+            ),
+
+            order_executor=(
+                order_executor
+            ),
+
+            order_state_provider=(
+                order_state_provider
             ),
         )

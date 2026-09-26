@@ -40,12 +40,33 @@ class LiveOrderManager:
         default_factory=dict
     )
 
+    #
+    # Команды последнего submit,
+    # которые НЕ были отправлены
+    # брокеру (защита от дублей /
+    # нехватка средств).
+    #
+    # Движок уже перевёл их уровни
+    # в ORDER_PLACED, поэтому
+    # вызывающая сторона обязана
+    # откатить уровни.
+    #
+    last_dropped_commands: list[
+        TradingCommand
+    ] = field(
+        default_factory=list
+    )
+
     def submit_commands(
         self,
         commands: list[TradingCommand],
     ) -> list[PlacedOrder]:
         placed_orders: list[
             PlacedOrder
+        ] = []
+
+        dropped_commands: list[
+            TradingCommand
         ] = []
 
         for command in commands:
@@ -56,6 +77,10 @@ class LiveOrderManager:
             )
 
             if placed_order is None:
+                dropped_commands.append(
+                    command
+                )
+
                 continue
 
             self.active_orders[
@@ -68,6 +93,10 @@ class LiveOrderManager:
             placed_orders.append(
                 placed_order
             )
+
+        self.last_dropped_commands = (
+            dropped_commands
+        )
 
         return placed_orders
 

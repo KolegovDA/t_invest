@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('C:/new/T-Invest/t_invest_bot/frontend/dist', 'frontend/dist')]
+datas = [('frontend/dist', 'frontend/dist')]
 binaries = []
 hiddenimports = ['t_tech.invest.certs', 'grpc', 'grpc.aio']
 tmp_ret = collect_all('t_tech.invest')
@@ -11,8 +11,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['C:/new/T-Invest/t_invest_bot/run_server.py'],
-    pathex=['C:/new/T-Invest/t_invest_bot/app'],
+    ['run_server.py'],
+    pathex=['app'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

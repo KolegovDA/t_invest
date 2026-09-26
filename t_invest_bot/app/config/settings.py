@@ -56,6 +56,14 @@ class Settings:
     log_level: str = "INFO"
     web_real_sandbox: bool = False
 
+    head_server_url: (
+        str | None
+    ) = None
+
+    head_server_enabled: bool = (
+        False
+    )
+
     @property
     def is_sandbox(self) -> bool:
         return self.trading_mode == "sandbox"
@@ -169,6 +177,17 @@ class Settings:
 
             web_real_sandbox=_env_bool(
                 "TINVEST_WEB_REAL_SANDBOX",
+                False,
+            ),
+
+            head_server_url=_empty_to_none(
+                os.getenv(
+                    "HEAD_SERVER_URL"
+                )
+            ),
+
+            head_server_enabled=_env_bool(
+                "HEAD_SERVER_ENABLED",
                 False,
             ),
         )

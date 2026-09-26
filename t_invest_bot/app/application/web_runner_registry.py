@@ -255,6 +255,57 @@ class WebRunnerRegistry:
 
         return count
 
+    def resume_by_session_id(
+        self,
+        session_id: str,
+    ) -> bool:
+        runner = (
+            self.runners_by_session_id
+            .get(
+                session_id
+            )
+        )
+
+        if runner is None:
+            return False
+
+        request_resume = getattr(
+            runner,
+            "request_resume",
+            None,
+        )
+
+        if request_resume is None:
+            return False
+
+        request_resume()
+        return True
+
+    def resume_by_ticker(
+        self,
+        ticker: str,
+    ) -> int:
+        count = 0
+
+        for runner in list(
+            self.get_by_ticker(
+                ticker
+            )
+        ):
+            request_resume = getattr(
+                runner,
+                "request_resume",
+                None,
+            )
+
+            if request_resume is None:
+                continue
+
+            request_resume()
+            count += 1
+
+        return count
+
     def stop_by_session_id(
         self,
         session_id: str,

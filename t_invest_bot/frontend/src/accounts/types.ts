@@ -108,18 +108,45 @@ export interface BrokerConnectionResult {
     broker: BrokerType
 
     broker_account_id:
-    string | null
+        string | null
 
     account_found: boolean
 
     error:
-    string | null
+        string | null
 
     accounts:
-    BrokerConnectionAccount[]
+        BrokerConnectionAccount[]
 
     portfolio:
-    BrokerPortfolio | null
+        BrokerPortfolio | null
+}
+
+
+export interface DiscoveredBrokerAccount {
+    broker_account_id: string
+
+    name: string
+
+    status: string
+
+    account_type: string
+
+    portfolio:
+        BrokerPortfolio | null
+}
+
+
+export interface DiscoverBrokerAccountsResponse {
+    success: boolean
+
+    broker: BrokerType
+
+    accounts:
+        DiscoveredBrokerAccount[]
+
+    error:
+        string | null
 }
 
 
@@ -172,4 +199,70 @@ export interface UpdateTradingAccountPayload {
     string | null
 
     enabled?: boolean
+}
+
+
+export type MoneyMovement = {
+    id:
+    number | null
+
+    created_at:
+    string
+
+    trading_account_id:
+    string
+
+    amount:
+    string
+
+    note:
+    string
+}
+
+
+export type AccountPerformance = {
+    trading_account_id:
+    string
+
+    deposits_total:
+    string
+
+    withdrawals_total:
+    string
+
+    net_deposits:
+    string
+
+    realized_profit:
+    string
+
+    unrealized_profit:
+    string
+
+    unrealized_estimated:
+    boolean
+
+    open_invested:
+    string
+
+    historical_balance:
+    string
+
+    roe_percent:
+    string | null
+
+    roi_percent:
+    string | null
+
+    movements_count:
+    number
+}
+
+
+export type MoneyMovementsResponse = {
+    movements:
+    MoneyMovement[]
+
+    performance:
+    AccountPerformance
 }

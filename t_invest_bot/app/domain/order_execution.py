@@ -9,6 +9,20 @@ class PlacedOrder:
     request_id: str | None = None
 
 
+@dataclass(slots=True)
+class BrokerActiveOrder:
+    order_id: str
+
+    instrument_id: str
+
+    # "BUY" | "SELL"
+    direction: str
+
+    quantity_lots: int
+
+    price: Decimal
+
+
 class OrderExecutor(Protocol):
     def place_limit_buy(
         self,
