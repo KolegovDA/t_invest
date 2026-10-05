@@ -1,4 +1,5 @@
 import type { ActiveSession } from "../types"
+import { SessionsCard } from "./SessionsCard"
 
 type Props = {
     session: ActiveSession | null
@@ -18,7 +19,7 @@ export function SessionDetailCard({
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginTop: 16,
@@ -48,23 +49,27 @@ export function SessionDetailCard({
                 </button>
             </div>
 
-            <p>Статус: {session.status}</p>
-            <p>Цена: {session.current_price.toLocaleString()} ₽</p>
-            <p>Уровней: {session.levels}</p>
-            <p>Базовый лот: {session.quantity}</p>
-            <p>Открытых позиций: {session.positions}</p>
-            <p>
-                Реализовано:{" "}
-                {session.realized_profit.toLocaleString()} ₽
-            </p>
-            <p>
-                Нереализовано:{" "}
-                {session.unrealized_profit.toLocaleString()} ₽
-            </p>
-            <p>
-                Общая прибыль:{" "}
-                <b>{session.total_profit.toLocaleString()} ₽</b>
-            </p>
+            <SessionsCard sessions={[session]} onOpen={() => {}} />
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 12,
+                    marginTop: 12,
+                }}
+            >
+                {[
+                    ["Цена", session.current_price],
+                    ["Реализовано", session.realized_profit],
+                    ["Нереализовано", session.unrealized_profit],
+                    ["Общая прибыль", session.total_profit],
+                ].map(([label, value]) => (
+                    <div key={label} style={{ padding: 12, borderRadius: 12, background: "var(--card-soft)" }}>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</div>
+                        <b>{Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽</b>
+                    </div>
+                ))}
+            </div>
 
             <button
                 onClick={() => onStop(session.ticker)}
@@ -78,8 +83,8 @@ export function SessionDetailCard({
                     border: "none",
                     background:
                         session.status === "STOPPED"
-                            ? "#9ca3af"
-                            : "#dc2626",
+                            ? "var(--text-dim)"
+                            : "var(--loss)",
                     color: "white",
                 }}
             >

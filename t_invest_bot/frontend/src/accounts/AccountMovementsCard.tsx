@@ -334,7 +334,7 @@ export function AccountMovementsCard({
                 16,
 
                 borderTop:
-                "1px solid #e5e7eb",
+                "1px solid var(--border)",
 
                 paddingTop:
                 12,
@@ -368,7 +368,7 @@ export function AccountMovementsCard({
                     700,
 
                     color:
-                    "#2563eb",
+                    "var(--accent)",
                 }}
             >
                 {
@@ -404,7 +404,7 @@ export function AccountMovementsCard({
                                 <div
                                     style={{
                                         color:
-                                        "#15803d",
+                                        "var(--profit)",
                                     }}
                                 >
                                     {
@@ -423,7 +423,7 @@ export function AccountMovementsCard({
                                 <div
                                     style={{
                                         color:
-                                        "#b91c1c",
+                                        "var(--loss)",
                                     }}
                                 >
                                     {
@@ -713,7 +713,7 @@ export function AccountMovementsCard({
                                                 "6px 0",
 
                                                 borderTop:
-                                                "1px solid #f3f4f6",
+                                                "1px solid var(--border)",
 
                                                 fontSize:
                                                 13,
@@ -727,8 +727,8 @@ export function AccountMovementsCard({
                                                             movement.amount
                                                         )
                                                         > 0
-                                                            ? "#15803d"
-                                                            : "#b91c1c",
+                                                            ? "var(--profit)"
+                                                            : "var(--loss)",
                                                     }}
                                                 >
                                                     {
@@ -761,7 +761,7 @@ export function AccountMovementsCard({
                                                         <span
                                                             style={{
                                                                 color:
-                                                                "#6b7280",
+                                                                "var(--text-muted)",
                                                             }}
                                                         >
                                                             {
@@ -779,7 +779,7 @@ export function AccountMovementsCard({
                                             <div
                                                 style={{
                                                     color:
-                                                    "#9ca3af",
+                                                    "var(--text-dim)",
 
                                                     fontSize:
                                                     11,
@@ -808,7 +808,7 @@ export function AccountMovementsCard({
                                 10,
 
                                 color:
-                                "#6b7280",
+                                "var(--text-muted)",
 
                                 fontSize:
                                 13,
@@ -829,7 +829,7 @@ export function AccountMovementsCard({
                                 13,
 
                                 color:
-                                "#b91c1c",
+                                "var(--loss)",
                             }}
                         >
                             {

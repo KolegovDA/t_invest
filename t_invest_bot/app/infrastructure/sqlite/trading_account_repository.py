@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from sqlite_schema import SchemaConnection
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,7 +36,8 @@ class TradingAccountRepository:
         self,
     ) -> sqlite3.Connection:
         connection = sqlite3.connect(
-            self.db_path
+            self.db_path,
+            factory=SchemaConnection,
         )
 
         connection.row_factory = (
@@ -76,6 +78,8 @@ class TradingAccountRepository:
                         TEXT NOT NULL,
 
                     mode TEXT NOT NULL,
+
+                    base_currency TEXT,
 
                     protected_credentials
                         TEXT NOT NULL,
@@ -136,6 +140,19 @@ class TradingAccountRepository:
                 )
 
             if (
+                "base_currency"
+                not in columns
+            ):
+                connection.execute(
+                    """
+                    ALTER TABLE
+                        trading_accounts
+                    ADD COLUMN
+                        base_currency TEXT
+                    """
+                )
+
+            if (
                 "protected_credentials"
                 not in columns
                 and "protected_token"
@@ -160,6 +177,12 @@ class TradingAccountRepository:
                         protected_credentials
                         IS NULL
                     """
+                )
+
+            if "protected_token" in columns:
+                connection.execute(
+                    "UPDATE trading_accounts SET protected_credentials = protected_token "
+                    "WHERE protected_credentials IS NULL"
                 )
 
             #
@@ -227,12 +250,13 @@ class TradingAccountRepository:
             connection.execute(
                 """
                 INSERT INTO
-                trading_accounts (
+                    trading_accounts (
                     id,
                     name,
                     broker,
                     broker_account_id,
                     mode,
+                    base_currency,
                     protected_credentials,
                     commission_mode,
                     custom_buy_commission_percent,
@@ -244,7 +268,7 @@ class TradingAccountRepository:
                     updated_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?
                 )
 
@@ -261,6 +285,9 @@ class TradingAccountRepository:
 
                     mode =
                         excluded.mode,
+
+                    base_currency =
+                        excluded.base_currency,
 
                     protected_credentials =
                         excluded.protected_credentials,
@@ -298,6 +325,9 @@ class TradingAccountRepository:
                     .broker_account_id,
 
                     account.mode.value,
+
+                    account
+                    .base_currency,
 
                     protected_credentials,
 
@@ -519,6 +549,13 @@ class TradingAccountRepository:
 
             mode=TradingAccountMode(
                 row["mode"]
+            ),
+
+            base_currency=(
+                row["base_currency"]
+                if "base_currency"
+                in row.keys()
+                else None
             ),
 
             commission_mode=(

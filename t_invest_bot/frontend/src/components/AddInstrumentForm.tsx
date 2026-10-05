@@ -50,7 +50,7 @@ export function AddInstrumentForm({
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginBottom: 12,
@@ -92,7 +92,7 @@ export function AddInstrumentForm({
                     marginBottom: 8,
                     borderRadius: 10,
                     border:
-                        "1px solid #ddd",
+                        "1px solid var(--border)",
                     boxSizing:
                         "border-box",
                     fontSize: 16,
@@ -103,7 +103,7 @@ export function AddInstrumentForm({
                 <div
                     style={{
                         color:
-                            "#6b7280",
+                            "var(--text-muted)",
                         fontSize: 13,
                         marginBottom: 8,
                     }}
@@ -119,7 +119,7 @@ export function AddInstrumentForm({
                     <div
                         style={{
                             color:
-                                "#6b7280",
+                                "var(--text-muted)",
                             fontSize: 13,
                             marginBottom: 8,
                         }}
@@ -136,7 +136,7 @@ export function AddInstrumentForm({
                         overflowY:
                             "auto",
                         border:
-                            "1px solid #e5e7eb",
+                            "1px solid var(--border)",
                         borderRadius: 10,
                         marginBottom: 14,
                     }}
@@ -159,9 +159,8 @@ export function AddInstrumentForm({
                                     border:
                                         "none",
                                     borderBottom:
-                                        "1px solid #f3f4f6",
-                                    background:
-                                        "white",
+                                        "1px solid var(--border)",
+                                    background: "var(--card)",
                                     padding:
                                         "11px 12px",
                                     textAlign:
@@ -188,7 +187,7 @@ export function AddInstrumentForm({
                                     <span
                                         style={{
                                             color:
-                                                "#6b7280",
+                                                "var(--text-muted)",
                                             fontSize: 12,
                                         }}
                                     >
@@ -202,7 +201,7 @@ export function AddInstrumentForm({
                                     style={{
                                         marginTop: 3,
                                         color:
-                                            "#4b5563",
+                                            "var(--text-muted)",
                                         fontSize: 13,
                                     }}
                                 >
@@ -249,12 +248,12 @@ export function AddInstrumentForm({
                                 borderRadius: 10,
                                 border:
                                     newLevels === level
-                                        ? "2px solid #111827"
-                                        : "1px solid #ddd",
+                                        ? "2px solid var(--text)"
+                                        : "1px solid var(--border)",
                                 background:
                                     newLevels === level
-                                        ? "#eef2ff"
-                                        : "white",
+                                        ? "var(--accent-soft)"
+: "var(--card)",
                             }}
                         >
                             {level}
@@ -287,7 +286,7 @@ export function AddInstrumentForm({
                     marginBottom: 12,
                     borderRadius: 10,
                     border:
-                        "1px solid #ddd",
+                        "1px solid var(--border)",
                     boxSizing:
                         "border-box",
                     fontSize: 16,
@@ -312,7 +311,7 @@ export function AddInstrumentForm({
                         borderRadius: 10,
                         border: "none",
                         background:
-                            "#16a34a",
+                            "var(--profit)",
                         color: "white",
                         opacity:
                             newTicker.trim()
@@ -331,9 +330,8 @@ export function AddInstrumentForm({
                         padding: 12,
                         borderRadius: 10,
                         border:
-                            "1px solid #ddd",
-                        background:
-                            "white",
+                            "1px solid var(--border)",
+                        background: "var(--card)",
                     }}
                 >
                     Отмена

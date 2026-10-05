@@ -550,3 +550,43 @@ def test_engine_without_positions_skipped(
         report.mismatch_warnings
         == []
     )
+
+
+def test_cleared_purchase_cost_reported(
+) -> None:
+    session = (
+        create_session()
+    )
+
+    provider = (
+        FakePositionProvider(
+            positions=[],
+        )
+    )
+
+    report = (
+        BrokerPositionReconciler()
+        .reconcile(
+            sessions={
+                "SBER": session,
+            },
+
+            account_id=(
+                "account-1"
+            ),
+
+            position_provider=(
+                provider
+            ),
+        )
+    )
+
+    assert (
+        report
+        .cleared_purchase_cost
+        == {
+            "SBER": (
+                Decimal("596")
+            ),
+        }
+    )

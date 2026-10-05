@@ -12,7 +12,7 @@ class TradeExecutedEvent:
     #
     # Количество лотов.
     #
-    quantity: int
+    quantity: int | Decimal
 
     #
     # Фактическая средняя
@@ -32,5 +32,15 @@ class TradeExecutedEvent:
     # без комиссии.
     #
     total_amount: (
+        Decimal | None
+    ) = None
+
+    #
+    # Плановая лимитная цена
+    # ордера (на момент
+    # выставления) — для
+    # расчётной прибыли.
+    #
+    planned_price: (
         Decimal | None
     ) = None

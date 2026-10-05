@@ -1,5 +1,6 @@
 export type BrokerType =
     | "tinvest"
+    | "bybit"
     | "alfa"
     | "bcs"
     | "finam"
@@ -412,7 +413,38 @@ export interface UpdateTradingAccountPayload {
 }
 
 
+export type DashboardAccountDetail = {
+    id:
+    string
+
+    name:
+    string
+
+    broker:
+    string
+
+    mode:
+    string
+
+    enabled:
+    boolean
+
+    currency:
+    string
+
+    balance:
+    number | null
+
+    pnl_today:
+    number | null
+}
+
+
 export type Dashboard = {
+    total_balance?: number | null
+    total_balance_currency?: string
+    balance_conversion_note?: string | null
+    exchange_rates_rub?: Record<string, number>
     accounts:
     number
 
@@ -422,14 +454,26 @@ export type Dashboard = {
     capital:
     number | null
 
+    total_equity?:
+    number | null
+
     available_cash?:
     number | null
+
+    available_cash_by_currency?:
+    Record<string, number>
 
     reserved_cash?:
     number | null
 
     invested_cash?:
     number | null
+
+    invested_cash_by_currency?:
+    Record<string, number>
+
+    accounts_detail?:
+    DashboardAccountDetail[]
 
     active_positions:
     number
@@ -445,6 +489,250 @@ export type Dashboard = {
 
     instruments:
     string[]
+}
+
+
+export type EquityPoint = {
+    ts: string
+
+    equity: number
+}
+
+
+export type HistoryAccount = {
+    broker?: string
+    id:
+    string
+
+    name:
+    string
+
+    currency:
+    string
+}
+
+
+export type DashboardHistory = {
+    total_points?: EquityPoint[]
+    total_balance_currency?: string
+    exchange_rates_rub?: Record<string, number>
+    history_note?: string
+
+    days: number
+
+    equity: number | null
+
+    equity_by_currency?:
+    Record<string, number>
+
+    points: EquityPoint[]
+
+    points_by_currency?:
+    Record<string, EquityPoint[]>
+
+    points_by_account?:
+    Record<string, EquityPoint[]>
+
+    accounts?:
+    HistoryAccount[]
+
+    pnl_today: number | null
+
+    pnl_today_percent: number | null
+
+    pnl_total?: number | null
+
+    pnl_total_percent?: number | null
+
+    updated_at: string
+}
+
+
+export type OverviewAsset = {
+    ticker:
+    string
+
+    kind:
+    string
+
+    quantity:
+    number | null
+
+    quantity_precision:
+    number
+
+    price:
+    number | null
+
+    value:
+    number | null
+
+    change_24h:
+    number | null
+
+    change_24h_percent:
+    number | null
+}
+
+
+export type OverviewOrderBought = {
+    level_index:
+    number
+
+    price:
+    string
+
+    quantity:
+    number
+
+    exit_target:
+    string | null
+}
+
+
+export type OverviewOrderPlanned = {
+    level_index:
+    number
+
+    price:
+    string
+
+    status:
+    string
+}
+
+
+export type OverviewSessionBlock = {
+    closed_orders: number
+    cycle_profit: number
+    pnl_percent: number | null
+    next_buy_activation: number | null
+    next_sell_activation: number | null
+
+    ticker:
+    string
+
+    status:
+    string
+
+    quantity:
+    number | null
+
+    positions:
+    number
+
+    current_price:
+    number | null
+
+    realized_profit:
+    number | null
+
+    unrealized_profit:
+    number | null
+
+    total_profit:
+    number | null
+
+    orders_bought:
+    OverviewOrderBought[]
+
+    orders_planned:
+    OverviewOrderPlanned[]
+}
+
+
+export type OverviewAccount = {
+    id:
+    string
+
+    name:
+    string
+
+    broker:
+    string
+
+    mode:
+    string
+
+    enabled:
+    boolean
+
+    currency:
+    string
+
+    equity:
+    number | null
+
+    available:
+    number | null
+
+    invested:
+    number
+
+    reserved:
+    number | null
+
+    balance_series:
+    EquityPoint[]
+
+    assets:
+    OverviewAsset[]
+
+    sessions:
+    OverviewSessionBlock[]
+}
+
+
+export type AccountsOverview = {
+    accounts:
+    OverviewAccount[]
+}
+
+
+export type CommissionCharge = {
+    id: number
+
+    created_at: string
+
+    trading_account_id:
+    string | null
+
+    broker: string
+
+    instrument_id:
+    string | null
+
+    ticker:
+    string | null
+
+    level_index:
+    number | null
+
+    trade_profit: string
+
+    percent: string
+
+    amount: string
+
+    balance_after: string
+}
+
+
+export type CommissionSummary = {
+    balance: string
+
+    forced_drain: boolean
+
+    default_percent: string
+
+    by_platform:
+    Record<
+        string,
+        string
+    >
+
+    charges:
+    CommissionCharge[]
 }
 
 
@@ -558,6 +846,9 @@ export type InstrumentSearchResult = {
 
 export type ActiveSession = {
     ticker:
+    string
+
+    trading_account_id?:
     string
 
     levels:
@@ -806,6 +1097,8 @@ export type LiveStatus = {
 
 
 export type OperationLogEntry = {
+    broker?: string | null
+
     created_at:
     string
 
@@ -964,7 +1257,12 @@ export type ChartTrade = {
 
 
 export type SessionChartResponse = {
+    started_at?: string | null
+
     ticker:
+    string
+
+    interval:
     string
 
     session_id:

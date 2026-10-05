@@ -26,6 +26,15 @@ def _str_to_decimal(
     return Decimal(value)
 
 
+def _quantity_from_value(value: Any) -> int | Decimal:
+    quantity = Decimal(str(value))
+    return int(quantity) if quantity == quantity.to_integral_value() else quantity
+
+
+def _quantity_to_value(value: int | Decimal) -> int | str:
+    return str(value) if isinstance(value, Decimal) else value
+
+
 @dataclass(slots=True)
 class GridEngineConfigState:
     entry_limit_offset_percent: Decimal
@@ -52,7 +61,23 @@ class GridEngineConfigState:
 
     compensation_multiplier: Decimal
 
-    quantity: int
+    quantity: int | Decimal
+    take_profit_percent: Decimal | None = None
+    max_take_profit_percent: Decimal | None = None
+    base_order_amount: Decimal | None = None
+    order_amount_multiplier: Decimal = Decimal("1.05")
+    max_order_amount_multiplier: Decimal = Decimal("3")
+    quantity_step: Decimal = Decimal("1")
+    min_quantity: Decimal = Decimal("0")
+    min_order_amount: Decimal = Decimal("0")
+
+    early_close_min_working_time_seconds: (
+        int
+    ) = 86400
+
+    early_close_profit_loss_ratio: (
+        Decimal
+    ) = Decimal("3")
 
 
 @dataclass(slots=True)
@@ -80,7 +105,7 @@ class OpenPositionState:
     #
     # Количество лотов.
     #
-    quantity: int
+    quantity: int | Decimal
 
     buy_commission: Decimal
 
@@ -124,14 +149,14 @@ class BrokerOrderState:
 
     side: str
 
-    quantity: int
+    quantity: int | Decimal
 
     limit_price: Decimal
 
     status: str
 
-    lots_requested: int = 0
-    lots_executed: int = 0
+    lots_requested: int | Decimal = 0
+    lots_executed: int | Decimal = 0
 
     executed_price: (
         Decimal | None
@@ -193,6 +218,17 @@ class InstrumentTradingState:
         Decimal("0")
     )
 
+    grid_opened_at: (
+        str | None
+    ) = None
+
+    cycle_closed_orders: int = 0
+    cycle_realized_profit: Decimal = Decimal("0")
+    completed_cycles: list[dict] = field(default_factory=list)
+    cycle_price_points: list[dict] = field(default_factory=list)
+    session_start_price: Decimal | None = None
+    grid_step: Decimal | None = None
+
 
 @dataclass(slots=True)
 class TradingSessionState:
@@ -244,6 +280,8 @@ class TradingSessionState:
         Decimal("0")
     )
 
+    started_at: str | None = None
+
     def to_dict(
         self,
     ) -> dict[str, Any]:
@@ -253,6 +291,8 @@ class TradingSessionState:
 
             "session_id":
                 self.session_id,
+
+            "started_at": self.started_at,
 
             "trading_account_id":
                 self
@@ -371,6 +411,17 @@ class TradingSessionState:
                     .total_sell_commission
                 ),
 
+            "grid_opened_at":
+                instrument
+                .grid_opened_at,
+
+            "completed_cycles": instrument.completed_cycles,
+            "cycle_price_points": instrument.cycle_price_points,
+            "cycle_closed_orders": instrument.cycle_closed_orders,
+            "cycle_realized_profit": str(instrument.cycle_realized_profit),
+            "session_start_price": _decimal_to_str(instrument.session_start_price),
+            "grid_step": _decimal_to_str(instrument.grid_step),
+
             "grid_config": (
                 {
                     "entry_limit_offset_percent":
@@ -403,6 +454,15 @@ class TradingSessionState:
                             .min_profit_percent
                         ),
 
+                    "take_profit_percent": _decimal_to_str(config.take_profit_percent),
+                    "max_take_profit_percent": _decimal_to_str(config.max_take_profit_percent),
+                    "base_order_amount": _decimal_to_str(config.base_order_amount),
+                    "order_amount_multiplier": str(config.order_amount_multiplier),
+                    "max_order_amount_multiplier": str(config.max_order_amount_multiplier),
+                    "quantity_step": str(config.quantity_step),
+                    "min_quantity": str(config.min_quantity),
+                    "min_order_amount": str(config.min_order_amount),
+
                     "take_profit_buffer_percent":
                         str(
                             config
@@ -432,7 +492,17 @@ class TradingSessionState:
                         ),
 
                     "quantity":
-                        config.quantity,
+                        _quantity_to_value(config.quantity),
+
+                    "early_close_min_working_time_seconds":
+                        config
+                        .early_close_min_working_time_seconds,
+
+                    "early_close_profit_loss_ratio":
+                        str(
+                            config
+                            .early_close_profit_loss_ratio
+                        ),
                 }
                 if config is not None
                 else None
@@ -480,7 +550,7 @@ class TradingSessionState:
                         ),
 
                     "quantity":
-                        position.quantity,
+                        _quantity_to_value(position.quantity),
 
                     "buy_commission":
                         str(
@@ -552,7 +622,7 @@ class TradingSessionState:
                         order.side,
 
                     "quantity":
-                        order.quantity,
+                        _quantity_to_value(order.quantity),
 
                     "limit_price":
                         str(
@@ -564,12 +634,10 @@ class TradingSessionState:
                         order.status,
 
                     "lots_requested":
-                        order
-                        .lots_requested,
+                        _quantity_to_value(order.lots_requested),
 
                     "lots_executed":
-                        order
-                        .lots_executed,
+                        _quantity_to_value(order.lots_executed),
 
                     "executed_price":
                         _decimal_to_str(
@@ -676,6 +744,7 @@ class TradingSessionState:
             ),
 
             instruments=instruments,
+            started_at=str(data["started_at"]) if data.get("started_at") else None,
 
             portfolio_cash=(
                 _str_to_decimal(
@@ -725,6 +794,14 @@ class TradingSessionState:
         if raw_config is not None:
             grid_config = (
                 GridEngineConfigState(
+                    take_profit_percent=_str_to_decimal(raw_config.get("take_profit_percent")),
+                    max_take_profit_percent=_str_to_decimal(raw_config.get("max_take_profit_percent")),
+                    base_order_amount=_str_to_decimal(raw_config.get("base_order_amount")),
+                    order_amount_multiplier=Decimal(raw_config.get("order_amount_multiplier", "1.05")),
+                    max_order_amount_multiplier=Decimal(raw_config.get("max_order_amount_multiplier", "3")),
+                    quantity_step=Decimal(raw_config.get("quantity_step", "1")),
+                    min_quantity=Decimal(raw_config.get("min_quantity", "0")),
+                    min_order_amount=Decimal(raw_config.get("min_order_amount", "0")),
                     entry_limit_offset_percent=Decimal(
                         raw_config[
                             "entry_limit_offset_percent"
@@ -785,10 +862,26 @@ class TradingSessionState:
                         ]
                     ),
 
-                    quantity=int(
+                    quantity=_quantity_from_value(
                         raw_config[
                             "quantity"
                         ]
+                    ),
+
+                    early_close_min_working_time_seconds=int(
+                        raw_config.get(
+                            "early_close_min_working_time_seconds",
+
+                            86400,
+                        )
+                    ),
+
+                    early_close_profit_loss_ratio=Decimal(
+                        raw_config.get(
+                            "early_close_profit_loss_ratio",
+
+                            "3",
+                        )
                     ),
                 )
             )
@@ -849,7 +942,7 @@ class TradingSessionState:
                     ]
                 ),
 
-                quantity=int(
+                quantity=_quantity_from_value(
                     position[
                         "quantity"
                     ]
@@ -958,7 +1051,7 @@ class TradingSessionState:
                     ]
                 ),
 
-                quantity=int(
+                quantity=_quantity_from_value(
                     order[
                         "quantity"
                     ]
@@ -976,14 +1069,14 @@ class TradingSessionState:
                     ]
                 ),
 
-                lots_requested=int(
+                lots_requested=_quantity_from_value(
                     order.get(
                         "lots_requested",
                         0,
                     )
                 ),
 
-                lots_executed=int(
+                lots_executed=_quantity_from_value(
                     order.get(
                         "lots_executed",
                         0,
@@ -1054,4 +1147,16 @@ class TradingSessionState:
                     "0",
                 )
             ),
+
+            grid_opened_at=(
+                data.get(
+                    "grid_opened_at"
+                )
+            ),
+            completed_cycles=list(data.get("completed_cycles", [])),
+            cycle_price_points=list(data.get("cycle_price_points", [])),
+            cycle_closed_orders=int(data.get("cycle_closed_orders", 0)),
+            cycle_realized_profit=Decimal(data.get("cycle_realized_profit", "0")),
+            session_start_price=_str_to_decimal(data.get("session_start_price")),
+            grid_step=_str_to_decimal(data.get("grid_step")),
         )

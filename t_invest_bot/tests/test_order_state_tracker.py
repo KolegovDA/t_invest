@@ -41,6 +41,18 @@ class FakeStateProvider:
         return self.state
 
 
+def test_cancelled_partial_execution_is_not_discarded():
+    manager = create_manager()
+    tracker = OrderStateTracker("ACCOUNT", manager, FakeStateProvider(OrderExecutionState(
+        order_id="order-1", is_executed=False, executed_quantity=1,
+        executed_price=Decimal("300"), status="CANCELLED", is_cancelled=True,
+    )))
+    result = tracker.poll()
+    assert len(result.executed_orders) == 1
+    assert result.executed_orders[0].execution_state.executed_quantity == 1
+    assert not manager.active_orders
+
+
 def create_manager(
 ) -> LiveOrderManager:
     manager = LiveOrderManager(

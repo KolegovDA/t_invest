@@ -17,6 +17,12 @@ class BrokerType(
     TINVEST = "tinvest"
 
     #
+    # Вторая реальная
+    # интеграция.
+    #
+    BYBIT = "bybit"
+
+    #
     # Резервируем архитектуру
     # под следующие интеграции.
     #
@@ -99,6 +105,20 @@ class TradingAccount:
     # LIVE / SANDBOX.
     #
     mode: TradingAccountMode
+
+    #
+    # Основная валюта
+    # счёта.
+    #
+    # None => валюта
+    # по умолчанию брокера
+    # (T-Invest: RUB).
+    #
+    # Bybit: USDT / USDC.
+    #
+    base_currency: (
+        str | None
+    ) = None
 
     #
     # Комиссии.

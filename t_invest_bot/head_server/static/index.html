@@ -6,47 +6,126 @@
 <title>ESM Head Server</title>
 <style>
     * { box-sizing: border-box; }
+    :root {
+        --bg: #000000;
+        --card: #17171c;
+        --card-2: #0f0f13;
+        --border: #2b2b33;
+        --text: #eaecef;
+        --muted: #848e9c;
+        --accent: #f7a600;
+        --green: #0ecb81;
+        --red: #f6465d;
+    }
     body {
         font-family: "Segoe UI", Arial, sans-serif;
-        background: #f3f4f6;
+        background: var(--bg);
         margin: 0;
-        padding: 24px;
-        color: #111827;
+        padding: 24px 24px 100px;
+        max-width: 1600px;
+        margin: 0 auto;
+        color: var(--text);
     }
     h1 { font-size: 22px; margin: 0 0 4px; }
-    .sub { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
     .card {
-        background: #fff; border-radius: 14px; padding: 20px;
-        box-shadow: 0 8px 28px rgba(0,0,0,0.06); margin-bottom: 20px;
+        background: var(--card); border-radius: 14px; padding: 20px;
+        border: 1px solid var(--border); margin-bottom: 20px;
     }
     input {
         display: block; width: 100%; max-width: 320px;
         padding: 10px; margin: 6px 0 12px;
-        border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;
+        border: 1px solid var(--border); border-radius: 8px;
+        font-size: 14px; background: var(--card-2); color: var(--text);
     }
     button {
         padding: 10px 18px; border: none; border-radius: 8px;
-        background: #2563eb; color: #fff; font-weight: 700;
+        background: var(--accent); color: #1b1b1b; font-weight: 700;
         cursor: pointer; font-size: 14px;
     }
-    button.secondary { background: #e5e7eb; color: #111827; }
+    button.secondary {
+        background: var(--border); color: var(--text); font-weight: 600;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
-    th { color: #6b7280; font-weight: 600; white-space: nowrap; }
+    th, td {
+        text-align: left; padding: 8px 10px;
+        border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; white-space: nowrap; }
     .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .green { color: #15803d; }
-    .red { color: #b91c1c; }
-    .muted { color: #9ca3af; }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    .muted { color: var(--muted); }
+    .accent { color: var(--accent); }
     .tag {
-        display: inline-block; background: #eff6ff; color: #1d4ed8;
+        display: inline-block;
+        background: rgba(247, 166, 0, 0.12); color: var(--accent);
         border-radius: 6px; padding: 1px 7px; margin: 1px 2px; font-size: 12px;
     }
-    #error { color: #b91c1c; font-size: 13px; margin-top: 8px; }
+    #error { color: var(--red); font-size: 13px; margin-top: 8px; }
     pre {
-        background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+        background: var(--card-2); border: 1px solid var(--border);
+        border-radius: 8px; color: var(--text);
         padding: 12px; font-size: 12px; overflow: auto; max-height: 420px;
     }
+    a { color: var(--accent); }
     .hidden { display: none; }
+    .tabs {
+        display: flex; justify-content: space-around; gap: 4px;
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+        border-top: 1px solid var(--border); background: var(--card); backdrop-filter: blur(14px);
+        padding: 8px max(12px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));
+    }
+    .tabs button {
+        background: transparent; color: var(--muted); font-weight: 600;
+        flex: 1; max-width: 240px; padding: 9px 2px 7px;
+        border-radius: 0; font-size: 10px; font-weight: 500;
+    }
+    .tabs button.active { color: var(--accent); font-weight: 700; }
+    .tab-icon { display: block; font-size: 22px; line-height: 1; margin-bottom: 5px; }
+    .subtabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .subtabs button { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+    .subtabs button.active { color: var(--accent); border-color: var(--accent); }
+    .card-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+    .icon-button { width:36px; height:36px; padding:0; display:inline-grid; place-items:center; font-size:21px; line-height:1; }
+    .switch-label { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; cursor:pointer; }
+    .switch-label input { position:absolute; opacity:0; width:1px; height:1px; }
+    .switch-track { width:34px; height:20px; border-radius:12px; background:var(--border); position:relative; transition:background .2s; }
+    .switch-track::after { content:""; position:absolute; width:14px; height:14px; top:3px; left:3px; background:var(--text); border-radius:50%; transition:transform .2s; }
+    .switch-label input:checked + .switch-track { background:var(--accent); }
+    .switch-label input:checked + .switch-track::after { transform:translateX(14px); }
+    .switch-label input:focus-visible + .switch-track { outline:2px solid var(--text); }
+    .periods { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+    .periods button { background:var(--card-2); color:var(--muted); border:1px solid var(--border); padding:7px 12px; }
+    .periods button.active { border-color:var(--accent); color:var(--accent); }
+    .chart-values { display:flex; flex-wrap:wrap; gap:10px 24px; margin-top:14px; font-size:13px; }
+    .chart-values span { font-variant-numeric:tabular-nums; }
+    .settings-user { border:1px solid var(--border); border-radius:10px; margin:10px 0; background:var(--card-2); }
+    .settings-user summary { padding:16px; cursor:pointer; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .settings-user .expanded { padding:0 16px 16px; }
+    .commission-form { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin:10px 0; }
+    .commission-form input { width:100px; margin:4px 0 0; }
+    @media (max-width:600px) { body { padding:16px 12px 100px; } .card { padding:14px; } .tabs button { font-size:12px; } }
+    .stat-grid {
+        display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr));
+        gap: 12px; margin-bottom: 4px; overflow-x: auto;
+    }
+    .stat-tile {
+        background: var(--card-2); border: 1px solid var(--border);
+        border-radius: 10px; padding: 14px 16px;
+    }
+    .stat-tile .value {
+        font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .stat-tile .label { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    @media (max-width:600px) {
+        .stat-grid { grid-template-columns:repeat(5, minmax(0, 1fr)); gap:4px; overflow:visible; }
+        .stat-tile { padding:8px 4px; min-width:0; }
+        .stat-tile .value { font-size:18px; overflow-wrap:anywhere; }
+        .stat-tile .label { font-size:9px; overflow-wrap:anywhere; }
+    }
+    #chartBox { width: 100%; overflow: hidden; }
+    #chart { width: 100%; height: auto; display: block; }
 </style>
 </head>
 <body>
@@ -62,47 +141,235 @@
     </div>
 
     <div id="main" class="hidden">
-        <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <b>Клиенты</b>
-                <button class="secondary" onclick="loadClients()">Обновить</button>
+        <div class="tabs">
+            <button id="tabButton-general" class="active" onclick="switchTab('general')"><span class="tab-icon">⌂</span>Обзор</button>
+            <button id="tabButton-users" onclick="switchTab('users')"><span class="tab-icon">◉</span>Пользователи</button>
+            <button id="tabButton-activity" onclick="switchTab('activity')"><span class="tab-icon">⇅</span>Активность</button>
+            <button id="tabButton-settings" onclick="switchTab('settings')"><span class="tab-icon">⚙</span>Настройки</button>
+        </div>
+
+        <div id="tab-general" class="tab-page">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>Обзор</b>
+                    <button class="secondary icon-button" onclick="loadOverview()" title="Обновить" aria-label="Обновить">↻</button>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat-tile">
+                        <div class="value" id="statClients">—</div>
+                        <div class="label">Зарегистрировано клиентских приложений</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="value" id="statClients24h">—</div>
+                        <div class="label">Синхронизировались за 24 часа</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="value" id="statDevices">—</div>
+                        <div class="label">Устройств всего</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="value accent" id="statOnline">—</div>
+                        <div class="label">Запущено прямо сейчас (5 минут)</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="value" id="statTopups">—</div>
+                        <div class="label">Заявок на пополнение ожидают</div>
+                    </div>
+                </div>
             </div>
-            <div style="overflow-x:auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>ФИО</th>
-                        <th>Логин</th>
-                        <th>Телефон</th>
-                        <th>Email</th>
-                        <th>Дата рожд.</th>
-                        <th>Платформы</th>
-                        <th>Счета</th>
-                        <th>Инструменты</th>
-                        <th>Нач. баланс</th>
-                        <th>Тек. баланс</th>
-                        <th>Прибыль</th>
-                        <th>ROE</th>
-                        <th>Синк</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="clientsBody"></tbody>
-            </table>
+
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>Динамика показателей</b>
+                </div>
+                <div id="chartBox"><svg id="chart" viewBox="0 0 900 210" preserveAspectRatio="none" role="img" aria-label="Динамика показателей по дням"></svg></div>
+                <div id="chartValues" class="chart-values"></div>
+                <div class="periods" id="chartPeriods">
+                    <button class="active" onclick="setChartPeriod('7', this)">7 дней</button>
+                    <button onclick="setChartPeriod('30', this)">30 дней</button>
+                    <button onclick="setChartPeriod('180', this)">180 дней</button>
+                    <button onclick="setChartPeriod('all', this)">За всё время</button>
+                </div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Запущенной считается копия, приславшая хотя бы один heartbeat за день (heartbeat каждую минуту работы). Онлайн на графике — дневная активность, в карточке — последние 5 минут.</div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>История</b>
+                    <button class="secondary icon-button" onclick="loadOverview()" title="Обновить" aria-label="Обновить">↻</button>
+                </div>
+                <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Событие</th>
+                            <th>Клиент</th>
+                            <th>Детали</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventsBody"></tbody>
+                </table>
+                </div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Регистрации, включения новых копий ПО, заявки и решения по пополнениям.</div>
             </div>
         </div>
 
-        <div id="detailCard" class="card hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <b id="detailTitle">История синхронизаций</b>
-                <button class="secondary" onclick="hideDetail()">Закрыть</button>
+        <div id="tab-users" class="tab-page hidden">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>Клиенты</b>
+                    <button class="secondary icon-button" onclick="loadClients()" title="Обновить" aria-label="Обновить">↻</button>
+                </div>
+                <div id="clientsBody"></div>
             </div>
-            <div id="detailContent"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <b>Заявки на пополнение <span id="topupPending" class="tag" style="display:none; background:rgba(247,166,0,0.18);"></span></b>
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <label class="switch-label">
+                            <input type="checkbox" id="topupPendingOnly" onchange="loadTopups()">
+                            <span class="switch-track"></span>Только ожидающие
+                        </label>
+                        <button class="secondary icon-button" onclick="loadTopups()" title="Обновить" aria-label="Обновить">↻</button>
+                    </div>
+                </div>
+                <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Клиент</th>
+                            <th>Сумма</th>
+                            <th>Комментарий</th>
+                            <th>Создана</th>
+                            <th>Документ</th>
+                            <th>Статус</th>
+                            <th>Решение</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="topupsBody"></tbody>
+                </table>
+                </div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Заявки на пополнение баланса ЛК из клиентских копий. Подтверждение зачисляет сумму в баланс клиента (запись «topup» в комиссионном журнале).</div>
+            </div>
+
+            <div id="detailCard" class="card hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b id="detailTitle">История синхронизаций</b>
+                    <button class="secondary" onclick="hideDetail()">Закрыть</button>
+                </div>
+                <div id="detailContent"></div>
+            </div>
+
+            <div id="resetCard" class="card hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b id="resetTitle">Сброс пароля</b>
+                    <button class="secondary" onclick="hideReset()">Закрыть</button>
+                </div>
+                <div id="resetContent"></div>
+            </div>
+        </div>
+
+        <div id="tab-activity" class="tab-page hidden">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>Пользователи онлайн <span id="onlineUsersCount" class="tag">0</span></b>
+                    <button class="secondary icon-button" onclick="loadActivity()" title="Обновить" aria-label="Обновить">↻</button>
+                </div>
+                <div style="overflow-x:auto;"><table>
+                    <thead><tr><th>Логин</th><th>ФИО</th><th>Активных устройств</th><th>Последняя активность</th><th></th></tr></thead>
+                    <tbody id="onlineUsersBody"></tbody>
+                </table></div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Онлайн — хотя бы одно устройство прислало heartbeat за последние 5 минут.</div>
+            </div>
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b>Устройства</b>
+                    <button class="secondary icon-button" onclick="loadDevices()" title="Обновить" aria-label="Обновить">↻</button>
+                </div>
+                <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Клиент</th>
+                            <th>ФИО</th>
+                            <th>Устройство</th>
+                            <th>Онлайн</th>
+                            <th>Последняя активность</th>
+                            <th>Головное</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesBody"></tbody>
+                </table>
+                </div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Онлайн — активность за последние 5 минут (heartbeat каждую минуту).</div>
+            </div>
+
+            <div id="controlLogsCard" class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <b id="controlLogsTitle">Контрольные логи</b>
+                    <div>
+                        <button class="secondary hidden" id="controlAllButton" onclick="showAllControlLogs()">Показать все</button>
+                        <button class="secondary icon-button" onclick="loadControlLogs()" title="Обновить" aria-label="Обновить">↻</button>
+                    </div>
+                </div>
+                <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Клиент</th>
+                            <th>Время</th>
+                            <th>Событие</th>
+                            <th>Тикер</th>
+                            <th>Счёт</th>
+                            <th>Детали</th>
+                        </tr>
+                    </thead>
+                    <tbody id="controlLogsBody"></tbody>
+                </table>
+                </div>
+                <div class="muted" style="margin-top:8px; font-size:12px;">Контрольные события клиентских копий: сверка ордеров, снятие позиций вне бота, расхождения и ошибки сверки. Для сбора ошибок в будущем.</div>
+            </div>
+        </div>
+
+        <div id="tab-settings" class="tab-page hidden">
+            <div class="subtabs">
+                <button id="settingsButton-users" class="active" onclick="switchSettingsTab('users')">Пользователи</button>
+                <button id="settingsButton-platforms" onclick="switchSettingsTab('platforms')">Платформы</button>
+            </div>
+            <div id="settings-users" class="card">
+                <div class="card-header"><b>Комиссии пользователей</b><button class="secondary icon-button" onclick="loadCommissionUsers()" title="Обновить" aria-label="Обновить">↻</button></div>
+                <div id="commissionUsers"></div>
+                <div id="commissionError" class="red"></div>
+            </div>
+            <div id="settings-platforms" class="card hidden">
+                <b>Параметры торговли по платформам</b>
+                <div class="muted" style="margin:10px 0; font-size:13px;">Изменения доставляются клиентам при следующей синхронизации (до 5 минут) и действуют для новых сессий и новых инструментов авторежима. Работающие сетки не меняются.</div>
+                <div id="tradingSettings"></div>
+                <div id="tradingSettingsError" class="red"></div>
+            </div>
         </div>
     </div>
 
 <script>
+const TABS = ["general", "users", "activity", "settings"];
+let activeTab = "general";
+let settingsTab = "users";
+let chartPeriod = "7";
+const CHART_METRICS = [
+    ["clients_total", "Клиентов всего", "#f7a600"],
+    ["clients_active_24h", "Синхронизаций за день", "#1f9ff4"],
+    ["devices_total", "Устройств всего", "#9b87f5"],
+    ["devices_online", "Запущенных копий за день", "#0ecb81"],
+    ["topups_pending", "Ожидают пополнения", "#f6465d"]
+];
+
 async function api(path, options) {
     const response = await fetch(path, options);
     if (!response.ok) {
@@ -151,37 +418,584 @@ async function showMain() {
     document.getElementById("main").classList.remove("hidden");
     const health = await api("/head/api/health");
     document.getElementById("version").textContent = health.version;
-    await loadClients();
+    await refreshAll();
+    startAutoRefresh();
+}
+
+function switchTab(name) {
+    activeTab = name;
+    for (const tab of TABS) {
+        const page = document.getElementById("tab-" + tab);
+        const button = document.getElementById("tabButton-" + tab);
+        if (tab === name) {
+            page.classList.remove("hidden");
+            button.classList.add("active");
+        } else {
+            page.classList.add("hidden");
+            button.classList.remove("active");
+        }
+    }
+    loadTab(name);
+}
+
+async function loadTab(name) {
+    if (name === "general") {
+        await loadOverview();
+    } else if (name === "users") {
+        await loadClients();
+        await loadTopups();
+    } else if (name === "activity") {
+        await loadActivity();
+        await loadDevices();
+        await loadControlLogs();
+    } else if (name === "settings") {
+        await loadSettingsTab();
+    }
+}
+
+function switchSettingsTab(name) {
+    settingsTab = name;
+    for (const tab of ["users", "platforms"]) {
+        document.getElementById("settings-" + tab).classList.toggle("hidden", tab !== name);
+        document.getElementById("settingsButton-" + tab).classList.toggle("active", tab === name);
+    }
+    loadSettingsTab();
+}
+
+async function loadSettingsTab() {
+    if (settingsTab === "users") await loadCommissionUsers();
+    else await loadTradingSettings();
+}
+
+async function refreshAll() {
+    await loadTab(activeTab);
+}
+
+async function loadTradingSettings() {
+    const error = document.getElementById("tradingSettingsError");
+    try {
+        const data = await api("/head/api/admin/trading-settings");
+        const defaults = {min_profit_percent: "0.30", entry_rebound_percent: "0.15", trailing_percent: "0.15"};
+        const labels = {min_profit_percent: "Минимальная прибыль, %", entry_rebound_percent: "Трал покупки, %", trailing_percent: "Трал продажи, %"};
+        const assets = await api("/head/api/admin/asset-trading-settings");
+        const assetFields = Object.entries({...labels, take_profit_percent: 'TP актива, %', max_take_profit_percent: 'Предельный TP (выход без отката), %', order_amount_multiplier: 'Множитель суммы ордера', max_order_amount_multiplier: 'Потолок суммы (к начальному ордеру)'});
+        const box = document.getElementById("tradingSettings");
+        const opened = new Set(Array.from(box.querySelectorAll('details[open]')).map(item => item.id));
+        const platforms = [...new Set(['tinvest', 'bybit', ...Object.keys(data.by_platform), ...Object.keys(assets.by_asset)])];
+        box.innerHTML = platforms.map(platform => {
+            const values = data.by_platform[platform] || defaults;
+            const tickers = assets.by_asset[platform] || {};
+            const platformId = 'trading-platform-' + platform;
+            const fields = values => assetFields.map(([key, label]) => `<label>${label}<input name="${key}" type="number" min="0.0001" max="100" step="any" value="${esc(values[key] ?? '')}" placeholder="По умолчанию"></label>`).join('');
+            const general = ['tinvest', 'bybit'].includes(platform) ? `<form onsubmit="saveTradingSettings(event, '${platform}')">
+                <b>Общие настройки</b>
+                ${Object.entries(labels).map(([key, label]) => `<label>${label}<input name="${key}" type="number" min="0.0001" max="100" step="any" required value="${esc(values[key])}"></label>`).join('')}
+                <button type="submit">Сохранить</button>
+                ${data.by_platform[platform] ? '' : '<span class="muted">Действуют значения по умолчанию</span>'}
+            </form>` : '';
+            const assetBlocks = Object.entries(tickers).map(([ticker, values]) => {
+                const assetId = platformId + '-asset-' + ticker;
+                return `<details class="settings-user" id="${esc(assetId)}" ${opened.has(assetId) ? 'open' : ''}>
+                    <summary><b>${esc(ticker)}</b></summary><div class="expanded">
+                    <form onsubmit="saveAssetTradingSettings(event)" class="commission-form">
+                        <input type="hidden" name="platform" value="${esc(platform)}"><input type="hidden" name="ticker" value="${esc(ticker)}">
+                        ${fields(values)}<button type="submit">Сохранить</button>
+                    </form></div></details>`;
+            }).join('');
+            return `<details class="settings-user" id="${esc(platformId)}" ${opened.has(platformId) ? 'open' : ''}>
+                <summary><b>${esc(platform === 'tinvest' ? 'Т-Инвест' : platform === 'bybit' ? 'Bybit' : platform)}</b><span class="muted">Активов: ${Object.keys(tickers).length}</span></summary>
+                <div class="expanded">${general}<h3>Индивидуальные настройки активов</h3>
+                <div class="muted">Пустое поле наследует значение платформы или стратегии по умолчанию.</div>
+                ${assetBlocks || '<div class="muted">Ранее запущенных активов пока нет.</div>'}
+                <details class="settings-user"><summary>Добавить актив</summary><div class="expanded">
+                    <form onsubmit="saveAssetTradingSettings(event)" class="commission-form">
+                        <input type="hidden" name="platform" value="${esc(platform)}"><label>Актив<input name="ticker" placeholder="SBER / BTCUSDT" required></label>
+                        ${fields({})}<button type="submit">Добавить актив</button>
+                    </form>
+                </div></details></div></details>`;
+        }).join('');
+        error.textContent = "";
+    } catch (e) {
+        error.textContent = e.message;
+    }
+}
+
+async function saveAssetTradingSettings(event) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.currentTarget));
+    for (const key of ['min_profit_percent', 'entry_rebound_percent', 'trailing_percent', 'take_profit_percent', 'max_take_profit_percent', 'order_amount_multiplier', 'max_order_amount_multiplier']) if (!payload[key]) payload[key] = null;
+    try {
+        await api('/head/api/admin/asset-trading-settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        await loadTradingSettings();
+    } catch (error) { document.getElementById('tradingSettingsError').textContent = error.message; }
+}
+
+async function saveTradingSettings(event, platform) {
+    event.preventDefault();
+    const error = document.getElementById("tradingSettingsError");
+    const form = event.currentTarget;
+    try {
+        await api("/head/api/admin/trading-settings", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({platform, ...Object.fromEntries(new FormData(form))})
+        });
+        await loadTradingSettings();
+    } catch (e) {
+        error.textContent = e.message;
+    }
+}
+
+async function loadCommissionUsers() {
+    const error = document.getElementById("commissionError");
+    const box = document.getElementById("commissionUsers");
+    error.textContent = "";
+    try {
+        const [clientsData, commissionData] = await Promise.all([
+            api("/head/api/admin/clients"),
+            api("/head/api/admin/commission"),
+        ]);
+        const settings = {};
+        for (const item of commissionData.settings || []) {
+            const key = String(item.client_id);
+            settings[key] = settings[key] || {};
+            settings[key][item.platform] = item.percent;
+        }
+        const balances = commissionData.balances || {};
+        const defaultPercent = commissionData.default_percent;
+        const clients = clientsData.clients || [];
+        if (!clients.length) {
+            box.innerHTML = '<div class="muted">Клиентов пока нет.</div>';
+            return;
+        }
+        const platformNames = [...new Set(clients.flatMap(c => c.platforms || []))];
+        box.innerHTML = clients.map(client => {
+            const clientId = client.id;
+            const percent = platform => (settings[clientId] || {})[platform] ?? defaultPercent;
+            const rows = platformNames.map(platform => {
+                const active = (client.platforms || []).includes(platform);
+                return `<form class="commission-form" onsubmit="saveCommission(event, ${clientId}, '${esc(platform)}')">
+                    <span class="tag">${esc(platform)}</span>
+                    <label style="margin:0;">Комиссия, %
+                        <input type="number" min="0" max="100" step="any" required value="${esc(percent(platform))}" name="percent">
+                    </label>
+                    <button type="submit" class="secondary">Сохранить</button>
+                    ${(settings[clientId] || {}).hasOwnProperty(platform) ? "" : '<span class="muted" style="font-size:11px;">по умолчанию</span>'}
+                </form>`;
+            }).join("") || '<div class="muted">Платформы появятся после первой синхронизации клиента.</div>';
+            return `<details class="settings-user" id="commissionUser-${clientId}">
+                <summary>
+                    <span><b>${esc(client.login)}</b> <span class="muted">#${clientId}</span><div class="muted" style="font-size:12px;">${esc(client.full_name)}</div></span>
+                    <span class="num accent"><b>${fmt(balances[clientId] ?? client.cabinet_balance, " ₽")}</b></span>
+                </summary>
+                <div class="expanded">${rows}</div>
+            </details>`;
+        }).join("");
+    } catch (e) {
+        error.textContent = e.message;
+    }
+}
+
+async function saveCommission(event, clientId, platform) {
+    event.preventDefault();
+    const error = document.getElementById("commissionError");
+    error.textContent = "";
+    try {
+        await api("/head/api/admin/commission", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({client_id: clientId, platform, percent: new FormData(event.currentTarget).get("percent")})
+        });
+        await loadCommissionUsers();
+    } catch (e) {
+        error.textContent = e.message;
+    }
+}
+
+function startAutoRefresh() {
+    if (window.__headAutoRefresh) return;
+    window.__headAutoRefresh = setInterval(async () => {
+        if (document.getElementById("main").classList.contains("hidden") || activeTab === "settings") return;
+        try {
+            await refreshAll();
+        } catch (e) {
+            // сессия админа истекла — останавливаем автообновление
+            stopAutoRefresh();
+        }
+        }, 30000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && window.__headAutoRefresh) refreshAll().catch(() => stopAutoRefresh());
+    });
+}
+
+function stopAutoRefresh() {
+    if (!window.__headAutoRefresh) return;
+    clearInterval(window.__headAutoRefresh);
+    window.__headAutoRefresh = null;
+}
+
+const EVENT_LABELS = {
+    client_registered: ["Регистрация", "var(--accent)", "rgba(247,166,0,0.12)"],
+    device_first_seen: ["Новое ПО включено", "var(--green)", "rgba(14,203,129,0.12)"],
+    topup_created: ["Заявка на пополнение", "#92400e", "rgba(247,166,0,0.2)"],
+    topup_approved: ["Пополнение подтверждено", "var(--green)", "rgba(14,203,129,0.12)"],
+    topup_rejected: ["Пополнение отклонено", "var(--red)", "rgba(246,70,93,0.12)"]
+};
+
+const seriesOf = daily => {
+    const t = d => (new Date(d.day + "T00:00:00Z")).getTime();
+    const series = CHART_METRICS.map(([key, label, color]) => ({
+        label, color,
+        points: daily.map(d => ({t: t(d), y: Math.max(0, Number(d[key]) || 0), day: d.day, value: d[key]}))
+    }));
+    const min = series[0].points[0].t;
+    const max = series[0].points[series[0].points.length - 1].t;
+    return {series, min, max};
+};
+
+function renderChart(daily) {
+    const svg = document.getElementById("chart");
+    const values = document.getElementById("chartValues");
+    if (!daily.length) { svg.innerHTML = ""; values.innerHTML = '<span class="muted">Нет данных.</span>'; return; }
+    const width = 900, height = 210, topPad = 18, bottomPad = 26;
+    const {series, min, max} = seriesOf(daily);
+    const yMax = Math.max(1, ...series.flatMap(s => s.points.map(p => p.y)));
+    const x = t => 6 + (t - min) / (max - min) * (width - 12);
+    const y = v => height - bottomPad - v / yMax * (height - topPad - bottomPad);
+    let paths = "";
+    let titles = "";
+    for (const s of series) {
+        const d = s.points.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.y).toFixed(1)}`).join("");
+        paths += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>`;
+        for (const p of s.points) {
+            titles += `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="10" fill="transparent"><title>${p.day}: ${s.label} — ${p.value}</title></circle>`;
+        }
+    }
+    const labelStep = Math.max(1, Math.round(daily.length / 6));
+    let labels = "";
+    for (let i = 0; i < daily.length; i++) {
+        if (i % labelStep !== 0 && i !== daily.length - 1) continue;
+        const d = daily[i];
+        labels += `<text x="${x(new Date(d.day + "T00:00:00Z").getTime()).toFixed(1)}" y="${height - 8}" fill="#848e9c" font-size="10" text-anchor="middle">${d.day.slice(8, 10)}.${d.day.slice(5, 7)}${chartPeriod === "all" ? "." + d.day.slice(2, 4) : ""}</text>`;
+    }
+    svg.innerHTML = `<text x="6" y="12" fill="#848e9c" font-size="10">макс. за период: ${yMax}</text>` + paths + labels + titles;
+    const last = daily[daily.length - 1];
+    values.innerHTML = CHART_METRICS.map(m => `<span><span style="color:${m[2]};">●</span> ${m[1]}: <b>${fmt(last[m[0]])}</b></span>`).join("");
+}
+
+function setChartPeriod(period, source) {
+    chartPeriod = period;
+    for (const button of document.querySelectorAll("#chartPeriods button")) button.classList.remove("active");
+    (source || event.currentTarget).classList.add("active");
+    loadOverview();
+}
+
+async function loadOverview() {
+    const params = chartPeriod === "all" ? "all_time=true" : "days=" + chartPeriod;
+    const data = await api("/head/api/admin/overview?" + params);
+    const stats = data.stats;
+    document.getElementById("statClients").textContent = stats.clients_total;
+    document.getElementById("statClients24h").textContent = stats.clients_active_24h;
+    document.getElementById("statDevices").textContent = stats.devices_total;
+    document.getElementById("statOnline").textContent = stats.devices_online;
+    document.getElementById("statTopups").textContent = stats.topups_pending;
+    renderChart(data.daily || []);
+    const body = document.getElementById("eventsBody");
+    body.innerHTML = "";
+    for (const event of (data.events || [])) {
+        const info = EVENT_LABELS[event.type] || [event.type, "var(--text)", "var(--border)"];
+        const client = event.client_login
+            ? `${esc(event.client_login)}<span class="muted"> #${event.client_id}</span>`
+            : '<span class="muted">—</span>';
+        let details = esc(event.details || "—");
+        if (event.amount !== null && event.amount !== undefined) {
+            details = `<b class="num">${fmt(event.amount, " ₽")}</b>` + (event.details ? `<div class="muted" style="font-size:11px;">${esc(event.details)}</div>` : "");
+        }
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="muted num">${event.at ? new Date(event.at).toLocaleString("ru-RU") : "—"}</td>
+            <td><span class="tag" style="color:${info[1]}; background:${info[2]};">${esc(info[0])}</span></td>
+            <td>${client}<div class="muted" style="font-size:11px;">${esc(event.client_full_name || "")}</div></td>
+            <td>${details}</td>
+        `;
+        body.appendChild(tr);
+    }
+    if (!(data.events || []).length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="4" class="muted">Событий пока нет.</td>';
+        body.appendChild(tr);
+    }
+}
+
+const TOPUP_STATUS_LABELS = {
+    pending: ["Ожидает", "var(--accent)", "rgba(247,166,0,0.15)"],
+    approved: ["Подтверждена", "var(--green)", "rgba(14,203,129,0.12)"],
+    rejected: ["Отклонена", "var(--red)", "rgba(246,70,93,0.12)"]
+};
+
+async function loadTopups() {
+    const onlyPending = document.getElementById("topupPendingOnly").checked;
+    const params = onlyPending ? "?status=pending&limit=100" : "?limit=100";
+    const data = await api("/head/api/admin/topups" + params);
+    const badge = document.getElementById("topupPending");
+    if (data.pending_count > 0) {
+        badge.textContent = "ожидают: " + data.pending_count;
+        badge.style.display = "inline-block";
+    } else {
+        badge.style.display = "none";
+    }
+    const body = document.getElementById("topupsBody");
+    body.innerHTML = "";
+    for (const item of data.requests) {
+        const statusInfo = TOPUP_STATUS_LABELS[item.status] || [item.status, "var(--text)", "var(--border)"];
+        const doc = item.document_name
+            ? `<a href="/head/api/admin/topups/${item.id}/document" target="_blank" rel="noopener">${esc(item.document_name)}</a>`
+            : '<span class="muted">—</span>';
+        const actions = item.status === "pending"
+            ? `<button onclick="reviewTopup(${item.id}, 'approve')">Подтвердить</button> <button class="secondary" onclick="reviewTopup(${item.id}, 'reject')">Отклонить</button>`
+            : "";
+        const note = item.review_note ? `<div class="muted" style="font-size:11px;">${esc(item.review_note)}</div>` : "";
+        const balanceNote = (item.balance_after !== null && item.balance_after !== undefined)
+            ? `<div class="muted" style="font-size:11px;">баланс: ${fmt(item.balance_after, " ₽")}</div>`
+            : "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="num">${item.id}</td>
+            <td>${esc(item.client_login || "—")}<span class="muted"> #${item.client_id}</span><div class="muted" style="font-size:11px;">${esc(item.client_full_name || "")}</div></td>
+            <td class="num"><b>${fmt(item.amount, " ₽")}</b></td>
+            <td>${esc(item.comment || "—")}</td>
+            <td class="muted num">${item.created_at ? new Date(item.created_at).toLocaleString("ru-RU") : "—"}</td>
+            <td>${doc}</td>
+            <td><span class="tag" style="color:${statusInfo[1]}; background:${statusInfo[2]};">${esc(statusInfo[0])}</span>${balanceNote}</td>
+            <td>${note}</td>
+            <td>${actions}</td>
+        `;
+        body.appendChild(tr);
+    }
+    if (!data.requests.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="9" class="muted">Заявок пока нет.</td>';
+        body.appendChild(tr);
+    }
+}
+
+async function reviewTopup(requestId, action) {
+    const note = action === "approve" ? "" : (prompt("Причина отклонения (необязательно):") || "");
+    try {
+        const data = await api(`/head/api/admin/topups/${requestId}/${action}`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({review_note: note})
+        });
+        await loadTopups();
+        await loadOverview();
+        if (action === "approve") {
+            alert("Пополнение подтверждено. Баланс клиента: " + fmt(data.balance, " ₽"));
+        }
+    } catch (e) {
+        alert("Ошибка: " + e.message);
+    }
+}
+
+async function loadActivity() {
+    const data = await api("/head/api/admin/activity");
+    const body = document.getElementById("onlineUsersBody");
+    document.getElementById("onlineUsersCount").textContent = data.users.length;
+    body.innerHTML = "";
+    for (const user of data.users) {
+        const client = user.client;
+        const latest = user.devices[0];
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${esc(client.login)} <span class="muted">#${client.id}</span></td>
+            <td>${esc(client.full_name)}</td>
+            <td class="num green">${user.online_devices}</td>
+            <td class="muted num">${latest ? new Date(latest.last_seen_at).toLocaleString("ru-RU") : "—"}</td>
+            <td><button class="secondary" onclick="toggleOnlineDevices(${client.id})">Устройства</button></td>
+        `;
+        body.appendChild(tr);
+        const detail = document.createElement("tr");
+        detail.id = "online-devices-" + client.id;
+        detail.classList.add("hidden");
+        const devices = user.devices.map(device => `<tr>
+            <td>${esc(device.machine_label || "—")}</td>
+            <td>${esc(device.device_key)}<div class="muted">Адрес подключения: ${esc(device.source_address || '—')}</div><div class="muted">Адрес ПО (заявлен клиентом): ${esc(device.software_endpoint || '—')}</div><div class="muted">Обратная доступность ПО не проверена; адрес источника не является адресом доставки за NAT.</div></td>
+            <td>${device.is_head ? "Головное" : "Обычное"}</td>
+            <td class="muted num">${new Date(device.last_seen_at).toLocaleString("ru-RU")}</td>
+        </tr>`).join("");
+        detail.innerHTML = `<td colspan="5"><div style="padding:12px; background:var(--card-2); border-radius:10px;">
+            <b>Активные устройства</b>
+            <table style="margin-top:8px;"><thead><tr><th>Имя</th><th>Ключ</th><th>Роль</th><th>Последняя активность</th></tr></thead>
+            <tbody>${devices}</tbody></table>
+        </div></td>`;
+        body.appendChild(detail);
+    }
+    if (!data.users.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="5" class="muted">Пользователей онлайн нет.</td>';
+        body.appendChild(tr);
+    }
+}
+
+function toggleOnlineDevices(clientId) {
+    document.getElementById("online-devices-" + clientId)?.classList.toggle("hidden");
+}
+
+async function loadDevices() {
+    const data = await api("/head/api/admin/devices");
+    const body = document.getElementById("devicesBody");
+    body.innerHTML = "";
+    for (const device of data.devices) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="num">${device.id}</td>
+            <td>${esc(device.client_login || "—")}<span class="muted"> #${device.client_id}</span></td>
+            <td>${esc(device.client_full_name || "—")}</td>
+            <td>${esc(device.machine_label || "—")}<div class="muted" style="font-size:11px;">${esc(device.device_key)} · ${esc(device.source_address || '—')}</div></td>
+            <td>${device.online ? '<span class="green">● онлайн</span>' : '<span class="muted">○ офлайн</span>'}</td>
+            <td class="muted num">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString("ru-RU") : "—"}</td>
+            <td>${device.is_head ? '<span class="tag">головное</span>' : ""}</td>
+            <td>
+                <button class="secondary" onclick="toggleHeadDevice(${device.id}, ${device.is_head ? "false" : "true"})">${device.is_head ? "Снять отметку" : "Отметить головным"}</button>
+            </td>
+        `;
+        body.appendChild(tr);
+    }
+    for (const browser of data.browser_devices || []) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>—</td><td>#${esc(browser.client_id)}</td><td>Браузер</td><td>${esc(browser.device_id)}<div class="muted">Установка: ${esc(browser.installation_key)}</div></td><td>${browser.online ? 'онлайн' : 'офлайн'}</td><td>${esc(new Date(browser.last_seen_at).toLocaleString("ru-RU"))}</td><td>браузерное устройство</td><td>Не является отдельным запуском ПО</td>`;
+        body.appendChild(tr);
+    }
+    if (!data.devices.length && !(data.browser_devices || []).length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="8" class="muted">Устройств пока нет — запустите клиентское ПО.</td>';
+        body.appendChild(tr);
+    }
+}
+
+async function toggleHeadDevice(deviceId, isHead) {
+    try {
+        await api(`/head/api/admin/devices/${deviceId}/head`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({is_head: isHead})
+        });
+        await loadDevices();
+    } catch (e) {
+        alert("Ошибка: " + e.message);
+    }
+}
+
+async function ensureClientsMap() {
+    if (window.clientsById) return;
+    const data = await api("/head/api/admin/clients");
+    window.clientsById = {};
+    for (const client of data.clients) {
+        window.clientsById[client.id] = client;
+    }
+}
+
+async function changeUserBalance(clientId) {
+    const balance = prompt('Новый баланс личного кабинета, ₽:');
+    if (balance === null) return;
+    const note = prompt('Причина изменения:') || '';
+    try {
+        await api(`/head/api/admin/clients/${clientId}/balance`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({balance, note})});
+        await loadClients();
+    } catch (error) { alert(error.message); }
+}
+
+async function changeUserPermissions(clientId, allowed) {
+    if (!confirm(allowed ? 'Разрешить работу при недостаточном балансе?' : 'Отозвать разрешение работы при недостаточном балансе?')) return;
+    try {
+        await api(`/head/api/admin/clients/${clientId}/permissions`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({allow_insufficient_balance: allowed})});
+        await loadClients();
+    } catch (error) { alert(error.message); }
 }
 
 async function loadClients() {
     const data = await api("/head/api/admin/clients");
+    window.clientsById = {};
     const body = document.getElementById("clientsBody");
     body.innerHTML = "";
     for (const client of data.clients) {
-        const tr = document.createElement("tr");
+        window.clientsById[client.id] = client;
+        const tr = document.createElement("details");
+        tr.className = 'settings-user';
         const platforms = (client.platforms || []).map(p => `<span class="tag">${esc(p)}</span>`).join(" ") || "—";
         const accounts = (client.account_ids || []).map(a => `<span class="tag">${esc(a)}</span>`).join(" ") || "—";
         const instruments = (client.instruments || []).map(i => `<span class="tag">${esc(i)}</span>`).join(" ") || "—";
         const profit = Number(client.total_profit || 0);
-        tr.innerHTML = `
-            <td class="num">${client.id}</td>
-            <td>${esc(client.full_name)}</td>
-            <td>${esc(client.login)}</td>
-            <td class="num">${esc(client.phone)}</td>
-            <td>${esc(client.email)}</td>
-            <td class="num">${esc(client.birth_date)}</td>
-            <td>${platforms}</td>
-            <td>${accounts}</td>
-            <td>${instruments}</td>
-            <td class="num">${fmt(client.initial_balance, " ₽")}</td>
-            <td class="num"><b>${fmt(client.current_balance, " ₽")}</b></td>
-            <td class="num ${profit >= 0 ? "green" : "red"}">${fmt(client.total_profit, " ₽")}</td>
-            <td class="num">${fmt(client.roe_percent, "%")}</td>
-            <td class="muted num">${client.last_sync_at ? new Date(client.last_sync_at).toLocaleString("ru-RU") : "нет"}</td>
-            <td><button class="secondary" onclick="showDetail(${client.id}, '${esc(client.login)}')">Синки</button></td>
-        `;
+        tr.innerHTML = `<summary>
+            <span><b>${esc(client.full_name)}</b><span class="muted" style="display:block; margin-top:4px;">${esc(client.login)} · #${client.id} · ${client.entitlements?.trial_active ? 'Пробный период' : 'Обычный'}</span></span>
+            <span><span class="muted">Баланс ЛК</span><b class="accent" style="display:block">${fmt(client.cabinet_balance, ' ₽')}</b></span>
+            <span><span class="muted">Общий PnL</span><b class="${profit >= 0 ? 'green' : 'red'}" style="display:block">${fmt(client.total_profit, ' ₽')}</b></span>
+            <span><span class="muted">Комиссии компании</span><b style="display:block">${fmt(client.paid_commissions, ' ₽')}</b></span>
+        </summary><div class="expanded">
+            <div class="muted">Телефон: ${esc(client.phone)} · Email: ${esc(client.email)} · Дата рождения: ${esc(client.birth_date)}</div>
+            <div style="margin:10px 0">${platforms} ${accounts} ${instruments}</div>
+            <div>Начальный баланс: ${fmt(client.initial_balance, ' ₽')} · Текущий: ${fmt(client.current_balance, ' ₽')} · ROE: ${fmt(client.roe_percent, '%')}</div>
+            <div class="muted" style="margin:8px 0">Синхронизация: ${client.last_sync_at ? new Date(client.last_sync_at).toLocaleString('ru-RU') : 'нет'}</div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px">
+                <button class="secondary" onclick="toggleClientProfile(${client.id})">Профиль</button>
+                <button class="secondary" onclick="changeUserBalance(${client.id})">Изменить баланс</button>
+                <button class="secondary" onclick="changeUserPermissions(${client.id}, ${!client.entitlements?.allow_insufficient_balance})">${client.entitlements?.allow_insufficient_balance ? 'Отозвать суперправо' : 'Суперправо'}</button>
+                <button class="secondary" onclick="showDetail(${client.id}, clientsById[${client.id}].login)">Синки</button>
+                <button class="secondary" onclick="showClientControlLogs(${client.id}, clientsById[${client.id}].login)">Логи</button>
+                <button class="secondary" onclick="resetPassword(${client.id}, clientsById[${client.id}].login)">Сброс пароля</button>
+            </div><div id="profile-${client.id}" class="hidden muted" style="margin-top:12px">Загрузка профиля…</div>
+        </div>`;
         body.appendChild(tr);
+    }
+    if (!data.clients.length) {
+        const tr = document.createElement("div");
+        tr.className = 'muted';
+        tr.textContent = 'Клиентов пока нет.';
+        body.appendChild(tr);
+    }
+}
+
+async function toggleClientProfile(clientId) {
+    const row = document.getElementById("profile-" + clientId);
+    if (!row) return;
+    if (!row.classList.contains("hidden")) {
+        row.classList.add("hidden");
+        return;
+    }
+    row.classList.remove("hidden");
+    try {
+        const data = await api(`/head/api/admin/clients/${clientId}/profile`);
+        const client = data.client;
+        const settings = data.commission_settings || {};
+        const accounts = (data.accounts || []).map(account => {
+            const broker = String(account.broker || "").toLowerCase();
+            const percent = settings[broker] ?? data.default_percent;
+            return `<tr>
+                <td>${esc(account.name || "—")}</td>
+                <td>${esc(account.broker || "—")}</td>
+                <td>${esc(account.broker_account_id || "—")}</td>
+                <td>${esc(account.mode || "—")}</td>
+                <td>${account.enabled ? "Включён" : "Выключен"}</td>
+                <td class="num">${fmt(account.historical_balance, " ₽")}</td>
+                <td class="num">${fmt(percent, "%")}${settings[broker] === undefined ? ' <span class="muted">(по умолчанию)</span>' : ""}</td>
+            </tr>`;
+        }).join("") || '<tr><td colspan="7" class="muted">Счета ещё не синхронизированы.</td></tr>';
+        row.innerHTML = `<div
+            style="width:100%"><div style="padding:12px; background:var(--card-2); border-radius:10px;">
+                <b>Профиль: ${esc(client.full_name)}</b>
+                <div style="margin:10px 0; font-size:13px;">
+                    Логин: ${esc(client.login)} · Телефон: ${esc(client.phone)} · Email: ${esc(client.email)} · Дата рождения: ${esc(client.birth_date)}
+                    <br>Устройство: ${esc(client.machine_label || "—")} · Регистрация: ${client.created_at ? new Date(client.created_at).toLocaleString("ru-RU") : "—"}
+                    <br>Баланс ЛК: <b class="accent">${fmt(data.cabinet_balance, " ₽")}</b>
+                </div>
+                <b>Счета и комиссия</b>
+                <div style="overflow-x:auto; margin-top:8px;"><table>
+                    <thead><tr><th>Название</th><th>Платформа</th><th>ID счёта</th><th>Режим</th><th>Состояние</th><th>Баланс счёта</th><th>Комиссия</th></tr></thead>
+                    <tbody>${accounts}</tbody>
+                </table></div>
+            </div>
+        </div>`;
+    } catch (e) {
+        row.innerHTML = `<td colspan="16" class="red">Ошибка загрузки профиля: ${esc(e.message)}</td>`;
     }
 }
 
@@ -203,8 +1017,98 @@ async function showDetail(clientId, login) {
     document.getElementById("detailCard").classList.remove("hidden");
 }
 
+const CONTROL_EVENT_LABELS = {
+    ORDER_RECONCILE: "Сверка ордеров",
+    POSITION_CLEARED: "Позиции сняты",
+    POSITION_MISMATCH: "Расхождение позиций",
+    RECONCILE_ERROR: "Ошибка сверки"
+};
+
+let controlLogsClientId = null;
+
+async function loadControlLogs() {
+    await ensureClientsMap();
+    const params = controlLogsClientId
+        ? "?client_id=" + controlLogsClientId + "&limit=100"
+        : "?limit=100";
+    const data = await api("/head/api/admin/control-logs" + params);
+    const body = document.getElementById("controlLogsBody");
+    body.innerHTML = "";
+    for (const log of data.control_logs) {
+        const client = (window.clientsById || {})[log.client_id];
+        const label = CONTROL_EVENT_LABELS[log.event_type] || log.event_type;
+        const color = log.event_type === "POSITION_MISMATCH"
+            ? "var(--accent)"
+            : (log.event_type === "ORDER_RECONCILE" ? "var(--muted)" : "var(--red)");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="num">${log.id}</td>
+            <td>${esc(client ? client.login : "—")}<span class="muted"> #${log.client_id}</span></td>
+            <td class="muted num">${log.created_at ? new Date(log.created_at).toLocaleString("ru-RU") : "—"}</td>
+            <td><span class="tag" style="color:${color};">${esc(label)}</span><div class="muted" style="font-size:11px;">${esc(log.event_type)}</div></td>
+            <td>${esc(log.ticker || "—")}</td>
+            <td class="num">${esc(log.trading_account_id || "—")}</td>
+            <td>${esc(log.details || "—")}</td>
+        `;
+        body.appendChild(tr);
+    }
+    if (!data.control_logs.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="7" class="muted">Контрольных логов пока нет.</td>';
+        body.appendChild(tr);
+    }
+}
+
+function showClientControlLogs(clientId, login) {
+    controlLogsClientId = clientId;
+    document.getElementById("controlLogsTitle").textContent = "Контрольные логи: " + login;
+    document.getElementById("controlAllButton").classList.remove("hidden");
+    switchTab("activity");
+    loadControlLogs();
+    document.getElementById("controlLogsCard").scrollIntoView({behavior: "smooth"});
+}
+
+function showAllControlLogs() {
+    controlLogsClientId = null;
+    document.getElementById("controlLogsTitle").textContent = "Контрольные логи";
+    document.getElementById("controlAllButton").classList.add("hidden");
+    loadControlLogs();
+}
+
 function hideDetail() {
     document.getElementById("detailCard").classList.add("hidden");
+}
+
+async function resetPassword(clientId, login) {
+    try {
+        const data = await api(`/head/api/admin/clients/${clientId}/reset-password`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({})
+        });
+        const expires = data.expires_at ? new Date(data.expires_at).toLocaleString("ru-RU") : "—";
+        document.getElementById("resetTitle").textContent = "Сброс пароля: " + login;
+        document.getElementById("resetContent").innerHTML = `
+            <div>Передайте пользователю <b>${esc(login)}</b> код сброса:</div>
+            <pre id="resetCode" style="font-size:22px; font-weight:700; letter-spacing:4px; text-align:center; margin:14px 0;">${esc(data.reset_code)}</pre>
+            <div class="muted" style="margin-bottom:12px;">Код действует до ${expires}. Пользователь должен ввести его в окне входа («Забыли пароль?») вместе с новым паролем.</div>
+            <button onclick="copyResetCode()">Копировать код</button>
+        `;
+        document.getElementById("resetCard").classList.remove("hidden");
+    } catch (e) {
+        alert("Ошибка: " + e.message);
+    }
+}
+
+function copyResetCode() {
+    const code = document.getElementById("resetCode").textContent.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code);
+    }
+}
+
+function hideReset() {
+    document.getElementById("resetCard").classList.add("hidden");
 }
 
 (async () => {

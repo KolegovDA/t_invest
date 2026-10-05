@@ -439,6 +439,7 @@ def test_selection_options_endpoint(
         ]
         == 30
     )
+    assert data["defaults"]["min_levels"] == 5
 
 
 def test_selection_index_endpoint(
@@ -652,6 +653,67 @@ def test_selection_auto_endpoint(
             )
         )
     )
+
+
+def test_grid_preview_uses_account_market_prices_and_exact_grid_cost(monkeypatch) -> None:
+    from application.portfolio_capital_calculator import PortfolioCapitalCalculator
+    import web.api as web_api
+
+    calls = []
+    class Market:
+        def get_snapshots(self, tickers, trading_account_id):
+            calls.append((tickers, trading_account_id))
+            return [_make_snapshot("SBER", "123.4567", "5")]
+
+    monkeypatch.setattr(web_api, "instrument_market_service", Market())
+    response = client.post("/api/instrument-selection/grids", json={
+        "capital": "100000", "trading_account_id": "account-test",
+        "instruments": [{"ticker": "sber", "levels": 5, "quantity": 2}],
+    })
+    assert response.status_code == 200
+    assert calls == [(["SBER"], "account-test")]
+    item = response.json()["selections"][0]
+    assert item["price"] == "123.4567"
+    assert item["levels"] == 5
+    assert item["quantity"] == 2
+    cost = PortfolioCapitalCalculator().calculate(
+        min_price=Decimal("123.4567") * Decimal("0.70"),
+        current_price=Decimal("123.4567"), levels_count=5, base_quantity=2,
+    )
+    assert Decimal(item["estimated_cost"]) == cost
+
+
+def test_grid_preview_rejects_missing_prices_duplicates_and_invalid_levels(monkeypatch) -> None:
+    _patch_snapshots(monkeypatch, [_make_snapshot("SBER", "0", "5")])
+    assert client.post("/api/instrument-selection/grids", json={
+        "capital": "100000", "instruments": [{"ticker": "SBER", "levels": 5}],
+    }).status_code == 400
+    assert client.post("/api/instrument-selection/grids", json={
+        "capital": "100000", "instruments": [{"ticker": "SBER"}, {"ticker": "sber"}],
+    }).status_code == 400
+    assert client.post("/api/instrument-selection/grids", json={
+        "capital": "100000", "instruments": [{"ticker": "SBER", "levels": 4}],
+    }).status_code == 422
+
+
+def test_selection_auto_endpoint_defaults_to_five_levels(monkeypatch) -> None:
+    from application.auto_portfolio_selector import GRID_MIN_PRICE_FACTOR
+    from application.portfolio_capital_calculator import PortfolioCapitalCalculator
+
+    _patch_snapshots(monkeypatch, [_make_snapshot("SBER", "100", "5")])
+    minimum = PortfolioCapitalCalculator().calculate(
+        min_price=Decimal("100") * GRID_MIN_PRICE_FACTOR,
+        current_price=Decimal("100"),
+        levels_count=5,
+        base_quantity=1,
+    )
+    response = client.post(
+        "/api/instrument-selection/auto",
+        json={"capital": str(minimum), "max_instruments": 1},
+    )
+    assert response.status_code == 200
+    assert response.json()["selections"][0]["levels"] == 5
+    assert Decimal(response.json()["spent_capital"]) == minimum
 
 
 def test_selection_auto_endpoint_market_error(

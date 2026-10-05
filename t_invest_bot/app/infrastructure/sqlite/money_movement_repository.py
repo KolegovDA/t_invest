@@ -38,6 +38,66 @@ class SQLiteMoneyMovementRepository:
                 ),
             )
 
+    def get_since(
+        self,
+        since: str,
+    ) -> (
+        list[MoneyMovement]
+    ):
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    created_at,
+                    trading_account_id,
+                    amount,
+                    note
+                FROM money_movements
+                WHERE created_at >= ?
+                ORDER BY id ASC
+                """,
+                (
+                    since,
+                ),
+            ).fetchall()
+
+        return [
+            MoneyMovement(
+                id=int(
+                    row[
+                        "id"
+                    ]
+                ),
+
+                created_at=(
+                    row[
+                        "created_at"
+                    ]
+                ),
+
+                trading_account_id=(
+                    row[
+                        "trading_account_id"
+                    ]
+                ),
+
+                amount=Decimal(
+                    row[
+                        "amount"
+                    ]
+                ),
+
+                note=(
+                    row[
+                        "note"
+                    ]
+                ),
+            )
+
+            for row in rows
+        ]
+
     def get_by_account(
         self,
         trading_account_id: str,

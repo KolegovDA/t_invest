@@ -1,4 +1,5 @@
 import sqlite3
+from sqlite_schema import SchemaConnection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,7 +9,7 @@ class SQLiteDatabase:
     database_path: Path
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, factory=SchemaConnection)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -104,7 +105,8 @@ class SQLiteDatabase:
                     instrument_id TEXT,
                     ticker TEXT,
                     event_type TEXT NOT NULL,
-                    details TEXT NOT NULL
+                    details TEXT NOT NULL,
+                    head_synced INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS money_movements (
@@ -120,6 +122,68 @@ class SQLiteDatabase:
                     trading_account_id
                 );
 
+                CREATE TABLE IF NOT EXISTS balance_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    trading_account_id TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    equity TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account
+                ON balance_snapshots (
+                    trading_account_id
+                );
+
+                CREATE TABLE IF NOT EXISTS account_backfills (
+                    trading_account_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS broker_cash_flows (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trading_account_id TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    payment TEXT NOT NULL
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_cash_flows_dedup
+                ON broker_cash_flows (
+                    trading_account_id,
+                    occurred_at,
+                    kind,
+                    payment
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_broker_cash_flows_account
+                ON broker_cash_flows (
+                    trading_account_id
+                );
+
+                CREATE TABLE IF NOT EXISTS broker_operations (
+                    trading_account_id TEXT NOT NULL,
+                    operation_id TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    payment TEXT NOT NULL,
+                    instrument_id TEXT,
+                    ticker TEXT,
+                    quantity TEXT,
+                    PRIMARY KEY (trading_account_id, operation_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_broker_operations_date
+                ON broker_operations (occurred_at);
+
+                CREATE TABLE IF NOT EXISTS broker_operation_sync (
+                    trading_account_id TEXT PRIMARY KEY,
+                    covered_since TEXT NOT NULL,
+                    synced_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS instrument_statistics (
                     instrument_id TEXT PRIMARY KEY,
                     total_cycles INTEGER NOT NULL,
@@ -132,5 +196,113 @@ class SQLiteDatabase:
                     total_trades INTEGER NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS commission_charges (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    trading_account_id TEXT,
+                    broker TEXT NOT NULL,
+                    instrument_id TEXT,
+                    ticker TEXT,
+                    level_index INTEGER,
+                    trade_profit TEXT NOT NULL,
+                    percent TEXT NOT NULL,
+                    amount TEXT NOT NULL,
+                    balance_after TEXT NOT NULL,
+                    synced_with_head INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS cabinet_entitlements (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    payload_json TEXT NOT NULL,
+                    local_charge_id INTEGER NOT NULL,
+                    balance TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS commission_settings_cache (
+                    broker TEXT PRIMARY KEY,
+                    percent TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                """
+            )
+
+            existing_columns = {
+                row[1]
+                for row in connection.execute(
+                    """
+                    PRAGMA table_info(
+                        operations_log
+                    )
+                    """
+                ).fetchall()
+            }
+
+            if (
+                "head_synced"
+                not in existing_columns
+            ):
+                connection.execute(
+                    """
+                    ALTER TABLE operations_log
+                    ADD COLUMN head_synced
+                        INTEGER NOT NULL
+                        DEFAULT 0
+                    """
+                )
+
+            charge_columns = {
+                row[1]
+                for row in connection.execute(
+                    """
+                    PRAGMA table_info(
+                        commission_charges
+                    )
+                    """
+                ).fetchall()
+            }
+
+            if (
+                "trading_account_id"
+                not in charge_columns
+            ):
+                connection.execute(
+                    """
+                    ALTER TABLE commission_charges
+                    ADD COLUMN trading_account_id
+                        TEXT
+                    """
+                )
+
+            if (
+                "synced_with_head"
+                not in charge_columns
+            ):
+                connection.execute(
+                    """
+                    ALTER TABLE commission_charges
+                    ADD COLUMN synced_with_head
+                        INTEGER NOT NULL
+                        DEFAULT 0
+                    """
+                )
+
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_operations_log_head_synced
+                ON operations_log (
+                    head_synced
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_commission_charges_account
+                ON commission_charges (
+                    trading_account_id
+                )
                 """
             )

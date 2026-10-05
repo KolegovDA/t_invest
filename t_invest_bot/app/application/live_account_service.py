@@ -48,14 +48,38 @@ class LiveAccountStatus:
 class LiveAccountService:
     settings: Settings
 
+    token: (
+        str | None
+    ) = None
+
+    account_id: (
+        str | None
+    ) = None
+
     def get_status(self) -> LiveAccountStatus:
-        token = self.settings.tinvest_token
+        token = (
+            self.token
+            or (
+                self
+                .settings
+                .tinvest_token
+            )
+        )
+
+        selected_account_id = (
+            self.account_id
+            or (
+                self
+                .settings
+                .tinvest_live_account_id
+            )
+        )
 
         if not token:
             return LiveAccountStatus(
                 token_configured=False,
                 selected_account_id=(
-                    self.settings.tinvest_live_account_id
+                    selected_account_id
                 ),
                 account_found=False,
                 live_trading_enabled=(
@@ -86,7 +110,7 @@ class LiveAccountService:
                 for account in accounts_response.accounts:
                     selected = (
                         account.id
-                        == self.settings.tinvest_live_account_id
+                        == selected_account_id
                     )
 
                     accounts.append(
@@ -155,7 +179,7 @@ class LiveAccountService:
                 return LiveAccountStatus(
                     token_configured=True,
                     selected_account_id=(
-                        self.settings.tinvest_live_account_id
+                        selected_account_id
                     ),
                     account_found=(
                         selected_account is not None
@@ -181,7 +205,7 @@ class LiveAccountService:
             return LiveAccountStatus(
                 token_configured=True,
                 selected_account_id=(
-                    self.settings.tinvest_live_account_id
+                    selected_account_id
                 ),
                 account_found=False,
                 live_trading_enabled=(

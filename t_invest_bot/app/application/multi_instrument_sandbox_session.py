@@ -9,6 +9,7 @@ from broker.broker_order_reconciler import (
     OrderReconcileResult,
 )
 from domain.events import TradeExecutedEvent
+from infrastructure.tinvest.last_price_provider import OrderBookQuote
 from domain.order_execution import (
     BrokerActiveOrder,
     PlacedOrder,
@@ -25,6 +26,15 @@ class MultiInstrumentSandboxSession:
         self,
         instrument_id: str,
         price: Decimal,
+
+        buy_reference_price: (
+            Decimal | None
+        ) = None,
+
+        sell_reference_price: (
+            Decimal | None
+        ) = None,
+        order_book: OrderBookQuote | None = None,
     ) -> list[PlacedOrder]:
         session = self.sessions[
             instrument_id
@@ -32,6 +42,15 @@ class MultiInstrumentSandboxSession:
 
         return session.on_price(
             price=price,
+
+            buy_reference_price=(
+                buy_reference_price
+            ),
+
+            sell_reference_price=(
+                sell_reference_price
+            ),
+            **({"order_book": order_book} if order_book is not None else {}),
         )
 
     def poll_executions(

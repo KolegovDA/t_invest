@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime
 from decimal import Decimal
 
 from application.live_order_manager_state_mapper import (
@@ -87,6 +89,14 @@ class GridEngineStateMapper:
 
         grid_config = (
             GridEngineConfigState(
+                take_profit_percent=config.take_profit_percent,
+                max_take_profit_percent=config.max_take_profit_percent,
+                base_order_amount=config.base_order_amount,
+                order_amount_multiplier=config.order_amount_multiplier,
+                max_order_amount_multiplier=config.max_order_amount_multiplier,
+                quantity_step=config.quantity_step,
+                min_quantity=config.min_quantity,
+                min_order_amount=config.min_order_amount,
                 entry_limit_offset_percent=(
                     config
                     .entry_limit_offset_percent
@@ -140,7 +150,21 @@ class GridEngineStateMapper:
                 quantity=(
                     config.quantity
                 ),
+
+                early_close_min_working_time_seconds=(
+                    config
+                    .early_close_min_working_time_seconds
+                ),
+
+                early_close_profit_loss_ratio=(
+                    config
+                    .early_close_profit_loss_ratio
+                ),
             )
+        )
+
+        grid_opened_at = (
+            engine.grid_opened_at
         )
 
         return InstrumentTradingState(
@@ -192,13 +216,32 @@ class GridEngineStateMapper:
                     )
                 )
             ),
+
+            grid_opened_at=(
+                grid_opened_at
+                .isoformat()
+                if (
+                    grid_opened_at
+                    is not None
+                )
+                else None
+            ),
+            completed_cycles=list(engine.completed_cycles),
+            cycle_closed_orders=engine.cycle_closed_orders,
+            cycle_realized_profit=engine.cycle_realized_profit,
+            session_start_price=engine.session_start_price,
+            grid_step=engine.grid_step,
         )
 
     def restore(
         self,
         engine: GridEngine,
         state: InstrumentTradingState,
+        use_current_rules: bool = False,
     ) -> None:
+        current_config = replace(engine.config)
+        current_level_prices = {level.index: level.price for level in engine.levels}
+
         if (
             engine.instrument_id
             != state.instrument_uid
@@ -212,6 +255,7 @@ class GridEngineStateMapper:
         if (
             state.grid_config
             is not None
+            and not use_current_rules
         ):
             self._restore_config(
                 engine=engine,
@@ -235,10 +279,21 @@ class GridEngineStateMapper:
                 f"engine={len(engine.levels)}"
             )
 
+        if not use_current_rules:
+            if state.session_start_price is not None:
+                engine.session_start_price = state.session_start_price
+            if state.grid_step is not None:
+                engine.grid_step = state.grid_step
+
         engine.open_positions.clear()
 
         engine.realized_profit = (
             state.realized_profit
+        )
+        engine.completed_cycles = list(state.completed_cycles)
+        engine.cycle_closed_orders = state.cycle_closed_orders if state.open_positions else 0
+        engine.cycle_realized_profit = (
+            state.cycle_realized_profit if state.open_positions else Decimal("0")
         )
 
         if hasattr(
@@ -257,6 +312,22 @@ class GridEngineStateMapper:
             engine.total_sell_commission = (
                 state
                 .total_sell_commission
+            )
+
+        if (
+            state.grid_opened_at
+            is None
+        ):
+            engine.grid_opened_at = (
+                None
+            )
+
+        else:
+            engine.grid_opened_at = (
+                datetime.fromisoformat(
+                    state
+                    .grid_opened_at
+                )
             )
 
         for level in (
@@ -417,6 +488,63 @@ class GridEngineStateMapper:
                 .level_index
             ] = position
 
+        if use_current_rules:
+            engine.config = current_config
+            engine.__post_init__()
+            grid_step = engine.grid_step
+            if grid_step is None:
+                raise ValueError("Missing current grid step")
+            ordered_levels = {
+                order.level_index
+                for order in state.active_orders
+            }
+            for level in engine.levels:
+                if (
+                    level.index in engine.open_positions
+                    or level.index in ordered_levels
+                ):
+                    continue
+                previous_position = engine.open_positions.get(level.index - 1)
+                level.price = (
+                    previous_position.entry_price - grid_step
+                    if previous_position is not None
+                    else current_level_prices[level.index]
+                )
+                if level.trailing_entry is not None:
+                    level.trailing_entry.level_price = level.price
+                    level.trailing_entry.trigger_price = (
+                        engine.trailing_engine._calculate_entry_trigger(
+                            highest_price=level.trailing_entry.lowest_price,
+                        )
+                    )
+                    level.trailing_entry.is_confirmed = False
+
+            for position in engine.open_positions.values():
+                purchase_cost = position.purchase_cost
+                if purchase_cost is None:
+                    purchase_cost = (
+                        position.entry_price * Decimal(position.quantity)
+                        + position.buy_commission
+                    )
+                    position.purchase_cost = purchase_cost
+                gross_amount = purchase_cost - position.buy_commission
+                if gross_amount <= 0 or position.entry_price <= 0:
+                    raise ValueError("Invalid saved position purchase cost")
+                effective_units = gross_amount / position.entry_price
+                position.hard_take_profit_price = (
+                    engine._calculate_hard_take_profit_price(
+                        purchase_cost=purchase_cost,
+                        effective_units=effective_units,
+                    )
+                )
+                position.expected_sell_commission_percent = (
+                    engine.config.fallback_sell_commission_percent
+                )
+                if position.trailing_exit is not None:
+                    position.trailing_exit.target_price = position.hard_take_profit_price
+                    if position.level_index not in ordered_levels:
+                        position.trailing_exit.is_confirmed = False
+
     def restore_with_orders(
         self,
         engine: GridEngine,
@@ -424,11 +552,13 @@ class GridEngineStateMapper:
         live_order_manager: (
             LiveOrderManager | None
         ),
+        use_current_rules: bool = False,
     ) -> None:
         self.restore(
             engine=engine,
 
             state=state,
+            use_current_rules=use_current_rules,
         )
 
         if (
@@ -524,6 +654,28 @@ class GridEngineStateMapper:
         engine.config.quantity = (
             saved.quantity
         )
+        engine.config.take_profit_percent = saved.take_profit_percent
+        engine.config.max_take_profit_percent = saved.max_take_profit_percent
+        engine.config.base_order_amount = saved.base_order_amount
+        engine.config.order_amount_multiplier = saved.order_amount_multiplier
+        engine.config.max_order_amount_multiplier = saved.max_order_amount_multiplier
+        engine.config.quantity_step = saved.quantity_step
+        engine.config.min_quantity = saved.min_quantity
+        engine.config.min_order_amount = saved.min_order_amount
+
+        engine\
+            .config\
+            .early_close_min_working_time_seconds = (
+                saved
+                .early_close_min_working_time_seconds
+            )
+
+        engine\
+            .config\
+            .early_close_profit_loss_ratio = (
+                saved
+                .early_close_profit_loss_ratio
+            )
 
         engine.trailing_engine = (
             TrailingEngine(
@@ -561,6 +713,16 @@ class GridEngineStateMapper:
                         emergency_sell_offset_percent=(
                             saved
                             .exit_limit_offset_percent
+                        ),
+
+                        early_close_min_working_time_seconds=(
+                            saved
+                            .early_close_min_working_time_seconds
+                        ),
+
+                        early_close_profit_loss_ratio=(
+                            saved
+                            .early_close_profit_loss_ratio
                         ),
                     )
                 ),

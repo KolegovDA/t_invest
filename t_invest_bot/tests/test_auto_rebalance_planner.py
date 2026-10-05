@@ -251,7 +251,7 @@ def test_budget_too_small_rejects_everything(
     ccc_min_cost = (
         grid_cost(
             "100",
-            10,
+            5,
         )
     )
 
@@ -303,17 +303,14 @@ def test_budget_too_small_rejects_everything(
         )
     ]
 
-    assert (
-        "нет более волатильной "
-        "акции в свободный "
-        "капитал"
-    ) in reasons
-
-    assert (
-        "не хватает капитала "
-        "даже на минимальную "
-        "сетку"
-    ) in reasons
+    amounts = (
+        f"нужно минимум {ccc_min_cost:.2f} ₽, "
+        f"доступно {ccc_min_cost - Decimal('0.01'):.2f} ₽"
+    )
+    assert reasons == [
+        "нет более волатильной акции в свободный капитал: " + amounts,
+        "не хватает капитала: " + amounts,
+    ]
 
 
 def test_zero_cash_returns_empty_decision(
@@ -552,8 +549,7 @@ def test_max_price_filters_candidates(
     ]
 
     assert (
-        "цена выше "
-        "лимита"
+        "цена выше лимита: 1000.00 ₽, лимит 500.00 ₽"
     ) in reasons
 
 

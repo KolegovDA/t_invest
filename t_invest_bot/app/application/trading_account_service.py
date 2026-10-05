@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import uuid4
 
+from domain.platform_connection import PlatformConnection
 from domain.trading_account import (
     BrokerType,
     CommissionMode,
@@ -19,6 +20,16 @@ from domain.trading_account import (
 )
 from infrastructure.sqlite.trading_account_repository import (
     TradingAccountRepository,
+)
+
+
+BYBIT_BASE_CURRENCIES = (
+    "USDT",
+    "USDC",
+)
+
+BYBIT_DEFAULT_BASE_CURRENCY = (
+    "USDT"
 )
 
 
@@ -74,6 +85,14 @@ class TradingAccountCredentials:
         return value
 
 
+class PlatformCredentialsProvider(Protocol):
+    def get_all(self) -> list[PlatformConnection]:
+        ...
+
+    def get_credentials(self, platform_id: str) -> dict[str, str]:
+        ...
+
+
 @dataclass(slots=True)
 class TradingAccountService:
     repository: (
@@ -83,6 +102,8 @@ class TradingAccountService:
     secret_protector: (
         SecretProtector
     )
+
+    platform_connection_service: PlatformCredentialsProvider | None = None
 
     def create(
         self,
@@ -101,6 +122,10 @@ class TradingAccountService:
         mode: (
             TradingAccountMode
         ) = TradingAccountMode.LIVE,
+
+        base_currency: (
+            str | None
+        ) = None,
 
         commission_mode: (
             CommissionMode
@@ -145,6 +170,16 @@ class TradingAccountService:
             credentials=(
                 normalized_credentials
             ),
+        )
+
+        normalized_base_currency = (
+            self._normalize_base_currency(
+                broker=broker,
+
+                base_currency=(
+                    base_currency
+                ),
+            )
         )
 
         self._validate_commission(
@@ -197,6 +232,10 @@ class TradingAccountService:
             ),
 
             mode=mode,
+
+            base_currency=(
+                normalized_base_currency
+            ),
 
             commission_mode=(
                 commission_mode
@@ -257,6 +296,11 @@ class TradingAccountService:
 
         mode: (
             TradingAccountMode
+            | None
+        ) = None,
+
+        base_currency: (
+            str
             | None
         ) = None,
 
@@ -327,6 +371,24 @@ class TradingAccountService:
 
         if mode is not None:
             account.mode = mode
+
+        if (
+            base_currency
+            is not None
+        ):
+            account.base_currency = (
+                self
+                ._normalize_base_currency(
+                    broker=(
+                        account
+                        .broker
+                    ),
+
+                    base_currency=(
+                        base_currency
+                    ),
+                )
+            )
 
         if (
             commission_mode
@@ -502,6 +564,13 @@ class TradingAccountService:
             raise KeyError(
                 account_id
             )
+
+        if self.platform_connection_service is not None:
+            for platform in self.platform_connection_service.get_all():
+                if platform.broker == stored.account.broker and platform.mode == stored.account.mode:
+                    return TradingAccountCredentials(
+                        values=self.platform_connection_service.get_credentials(platform.id),
+                    )
 
         decrypted = (
             self.secret_protector
@@ -746,6 +815,56 @@ class TradingAccountService:
         # Поэтому domain/service
         # не нужно переписывать.
         #
+
+    @staticmethod
+    def _normalize_base_currency(
+        broker: BrokerType,
+
+        base_currency: (
+            str | None
+        ),
+    ) -> str | None:
+        value = (
+            (
+                base_currency
+                or ""
+            )
+            .strip()
+            .upper()
+        )
+
+        if (
+            broker
+            == BrokerType.BYBIT
+        ):
+            if not value:
+                return (
+                    BYBIT_DEFAULT_BASE_CURRENCY
+                )
+
+            if (
+                value
+                not in BYBIT_BASE_CURRENCIES
+            ):
+                raise ValueError(
+                    "Unsupported base "
+                    "currency for Bybit: "
+
+                    f"{value}. "
+
+                    "Allowed: USDT, USDC"
+                )
+
+            return value
+
+        if value:
+            raise ValueError(
+                "Base currency is only "
+                "supported for Bybit "
+                "accounts"
+            )
+
+        return None
 
     def _validate_commission(
         self,

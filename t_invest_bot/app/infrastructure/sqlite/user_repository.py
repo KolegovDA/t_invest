@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+from sqlite_schema import SchemaConnection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from infrastructure.security.field_encryption import (
+    make_field_cipher,
+)
 
 
 @dataclass(slots=True)
@@ -46,8 +51,20 @@ class StoredSession:
 class SQLiteUserRepository:
     db_path: str
 
+    field_cipher: (
+        Any | None
+    ) = None
+
     def __post_init__(self) -> None:
         self._ensure_database()
+
+        if (
+            self.field_cipher
+            is None
+        ):
+            self.field_cipher = (
+                make_field_cipher()
+            )
 
     def _connect(
         self,
@@ -55,7 +72,8 @@ class SQLiteUserRepository:
         connection = (
             sqlite3
             .connect(
-                self.db_path
+                self.db_path,
+                factory=SchemaConnection,
             )
         )
 
@@ -140,6 +158,133 @@ class SQLiteUserRepository:
 
             connection.commit()
 
+        self._encrypt_legacy_fields()
+
+    def _encrypt_legacy_fields(
+        self,
+    ) -> None:
+        """
+        v1.3 (п. 4): разовое
+        DPAPI-шифрование паролей
+        и api-ключей, записанных
+        до включения шифрования.
+        """
+
+        cipher = (
+            self.field_cipher
+        )
+
+        if (
+            cipher
+            is None
+        ):
+            return
+
+        try:
+            with self._connect() as connection:
+                rows = (
+                    connection
+                    .execute(
+                        """
+                        SELECT
+                            id,
+                            password_hash,
+                            head_api_key
+                        FROM users
+                        """
+                    )
+                    .fetchall()
+                )
+
+                for row in rows:
+                    updates = {}
+
+                    password_hash = (
+                        row[
+                            "password_hash"
+                        ]
+                    )
+
+                    if (
+                        password_hash
+                        and not (
+                            cipher
+                            .is_encrypted(
+                                password_hash
+                            )
+                        )
+                    ):
+                        updates[
+                            "password_hash"
+                        ] = (
+                            cipher
+                            .encrypt(
+                                password_hash
+                            )
+                        )
+
+                    head_api_key = (
+                        row[
+                            "head_api_key"
+                        ]
+                    )
+
+                    if (
+                        head_api_key
+                        and not (
+                            cipher
+                            .is_encrypted(
+                                head_api_key
+                            )
+                        )
+                    ):
+                        updates[
+                            "head_api_key"
+                        ] = (
+                            cipher
+                            .encrypt(
+                                head_api_key
+                            )
+                        )
+
+                    if not updates:
+                        continue
+
+                    assignments = (
+                        ", ".join(
+                            f"{column} = ?"
+
+                            for column
+                            in updates
+                        )
+                    )
+
+                    connection.execute(
+                        f"""
+                        UPDATE users
+                        SET {assignments}
+                        WHERE id = ?
+                        """,
+                        (
+                            *updates
+                            .values(),
+
+                            row[
+                                "id"
+                            ],
+                        ),
+                    )
+
+                connection.commit()
+
+        except Exception as error:
+            print(
+                "USER FIELDS ENCRYPTION ERROR:",
+                repr(
+                    error
+                ),
+            )
+
     @staticmethod
     def _ensure_column(
         connection,
@@ -191,6 +336,21 @@ class SQLiteUserRepository:
         login: str,
         password_hash: str,
     ) -> StoredUser:
+        stored_hash = (
+            self
+            .field_cipher
+            .encrypt(
+                password_hash
+            )
+            if (
+                self
+                .field_cipher
+                is not None
+            )
+
+            else password_hash
+        )
+
         with self._connect() as connection:
             cursor = (
                 connection
@@ -212,7 +372,7 @@ class SQLiteUserRepository:
                         email,
                         birth_date,
                         login,
-                        password_hash,
+                        stored_hash,
                     ),
                 )
             )
@@ -224,12 +384,13 @@ class SQLiteUserRepository:
 
             connection.commit()
 
+        if user_id is None:
+            raise RuntimeError("users insert failed")
+
         user = (
             self
             .get_user_by_id(
-                int(
-                    user_id
-                )
+                user_id
             )
         )
 
@@ -239,6 +400,100 @@ class SQLiteUserRepository:
         )
 
         return user
+
+    def update_user_profile(
+        self,
+        user_id: int,
+        full_name: (
+            str | None
+        ) = None,
+        phone: (
+            str | None
+        ) = None,
+        email: (
+            str | None
+        ) = None,
+        birth_date: (
+            str | None
+        ) = None,
+    ) -> None:
+        updates = {}
+
+        if (
+            full_name
+            is not None
+        ):
+            updates[
+                "full_name"
+            ] = (
+                full_name
+                .strip()
+            )
+
+        if (
+            phone
+            is not None
+        ):
+            updates[
+                "phone"
+            ] = (
+                phone
+                .strip()
+            )
+
+        if (
+            email
+            is not None
+        ):
+            updates[
+                "email"
+            ] = (
+                email
+                .strip()
+            )
+
+        if (
+            birth_date
+            is not None
+        ):
+            updates[
+                "birth_date"
+            ] = (
+                birth_date
+                .strip()
+            )
+
+        if (
+            not updates
+        ):
+            return
+
+        set_clause = (
+            ", "
+            .join(
+                f"{column} = ?"
+
+                for column
+                in updates
+            )
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                f"""
+                UPDATE users
+                SET {set_clause}
+                WHERE id = ?
+                """,
+                (
+                    *updates
+                    .values(),
+
+                    user_id,
+                ),
+            )
+
+            connection.commit()
 
     def get_user_by_id(
         self,
@@ -304,6 +559,18 @@ class SQLiteUserRepository:
             )
         )
 
+    def get_first_user_with_head_api_key(self) -> StoredUser | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM users
+                WHERE head_api_key IS NOT NULL AND head_api_key != ''
+                ORDER BY id
+                LIMIT 1
+                """,
+            ).fetchone()
+        return self._row_to_user(row) if row is not None else None
+
     def count_users(
         self,
     ) -> int:
@@ -332,6 +599,26 @@ class SQLiteUserRepository:
             str | None
         ),
     ) -> None:
+        stored_key = (
+            api_key
+        )
+
+        if (
+            api_key
+            and (
+                self
+                .field_cipher
+                is not None
+            )
+        ):
+            stored_key = (
+                self
+                .field_cipher
+                .encrypt(
+                    api_key
+                )
+            )
+
         with self._connect() as connection:
             connection.execute(
                 """
@@ -340,7 +627,43 @@ class SQLiteUserRepository:
                 WHERE id = ?
                 """,
                 (
-                    api_key,
+                    stored_key,
+                    user_id,
+                ),
+            )
+
+            connection.commit()
+
+    def set_user_password_hash(
+        self,
+        user_id: int,
+        password_hash: str,
+    ) -> None:
+        stored_hash = (
+            self
+            .field_cipher
+            .encrypt(
+                password_hash
+            )
+
+            if (
+                self
+                .field_cipher
+                is not None
+            )
+
+            else password_hash
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE users
+                SET password_hash = ?
+                WHERE id = ?
+                """,
+                (
+                    stored_hash,
                     user_id,
                 ),
             )
@@ -372,11 +695,70 @@ class SQLiteUserRepository:
         if row is None:
             return None
 
-        return (
+        value = (
             row[
                 "head_api_key"
             ]
         )
+
+        if (
+            value
+            is None
+        ):
+            return None
+
+        if (
+            self
+            .field_cipher
+            is None
+        ):
+            return value
+
+        return (
+            self
+            .field_cipher
+            .decrypt(
+                value
+            )
+        )
+
+    def list_users_without_head_api_key(
+        self,
+    ) -> (
+        list[
+            StoredUser
+        ]
+    ):
+        """
+        Офлайн-очередь регистрации:
+        пользователи, чьи данные
+        ещё не доставлены на
+        головной сервер.
+        """
+
+        with self._connect() as connection:
+            rows = (
+                connection
+                .execute(
+                    """
+                    SELECT *
+                    FROM users
+                    WHERE head_api_key IS NULL
+                    ORDER BY id
+                    """
+                )
+                .fetchall()
+            )
+
+        return [
+            self
+            ._row_to_user(
+                row
+            )
+
+            for row
+            in rows
+        ]
 
     # ----------------------------------------
     # Devices
@@ -616,6 +998,19 @@ class SQLiteUserRepository:
             )
         )
 
+    def browser_devices_for_head(self, api_key: str) -> list[dict]:
+        user = self.get_first_user_with_head_api_key()
+        if user is None or user.head_api_key != api_key:
+            return []
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT device_id, MAX(last_activity) AS last_seen_at "
+                "FROM auth_sessions WHERE user_id = ? "
+                "GROUP BY device_id ORDER BY last_seen_at DESC LIMIT 100",
+                (user.id,),
+            ).fetchall()
+        return [{"device_id": row["device_id"], "last_seen_at": row["last_seen_at"]} for row in rows]
+
     def touch_session(
         self,
         token: str,
@@ -653,10 +1048,45 @@ class SQLiteUserRepository:
 
             connection.commit()
 
-    @staticmethod
     def _row_to_user(
+        self,
         row: Any,
     ) -> StoredUser:
+        cipher = (
+            self
+            .field_cipher
+        )
+
+        password_hash = (
+            row[
+                "password_hash"
+            ]
+        )
+
+        head_api_key = (
+            row[
+                "head_api_key"
+            ]
+        )
+
+        if (
+            cipher
+            is not None
+        ):
+            password_hash = (
+                cipher
+                .decrypt(
+                    password_hash
+                )
+            )
+
+            head_api_key = (
+                cipher
+                .decrypt(
+                    head_api_key
+                )
+            )
+
         return (
             StoredUser(
                 id=int(
@@ -696,9 +1126,7 @@ class SQLiteUserRepository:
                 ),
 
                 password_hash=(
-                    row[
-                        "password_hash"
-                    ]
+                    password_hash
                 ),
 
                 created_at=(
@@ -708,9 +1136,7 @@ class SQLiteUserRepository:
                 ),
 
                 head_api_key=(
-                    row[
-                        "head_api_key"
-                    ]
+                    head_api_key
                 ),
             )
         )

@@ -47,7 +47,7 @@ class LiveOrderManagerStateMapper:
                 command,
                 PlaceSellLimitCommand,
             ):
-                side = "SELL"
+                side = "SELL_MARKET" if command.is_market else "SELL"
 
                 level_index = (
                     command.level_index
@@ -169,11 +169,12 @@ class LiveOrderManagerStateMapper:
                 ),
             )
 
-        if state.side == "SELL":
+        if state.side in {"SELL", "SELL_MARKET"}:
             if state.level_index is None:
                 return None
 
             return PlaceSellLimitCommand(
+                is_market=state.side == "SELL_MARKET",
                 instrument_id=(
                     state.instrument_uid
                 ),

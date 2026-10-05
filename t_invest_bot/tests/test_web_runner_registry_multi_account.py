@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from application.web_runner_registry import (
     WebRunnerRegistry,
 )
@@ -80,3 +82,39 @@ def test_stop_by_session_id_stops_only_one_runner() -> None:
         registry.get_active_count()
         == 1
     )
+
+
+def test_partial_overlap_on_same_account_is_rejected_before_runner_start():
+    registry = WebRunnerRegistry()
+    first = FakeRunner("first", "SMLT")
+    first.trading_account_id = "account-a"
+    first.context.instrument_ids_by_ticker["SBER"] = "SBER_UID"
+    registry.start(first)
+    second = FakeRunner("second", "SMLT")
+    second.trading_account_id = "account-a"
+    second.context.instrument_ids_by_ticker.update({"GAZP": "GAZP_UID", "LKOH": "LKOH_UID"})
+    with pytest.raises(ValueError, match="SMLT"):
+        registry.start(second)
+    assert second.is_running is False
+    assert registry.get_all() == [first]
+    with pytest.raises(ValueError, match="SMLT"):
+        registry.ensure_instruments_available("account-a", [" smlt ", "GAZP"])
+    registry.ensure_instruments_available("account-b", ["SMLT"])
+    registry.ensure_instruments_available("account-a", ["GAZP"])
+    registry.stop_by_session_id("first")
+    registry.start(second)
+    assert second.is_running is True
+
+
+def test_rebalance_cannot_add_another_sessions_asset_before_broker_access():
+    from application.session_instrument_manager import SessionInstrumentManager
+
+    registry = WebRunnerRegistry()
+    first = FakeRunner("first", "SMLT")
+    first.trading_account_id = "account"
+    registry.start(first)
+    manager = SessionInstrumentManager(
+        instrument_availability_check=lambda ticker: registry.ensure_instruments_available("account", [ticker]),
+    )
+    with pytest.raises(ValueError, match="SMLT"):
+        manager.add_instrument(SimpleNamespace(instrument_ids_by_ticker={}), "SMLT", 5, 1)

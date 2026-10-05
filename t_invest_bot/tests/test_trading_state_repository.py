@@ -67,6 +67,10 @@ def test_trading_state_repository_save_and_load(
                 realized_profit=Decimal(
                     "12.34"
                 ),
+                cycle_closed_orders=2,
+                cycle_realized_profit=Decimal("4.56"),
+                session_start_price=Decimal("285"),
+                grid_step=Decimal("5"),
 
                 levels=[
                     GridLevelState(
@@ -174,6 +178,10 @@ def test_trading_state_repository_save_and_load(
     )
 
     assert restored is not None
+    assert restored.instruments[0].cycle_closed_orders == 2
+    assert restored.instruments[0].cycle_realized_profit == Decimal("4.56")
+    assert restored.instruments[0].session_start_price == Decimal("285")
+    assert restored.instruments[0].grid_step == Decimal("5")
 
     assert (
         restored.session_id

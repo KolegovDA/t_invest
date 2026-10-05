@@ -4,6 +4,7 @@ from dataclasses import (
     dataclass,
     field,
 )
+from decimal import Decimal
 
 from domain.commands import (
     PlaceSellLimitCommand,
@@ -25,6 +26,13 @@ class PositionReconcileReport:
         str
     ] = field(
         default_factory=list
+    )
+
+    cleared_purchase_cost: dict[
+        str,
+        Decimal,
+    ] = field(
+        default_factory=dict
     )
 
 
@@ -185,16 +193,34 @@ class BrokerPositionReconciler:
             PositionReconcileReport
         ),
     ) -> None:
+        cleared_cost = Decimal("0")
+
         for level_index in list(
             engine
             .open_positions
             .keys()
         ):
-            engine\
-                .open_positions\
+            position = (
+                engine
+                .open_positions
                 .pop(
                     level_index,
                     None,
+                )
+            )
+
+            if (
+                position
+                is not None
+                and (
+                    position
+                    .purchase_cost
+                )
+                is not None
+            ):
+                cleared_cost += (
+                    position
+                    .purchase_cost
                 )
 
             level = (
@@ -253,6 +279,11 @@ class BrokerPositionReconciler:
             .append(
                 instrument_id
             )
+
+        report\
+            .cleared_purchase_cost[
+                instrument_id
+            ] = cleared_cost
 
     @staticmethod
     def _has_pending_sell(

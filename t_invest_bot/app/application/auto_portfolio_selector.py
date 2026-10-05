@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_FLOOR
+from decimal import Decimal, ROUND_HALF_UP
 
 from application.instrument_selector import (
     RejectedInstrument,
@@ -13,7 +13,7 @@ from application.portfolio_capital_calculator import (
 
 DESIRED_LEVELS = 30
 
-MIN_LEVELS = 10
+MIN_LEVELS = 5
 
 GRID_MIN_PRICE_FACTOR = (
     Decimal("0.70")
@@ -193,11 +193,100 @@ def _fit_levels(
         if cost <= budget:
             return (
                 levels,
-
                 cost,
             )
 
     return None
+
+
+def _format_amount(
+    value: Decimal,
+) -> str:
+    return str(
+        value.quantize(
+            Decimal("0.01"),
+
+            rounding=(
+                ROUND_HALF_UP
+            ),
+        )
+    )
+
+
+def _min_grid_cost(
+    capital_calculator: (
+        PortfolioCapitalCalculator
+    ),
+
+    price: Decimal,
+
+    quantity: int,
+
+    min_levels: int,
+) -> Decimal:
+    return (
+        capital_calculator
+        .calculate(
+            min_price=(
+                price
+                * (
+                    GRID_MIN_PRICE_FACTOR
+                )
+            ),
+
+            current_price=(
+                price
+            ),
+
+            levels_count=(
+                min_levels
+            ),
+
+            base_quantity=(
+                quantity
+            ),
+        )
+    )
+
+
+def _min_grid_rejection_reason(
+    capital_calculator: (
+        PortfolioCapitalCalculator
+    ),
+
+    price: Decimal,
+
+    quantity: int,
+
+    min_levels: int,
+
+    available: Decimal,
+) -> str:
+    needed = (
+        _min_grid_cost(
+            capital_calculator=(
+                capital_calculator
+            ),
+
+            price=price,
+
+            quantity=(
+                quantity
+            ),
+
+            min_levels=(
+                min_levels
+            ),
+        )
+    )
+
+    return (
+        f"не хватает капитала: "
+        f"нужно минимум "
+        f"{_format_amount(needed)} ₽, "
+        f"доступно "
+        f"{_format_amount(available)} ₽"
+    )
 
 
 @dataclass(slots=True)
@@ -359,7 +448,10 @@ class AutoPortfolioSelector:
                         ticker=ticker,
 
                         reason=(
-                            "цена выше лимита"
+                            "цена выше лимита: "
+                            f"{_format_amount(snapshot.price)} ₽, "
+                            "лимит "
+                            f"{_format_amount(max_price)} ₽"
                         ),
                     )
                 )
@@ -401,9 +493,30 @@ class AutoPortfolioSelector:
                         ticker=ticker,
 
                         reason=(
-                            "не хватает капитала "
-                            "даже на минимальную "
-                            "сетку"
+                            _min_grid_rejection_reason(
+                                capital_calculator=(
+                                    self
+                                    .capital_calculator
+                                ),
+
+                                price=(
+                                    snapshot
+                                    .price
+                                ),
+
+                                quantity=(
+                                    quantity
+                                ),
+
+                                min_levels=(
+                                    self
+                                    .min_levels
+                                ),
+
+                                available=(
+                                    remaining
+                                ),
+                            )
                         ),
                     )
                 )
@@ -477,13 +590,14 @@ class IndexPortfolioSelector:
     """
     Индексный режим v1.1.
 
-    Капитал делится
-    равными долями между
-    всеми бумагами состава
-    индекса, в каждую долю
+    Бумаги состава индекса
+    рассматриваются по
+    порядку: в каждую
     вписывается сетка
     (от desired_levels
-    до min_levels уровней).
+    до min_levels уровней),
+    пока она вписывается
+    в остаток капитала.
     """
 
     desired_levels: int = (
@@ -535,20 +649,7 @@ class IndexPortfolioSelector:
         if not snapshots:
             return plan
 
-        share = (
-            capital
-            / Decimal(
-                len(
-                    snapshots
-                )
-            )
-        ).quantize(
-            Decimal("0.01"),
-
-            rounding=(
-                ROUND_FLOOR
-            ),
-        )
+        remaining = capital
 
         seen: set[str] = set()
 
@@ -610,7 +711,7 @@ class IndexPortfolioSelector:
 
                 quantity=quantity,
 
-                budget=share,
+                budget=remaining,
 
                 desired_levels=(
                     self
@@ -632,9 +733,30 @@ class IndexPortfolioSelector:
                         ticker=ticker,
 
                         reason=(
-                            "доля индекса мала "
-                            "для минимальной "
-                            "сетки"
+                            _min_grid_rejection_reason(
+                                capital_calculator=(
+                                    self
+                                    .capital_calculator
+                                ),
+
+                                price=(
+                                    snapshot
+                                    .price
+                                ),
+
+                                quantity=(
+                                    quantity
+                                ),
+
+                                min_levels=(
+                                    self
+                                    .min_levels
+                                ),
+
+                                available=(
+                                    remaining
+                                ),
+                            )
                         ),
                     )
                 )
@@ -697,6 +819,8 @@ class IndexPortfolioSelector:
                     ),
                 )
             )
+
+            remaining -= cost
 
         return plan
 
@@ -918,6 +1042,7 @@ class AutoRebalancePlanner:
         chosen: set[str] = set()
 
         saw_more_volatile = False
+        minimum_replacement_cost: Decimal | None = None
 
         for snapshot in candidates:
             if (
@@ -951,6 +1076,17 @@ class AutoRebalancePlanner:
 
             saw_more_volatile = (
                 True
+            )
+            minimum_cost = _min_grid_cost(
+                self.capital_calculator,
+                snapshot.price,
+                quantity,
+                self.min_levels,
+            )
+            minimum_replacement_cost = (
+                minimum_cost
+                if minimum_replacement_cost is None
+                else min(minimum_replacement_cost, minimum_cost)
             )
 
             fitted = _fit_levels(
@@ -1036,9 +1172,10 @@ class AutoRebalancePlanner:
                     ),
 
                     reason=(
-                        "нет более волатильной "
-                        "акции в свободный "
-                        "капитал"
+                        "нет более волатильной акции в свободный капитал: "
+                        "нужно минимум "
+                        f"{_format_amount(minimum_replacement_cost or Decimal('0'))} ₽, "
+                        f"доступно {_format_amount(remaining)} ₽"
 
                         if (
                             saw_more_volatile
@@ -1131,8 +1268,10 @@ class AutoRebalancePlanner:
                         ),
 
                         reason=(
-                            "цена выше "
-                            "лимита"
+                            "цена выше лимита: "
+                            f"{_format_amount(snapshot.price)} ₽, "
+                            "лимит "
+                            f"{_format_amount(max_price)} ₽"
                         ),
                     )
                 )
@@ -1178,9 +1317,30 @@ class AutoRebalancePlanner:
                         ),
 
                         reason=(
-                            "не хватает капитала "
-                            "даже на минимальную "
-                            "сетку"
+                            _min_grid_rejection_reason(
+                                capital_calculator=(
+                                    self
+                                    .capital_calculator
+                                ),
+
+                                price=(
+                                    snapshot
+                                    .price
+                                ),
+
+                                quantity=(
+                                    quantity
+                                ),
+
+                                min_levels=(
+                                    self
+                                    .min_levels
+                                ),
+
+                                available=(
+                                    remaining
+                                ),
+                            )
                         ),
                     )
                 )

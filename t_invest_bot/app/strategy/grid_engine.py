@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import (
     dataclass,
     field,
+    replace,
 )
-from decimal import Decimal
+from datetime import (
+    datetime,
+    timezone,
+)
+from decimal import Decimal, ROUND_FLOOR
 
 from domain.commands import (
     PlaceBuyLimitCommand,
@@ -124,7 +129,50 @@ class GridEngineConfig:
         Decimal("3")
     )
 
-    quantity: int = 1
+    early_close_min_working_time_seconds: (
+        int
+    ) = 86400
+
+    early_close_profit_loss_ratio: (
+        Decimal
+    ) = Decimal("3")
+
+    quantity: int | Decimal = 1
+    take_profit_percent: Decimal | None = None
+    max_take_profit_percent: Decimal | None = None
+    base_order_amount: Decimal | None = None
+    order_amount_multiplier: Decimal = Decimal("1.05")
+    max_order_amount_multiplier: Decimal = Decimal("3")
+    quantity_step: Decimal = Decimal("1")
+    min_quantity: Decimal = Decimal("0")
+    min_order_amount: Decimal = Decimal("0")
+
+    def buy_quantity(self, price: Decimal, open_positions_count: int) -> int | Decimal:
+        if self.base_order_amount is None:
+            return self.quantity
+        positive = (
+            price, self.base_order_amount, self.quantity_step,
+            self.order_amount_multiplier, self.max_order_amount_multiplier,
+        )
+        if any(not value.is_finite() or value <= 0 for value in positive):
+            raise ValueError("Order sizing values must be finite and positive")
+        if self.order_amount_multiplier < 1 or self.max_order_amount_multiplier < 1:
+            raise ValueError("Order amount multipliers must be at least one")
+        if open_positions_count < 0:
+            raise ValueError("Open positions count cannot be negative")
+        if any(not value.is_finite() or value < 0 for value in (self.min_quantity, self.min_order_amount)):
+            raise ValueError("Exchange minimums must be finite and nonnegative")
+        amount = self.base_order_amount
+        cap = amount * self.max_order_amount_multiplier
+        if self.order_amount_multiplier > 1:
+            for _ in range(open_positions_count):
+                amount = min(amount * self.order_amount_multiplier, cap)
+                if amount == cap:
+                    break
+        quantity = (amount / price / self.quantity_step).to_integral_value(rounding=ROUND_FLOOR) * self.quantity_step
+        if quantity < self.min_quantity or quantity * price < self.min_order_amount:
+            return Decimal("0")
+        return quantity
 
 
 @dataclass(slots=True)
@@ -180,6 +228,14 @@ class GridEngine:
         Decimal("0")
     )
 
+    grid_opened_at: (
+        datetime | None
+    ) = None
+
+    cycle_closed_orders: int = 0
+    cycle_realized_profit: Decimal = Decimal("0")
+    completed_cycles: list[dict] = field(default_factory=list)
+
     total_buy_commission: Decimal = (
         Decimal("0")
     )
@@ -234,6 +290,18 @@ class GridEngine:
                         emergency_sell_offset_percent=(
                             self.config
                             .exit_limit_offset_percent
+                        ),
+
+                        early_close_min_working_time_seconds=(
+                            self
+                            .config
+                            .early_close_min_working_time_seconds
+                        ),
+
+                        early_close_profit_loss_ratio=(
+                            self
+                            .config
+                            .early_close_profit_loss_ratio
                         ),
                     )
                 ),
@@ -292,28 +360,70 @@ class GridEngine:
     def on_price(
         self,
         current_price: Decimal,
+
+        buy_reference_price: (
+            Decimal | None
+        ) = None,
+
+        sell_reference_price: (
+            Decimal | None
+        ) = None,
     ) -> list[
         TradingCommand
     ]:
+        """
+        current_price — mid
+        стакана (переоценка,
+        риск-проверки).
+
+        buy_reference_price —
+        лучший ask: входы BUY
+        смотрим сторону
+        продаж.
+
+        sell_reference_price —
+        лучший bid: выходы
+        SELL смотрим сторону
+        покупок.
+
+        None → текущая цена
+        (обратная
+        совместимость).
+        """
+
+        buy_price = (
+            buy_reference_price
+
+            if (
+                buy_reference_price
+                is not None
+            )
+
+            else current_price
+        )
+
+        sell_price = (
+            sell_reference_price
+
+            if (
+                sell_reference_price
+                is not None
+            )
+
+            else current_price
+        )
+
         commands: list[
             TradingCommand
         ] = []
 
-        commands.extend(
-            self._process_entries(
-                current_price=(
-                    current_price
-                ),
-            )
-        )
+        if buy_price > 0:
+            commands.extend(self._process_entries(current_price=buy_price))
+        if sell_price > 0:
+            commands.extend(self._process_exits(current_price=sell_price))
 
-        commands.extend(
-            self._process_exits(
-                current_price=(
-                    current_price
-                ),
-            )
-        )
+        if sell_price <= 0:
+            return commands
 
         commands.extend(
             self.risk_manager
@@ -327,7 +437,29 @@ class GridEngine:
                 ),
 
                 current_price=(
-                    current_price
+                    sell_price
+                ),
+            )
+        )
+
+        commands.extend(
+            self.risk_manager
+            .check_early_close(
+                open_positions=(
+                    self.open_positions
+                ),
+
+                realized_profit=(
+                    self.realized_profit
+                ),
+
+                current_price=(
+                    sell_price
+                ),
+
+                grid_age_seconds=(
+                    self
+                    ._grid_age_seconds()
                 ),
             )
         )
@@ -367,13 +499,47 @@ class GridEngine:
                 event=event,
             )
 
+        self.recalculate_planned_levels()
         return []
+
+    def recalculate_planned_levels(self) -> None:
+        if self.grid_step is None or self.session_start_price is None:
+            return
+        anchor = self.session_start_price
+        for level in sorted(self.levels, key=lambda item: item.index):
+            position = self.open_positions.get(level.index)
+            if position is not None:
+                anchor = position.entry_price
+                if level.status != GridLevelStatus.ORDER_PLACED:
+                    gross = position.purchase_cost - position.buy_commission if position.purchase_cost is not None else position.entry_price * position.quantity
+                    units = self._calculate_effective_units(gross, position.entry_price)
+                    cost = position.purchase_cost if position.purchase_cost is not None else gross + position.buy_commission
+                    position.hard_take_profit_price = self._calculate_hard_take_profit_price(cost, units)
+                continue
+            if level.status == GridLevelStatus.ORDER_PLACED or level.trailing_entry is not None:
+                anchor = level.price
+                continue
+            activation = anchor - self.grid_step
+            if activation > 0:
+                level.price = activation
+            anchor = level.price
 
     def _handle_buy_execution(
         self,
         level: GridLevel,
         event: TradeExecutedEvent,
     ) -> None:
+        #
+        # Первый вход означает,
+        # что сетка в рынке.
+        #
+        if not self.open_positions:
+            self.grid_opened_at = (
+                datetime.now(
+                    timezone.utc
+                )
+            )
+
         #
         # Фактическая сумма покупки
         # БЕЗ комиссии.
@@ -449,6 +615,23 @@ class GridEngine:
             buy_commission
         )
 
+        existing = self.open_positions.get(event.level_index)
+        if existing is not None:
+            previous_gross = (existing.purchase_cost - existing.buy_commission) if existing.purchase_cost is not None else existing.entry_price * existing.quantity
+            combined_quantity = existing.quantity + event.quantity
+            average_price = (existing.entry_price * existing.quantity + event.price * event.quantity) / combined_quantity
+            combined_cost = (existing.purchase_cost if existing.purchase_cost is not None else previous_gross + existing.buy_commission) + purchase_cost
+            self.open_positions[event.level_index] = replace(existing,
+                quantity=combined_quantity, entry_price=average_price,
+                buy_commission=existing.buy_commission + buy_commission, purchase_cost=combined_cost,
+                hard_take_profit_price=self._calculate_hard_take_profit_price(
+                    combined_cost, self._calculate_effective_units(previous_gross + gross_buy_amount, average_price),
+                ),
+            )
+            level.price = average_price
+            level.status = GridLevelStatus.POSITION_OPENED
+            level.trailing_entry = None
+            return
         self.open_positions[
             event.level_index
         ] = OpenLevelPosition(
@@ -510,7 +693,20 @@ class GridEngine:
             )
         )
 
+        partial = False
         if position is not None:
+            if event.quantity < position.quantity:
+                partial = True
+                ratio = Decimal(event.quantity) / Decimal(position.quantity)
+                closed_cost = (position.purchase_cost if position.purchase_cost is not None else position.entry_price * position.quantity + position.buy_commission) * ratio
+                closed_commission = position.buy_commission * ratio
+                remainder = replace(position,
+                    quantity=position.quantity - event.quantity,
+                    buy_commission=position.buy_commission - closed_commission,
+                    purchase_cost=(position.purchase_cost - closed_cost) if position.purchase_cost is not None else None,
+                )
+                self.open_positions[event.level_index] = remainder
+                position = replace(position, quantity=event.quantity, buy_commission=closed_commission, purchase_cost=closed_cost)
             gross_sell_amount = (
                 self._get_gross_amount(
                     price=event.price,
@@ -577,20 +773,34 @@ class GridEngine:
             self.realized_profit += (
                 profit
             )
+            if not partial:
+                self.cycle_closed_orders += 1
+            self.cycle_realized_profit += profit
+
+        if not self.open_positions and position is not None:
+            self.completed_cycles.append({
+                "started_at": self.grid_opened_at.isoformat() if self.grid_opened_at else None,
+                "closed_at": datetime.now(timezone.utc).isoformat(),
+                "closed_orders": self.cycle_closed_orders,
+                "profit": str(self.cycle_realized_profit),
+            })
+        if not self.open_positions:
+            self.cycle_closed_orders = 0
+            self.cycle_realized_profit = Decimal("0")
+            self.grid_opened_at = (
+                None
+            )
 
         #
         # Уровень снова разрешён.
         #
-        level.status = (
-            GridLevelStatus
-            .WAITING_PRICE
-        )
+        level.status = GridLevelStatus.POSITION_OPENED if partial else GridLevelStatus.WAITING_PRICE
 
         level.trailing_entry = None
 
     def recover_position(
         self,
-        quantity: int,
+        quantity: int | Decimal,
         entry_price: Decimal,
     ) -> None:
         if quantity <= 0:
@@ -711,6 +921,40 @@ class GridEngine:
 
         level.trailing_entry = None
 
+        if (
+            self.grid_opened_at
+            is None
+        ):
+            self.grid_opened_at = (
+                datetime.now(
+                    timezone.utc
+                )
+            )
+
+    def _grid_age_seconds(
+        self,
+    ) -> int | None:
+        if (
+            self.grid_opened_at
+            is None
+        ):
+            return None
+
+        now = (
+            datetime.now(
+                timezone.utc
+            )
+        )
+
+        age = (
+            now
+            - self.grid_opened_at
+        )
+
+        return int(
+            age.total_seconds()
+        )
+
     # ========================================================
     # BUY
     # ========================================================
@@ -797,6 +1041,10 @@ class GridEngine:
             )
         )
 
+        quantity = self.config.buy_quantity(buy_price, len(self.open_positions))
+        if quantity <= 0:
+            return []
+
         active_entry_level.status = (
             GridLevelStatus
             .ORDER_PLACED
@@ -812,9 +1060,8 @@ class GridEngine:
                     active_entry_level.index
                 ),
 
-                quantity=(
-                    self.config.quantity
-                ),
+                quantity=quantity,
+                commission_percent=self.config.fallback_buy_commission_percent,
 
                 price=(
                     buy_price
@@ -917,10 +1164,13 @@ class GridEngine:
             ):
                 continue
 
+            grid_step = self.grid_step
+            if grid_step is None:
+                raise ValueError("grid_step must be initialized")
             activation_price = (
                 previous_position
                 .entry_price
-                - self.grid_step
+                - grid_step
             )
 
             level.price = (
@@ -1030,6 +1280,15 @@ class GridEngine:
             ):
                 continue
 
+            if position.purchase_cost is not None and position.entry_price > 0:
+                units = self._calculate_effective_units(
+                    position.purchase_cost - position.buy_commission, position.entry_price,
+                )
+                position.hard_take_profit_price = max(
+                    position.hard_take_profit_price,
+                    self._calculate_hard_take_profit_price(position.purchase_cost, units),
+                )
+
             activation_price = (
                 self
                 ._calculate_exit_activation_price(
@@ -1085,17 +1344,19 @@ class GridEngine:
                         .trailing_exit
                     ),
 
-                    current_price=(
-                        current_price
-                    ),
+                current_price=(
+                    current_price
+                ),
+            )
+        )
+
+            max_take_profit_reached = (
+                self.config.max_take_profit_percent is not None
+                and current_price >= position.entry_price * (
+                    Decimal("1") + self.config.max_take_profit_percent / Decimal("100")
                 )
             )
-
-            if not (
-                position
-                .trailing_exit
-                .is_confirmed
-            ):
+            if not position.trailing_exit.is_confirmed and not max_take_profit_reached:
                 continue
 
             #
@@ -1290,10 +1551,12 @@ class GridEngine:
                 "configuration"
             )
 
-        return (
-            hard_take_profit_price
-            / combined_multiplier
-        )
+        activation = hard_take_profit_price / combined_multiplier
+        if self.config.take_profit_percent is not None:
+            activation = max(activation, hard_take_profit_price / (
+                Decimal("1") + self.config.min_profit_percent / Decimal("100")
+            ) * (Decimal("1") + self.config.take_profit_percent / Decimal("100")))
+        return activation
 
     # ========================================================
     # MONEY
@@ -1302,7 +1565,7 @@ class GridEngine:
     def _get_gross_amount(
         self,
         price: Decimal,
-        quantity: int,
+        quantity: int | Decimal,
         broker_total: (
             Decimal | None
         ),

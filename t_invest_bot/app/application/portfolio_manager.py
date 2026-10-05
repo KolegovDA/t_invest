@@ -40,34 +40,26 @@ class PortfolioManager:
     def on_buy(
         self,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         commission: Decimal = Decimal("0"),
+        gross_amount: Decimal | None = None,
     ) -> None:
         instrument = self.get_or_create(
             instrument_id,
         )
 
-        buy_amount = (
-            price * quantity
-            + commission
-        )
+        gross_buy = gross_amount if gross_amount is not None else price * quantity
+        buy_amount = gross_buy + commission
 
         self.portfolio.cash -= buy_amount
 
         old_quantity = instrument.position_quantity
         new_quantity = old_quantity + quantity
 
-        if old_quantity == 0:
-            instrument.average_price = price
-        else:
-            instrument.average_price = (
-                (
-                    instrument.average_price
-                    * old_quantity
-                )
-                + (price * quantity)
-            ) / new_quantity
+        instrument.average_price = (
+            instrument.average_price * old_quantity + gross_buy
+        ) / new_quantity
 
         instrument.position_quantity = new_quantity
         instrument.buy_commission_total += commission
@@ -75,20 +67,23 @@ class PortfolioManager:
     def on_sell(
         self,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         profit: Decimal,
         commission: Decimal = Decimal("0"),
         buy_commission_to_close: Decimal = Decimal("0"),
+        gross_amount: Decimal | None = None,
+        purchase_cost_to_close: Decimal | None = None,
     ) -> None:
         instrument = self.get_or_create(
             instrument_id,
         )
 
-        sell_amount = (
-            price * quantity
-            - commission
-        )
+        gross_sell = gross_amount if gross_amount is not None else price * quantity
+        sell_amount = gross_sell - commission
+        remaining_gross_cost = instrument.average_price * instrument.position_quantity
+        if purchase_cost_to_close is not None:
+            remaining_gross_cost -= purchase_cost_to_close - buy_commission_to_close
 
         self.portfolio.cash += sell_amount
 
@@ -99,3 +94,5 @@ class PortfolioManager:
         if instrument.position_quantity == 0:
             instrument.average_price = Decimal("0")
             instrument.buy_commission_total = Decimal("0")
+        elif purchase_cost_to_close is not None:
+            instrument.average_price = remaining_gross_cost / instrument.position_quantity

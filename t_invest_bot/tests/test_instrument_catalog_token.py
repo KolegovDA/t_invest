@@ -231,10 +231,10 @@ def test_resolve_token_falls_back_to_settings_when_no_tinvest_accounts() -> None
     service = make_service(
         accounts=[
             make_account(
-                "quik-1",
+                "alfa-1",
                 broker=(
                     BrokerType
-                    .QUIK
+                    .ALFA
                 ),
             )
         ],
@@ -356,15 +356,15 @@ def test_resolve_token_explicit_non_tinvest_account_raises() -> None:
     service = make_service(
         accounts=[
             make_account(
-                "quik-1",
+                "alfa-1",
                 broker=(
                     BrokerType
-                    .QUIK
+                    .ALFA
                 ),
             )
         ],
         tokens={
-            "quik-1": "token"
+            "alfa-1": "token"
         },
     )
 
@@ -372,7 +372,7 @@ def test_resolve_token_explicit_non_tinvest_account_raises() -> None:
         ValueError
     ) as exc_info:
         service._resolve_token(
-            "quik-1"
+            "alfa-1"
         )
 
     assert (

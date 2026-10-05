@@ -1,3 +1,6 @@
+from infrastructure.brokers.bybit.adapter import (
+    BybitBrokerAdapter,
+)
 from infrastructure.brokers.registry import (
     BrokerRegistry,
 )
@@ -14,6 +17,10 @@ def create_default_broker_registry(
 
     registry.register(
         TInvestBrokerAdapter()
+    )
+
+    registry.register(
+        BybitBrokerAdapter()
     )
 
     return registry

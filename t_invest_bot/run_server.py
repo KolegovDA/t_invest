@@ -48,6 +48,10 @@ from infrastructure.system.windows_firewall_service import (  # noqa: E402
     WindowsFirewallService,
 )
 
+from app_version import (  # noqa: E402
+    APP_VERSION,
+)
+
 
 DEFAULT_WEB_HOST = (
     "0.0.0.0"
@@ -55,6 +59,10 @@ DEFAULT_WEB_HOST = (
 
 DEFAULT_WEB_PORT = (
     8000
+)
+
+MAX_WEB_PORT = (
+    8500
 )
 
 
@@ -358,10 +366,10 @@ def _ensure_firewall(
         )
 
 
-def _check_port_available(
+def _is_port_available(
     host: str,
     port: int,
-) -> None:
+) -> bool:
     test_socket = (
         socket.socket(
             socket.AF_INET,
@@ -383,17 +391,86 @@ def _check_port_available(
             )
         )
 
-    except OSError as error:
+        return True
+
+    except OSError:
+        return False
+
+    finally:
+        test_socket.close()
+
+
+def _resolve_web_port(
+    host: str,
+    requested: int,
+    max_port: int = MAX_WEB_PORT,
+) -> int:
+    """
+    Порт по умолчанию — 8000.
+    Если он уже занят (например,
+    второй копией нашего ПО),
+    подбирается первый свободный
+    порт до 8500 включительно.
+    """
+
+    if (
+        requested
+        > max_port
+    ):
+        if (
+            _is_port_available(
+                host=host,
+                port=requested,
+            )
+        ):
+            return requested
+
         raise RuntimeError(
-            f"TCP port {port} "
+            f"TCP port {requested} "
             "is already in use. "
             "Stop the previous "
             "ESM Trade System process "
             "before starting this version."
-        ) from error
+        )
 
-    finally:
-        test_socket.close()
+    for port in range(
+        requested,
+        max_port + 1,
+    ):
+        if (
+            _is_port_available(
+                host=host,
+                port=port,
+            )
+        ):
+            if (
+                port
+                != requested
+            ):
+                print(
+                    "[STARTUP] TCP port "
+                    f"{requested} is "
+                    "already in use "
+                    "(another copy of "
+                    "ESM Trade System?), "
+                    f"using port {port} "
+                    "instead."
+                )
+
+            return port
+
+    raise RuntimeError(
+        "No free TCP port in "
+        f"range {requested}"
+        f"-{max_port}. "
+        "Stop the other ESM Trade "
+        "System copies before "
+        "starting this version."
+    )
+
+
+def _web_event_loop() -> str:
+    return "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
 
 
 def main() -> None:
@@ -402,7 +479,12 @@ def main() -> None:
     )
 
     port = (
-        _get_port()
+        _resolve_web_port(
+            host=host,
+            requested=(
+                _get_port()
+            ),
+        )
     )
 
     print(
@@ -414,7 +496,7 @@ def main() -> None:
     )
 
     print(
-        "Version: 1.2.0-dev"
+        f"Version: {APP_VERSION}"
     )
 
     print(
@@ -433,16 +515,13 @@ def main() -> None:
         port=port,
     )
 
-    _check_port_available(
-        host=host,
-        port=port,
-    )
-
     #
     # Импортируем приложение
     # только после проверки Firewall
     # и порта.
     #
+    os.environ["ESM_WEB_BIND_HOST"] = host
+    os.environ["ESM_WEB_BOUND_PORT"] = str(port)
     from web.main import app
 
     import uvicorn
@@ -473,6 +552,7 @@ def main() -> None:
         host=host,
         port=port,
         log_level="info",
+        loop=_web_event_loop(),
     )
 
 

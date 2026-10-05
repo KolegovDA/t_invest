@@ -15,7 +15,7 @@ class OpenLevelPosition:
     #
     # Количество лотов.
     #
-    quantity: int
+    quantity: int | Decimal
 
     #
     # Фактическая или fallback

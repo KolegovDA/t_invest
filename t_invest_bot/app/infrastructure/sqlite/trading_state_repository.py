@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from sqlite_schema import SchemaConnection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +22,8 @@ class TradingStateRepository:
         self,
     ) -> sqlite3.Connection:
         connection = sqlite3.connect(
-            self.db_path
+            self.db_path,
+            factory=SchemaConnection,
         )
 
         connection.row_factory = (
@@ -57,6 +59,20 @@ class TradingStateRepository:
                     payload_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                         DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS closed_grid_history (
+                    grid_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    trading_account_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    started_at TEXT,
+                    closed_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
                 )
                 """
             )
@@ -191,7 +207,8 @@ class TradingStateRepository:
                     'ACTIVE',
                     'RUNNING',
                     'RECOVERY',
-                    'DRAINING'
+                    'DRAINING',
+                    'STOPPING'
                 )
                 ORDER BY updated_at DESC
                 """
@@ -232,6 +249,19 @@ class TradingStateRepository:
             )
             for row in rows
         ]
+
+    def record_closed_grid(self, payload: dict) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO closed_grid_history VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (payload["grid_id"], payload["session_id"], payload["trading_account_id"],
+                 payload["ticker"], payload.get("started_at"), payload["closed_at"], json.dumps(payload, ensure_ascii=False)),
+            )
+
+    def closed_grids(self) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT payload_json FROM closed_grid_history ORDER BY closed_at DESC").fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def delete(
         self,

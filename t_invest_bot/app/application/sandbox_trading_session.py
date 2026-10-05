@@ -5,6 +5,7 @@ from dataclasses import (
     field,
 )
 from decimal import Decimal
+from datetime import datetime, timezone
 
 from application.trade_event_handler import (
     TradeEventHandler,
@@ -16,7 +17,6 @@ from broker.order_execution_event_mapper import (
     OrderExecutionEventMapper,
 )
 from broker.order_state_tracker import (
-    OrderPollResult,
     OrderStateTracker,
     TerminalOrder,
 )
@@ -34,6 +34,7 @@ from domain.events import (
 from domain.order_execution import (
     PlacedOrder,
 )
+from infrastructure.tinvest.last_price_provider import OrderBookQuote
 from strategy.grid_engine import (
     GridEngine,
 )
@@ -73,21 +74,62 @@ class SandboxTradingSession:
         default_factory=list
     )
 
+    cycle_price_points: list[dict] = field(default_factory=list)
+
     def on_price(
         self,
         price: Decimal,
+
+        buy_reference_price: (
+            Decimal | None
+        ) = None,
+
+        sell_reference_price: (
+            Decimal | None
+        ) = None,
+        order_book: OrderBookQuote | None = None,
     ) -> list[
         PlacedOrder
     ]:
+        if order_book is not None and order_book.enforce_depth:
+            buy_reference_price = order_book.execution_price("BUY", self.grid_engine.config.quantity)
+            sell_quantity = max((position.quantity for position in self.grid_engine.open_positions.values()), default=1)
+            sell_reference_price = order_book.execution_price("SELL", sell_quantity)
+            if buy_reference_price is None:
+                buy_reference_price = Decimal("0")
+            if sell_reference_price is None:
+                sell_reference_price = Decimal("0")
+        if self.grid_engine.open_positions:
+            self.cycle_price_points.append({"time": datetime.now(timezone.utc).isoformat(), "price": str(price)})
         commands = (
             self.grid_engine
             .on_price(
                 current_price=(
                     price
                 ),
+
+                buy_reference_price=(
+                    buy_reference_price
+                ),
+
+                sell_reference_price=(
+                    sell_reference_price
+                ),
             )
         )
 
+        if order_book is not None and order_book.enforce_depth:
+            accepted = []
+            rejected = []
+            for command in commands:
+                if isinstance(command, (PlaceBuyLimitCommand, PlaceSellLimitCommand, PlaceSellAllLimitCommand)):
+                    side = "BUY" if isinstance(command, PlaceBuyLimitCommand) else "SELL"
+                    if order_book.execution_price(side, command.quantity, command.price) is None:
+                        rejected.append(command)
+                        continue
+                accepted.append(command)
+            self._revert_levels_for_dropped_commands(rejected)
+            commands = accepted
         if not commands:
             return []
 
@@ -317,10 +359,21 @@ class SandboxTradingSession:
                         ),
                     )
 
+            closed_position = (
+                self.grid_engine.open_positions.get(event.level_index)
+                if event.side == "SELL" else None
+            )
+            had_positions = bool(self.grid_engine.open_positions)
             self.grid_engine\
                 .on_trade_executed(
                     event=event,
                 )
+            if event.side == "BUY" and not had_positions:
+                self.cycle_price_points = [{"time": datetime.now(timezone.utc).isoformat(), "price": str(event.price)}]
+            if event.side == "SELL" and not self.grid_engine.open_positions and self.grid_engine.completed_cycles:
+                self.cycle_price_points.append({"time": datetime.now(timezone.utc).isoformat(), "price": str(event.price)})
+                self.grid_engine.completed_cycles[-1]["price_points"] = list(self.cycle_price_points)
+                self.cycle_price_points.clear()
 
             if (
                 self.trade_event_handler
@@ -330,7 +383,11 @@ class SandboxTradingSession:
                     .trade_event_handler\
                     .handle(
                         event=event,
+                        closed_position=closed_position,
                     )
+
+            if event.side == "SELL" and not self.grid_engine.open_positions and self.grid_engine.completed_cycles:
+                self.grid_engine.completed_cycles[-1]["events_until"] = datetime.now(timezone.utc).isoformat()
 
             self.executed_events.append(
                 event

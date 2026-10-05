@@ -164,7 +164,7 @@ function StatusRow({
 }
 
 const cardStyle = {
-    background: "white",
+    background: "var(--card)",
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,
@@ -175,12 +175,12 @@ const rowStyle = {
     justifyContent: "space-between",
     gap: 12,
     padding: "11px 0",
-    borderBottom: "1px solid #f3f4f6",
+    borderBottom: "1px solid var(--border)",
 }
 
 const accountStyle = {
     padding: 12,
-    background: "#f9fafb",
+    background: "var(--card-soft)",
     borderRadius: 12,
     marginBottom: 8,
     wordBreak: "break-all" as const,
@@ -188,7 +188,7 @@ const accountStyle = {
 
 const selectedStyle = {
     marginTop: 6,
-    color: "#16a34a",
+    color: "var(--profit)",
     fontWeight: 700,
 }
 
@@ -196,7 +196,7 @@ const errorStyle = {
     padding: 12,
     marginTop: 12,
     borderRadius: 12,
-    background: "#fee2e2",
-    color: "#991b1b",
+    background: "var(--loss-soft)",
+    color: "var(--loss)",
     wordBreak: "break-word" as const,
 }

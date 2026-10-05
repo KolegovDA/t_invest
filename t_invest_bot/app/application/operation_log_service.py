@@ -85,10 +85,14 @@ class OperationLogService:
         ticker: str | None,
         side: str,
         level_index: int,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         commission: Decimal,
         profit: (
+            Decimal | None
+        ) = None,
+
+        planned_profit: (
             Decimal | None
         ) = None,
     ) -> None:
@@ -106,9 +110,18 @@ class OperationLogService:
             f"{commission}"
         )
 
+        if (
+            planned_profit
+            is not None
+        ):
+            details += (
+                " расчётная="
+                f"{planned_profit}"
+            )
+
         if profit is not None:
             details += (
-                " прибыль="
+                " факт="
                 f"{profit}"
             )
 
@@ -135,9 +148,30 @@ class OperationLogService:
         ),
 
         instrument_id: str,
+
         ticker: str | None,
+
         order: Any,
     ) -> None:
+        details = (
+            "order_id="
+            f"{order.order_id}"
+        )
+
+        reason = (
+            getattr(
+                order,
+                "reason",
+                None,
+            )
+        )
+
+        if reason is not None:
+            details += (
+                " причина="
+                f"{reason}"
+            )
+
         self.record(
             event_type=(
                 "ORDER_PLACED"
@@ -153,10 +187,7 @@ class OperationLogService:
 
             ticker=ticker,
 
-            details=(
-                "order_id="
-                f"{order.order_id}"
-            ),
+            details=details,
         )
 
     def _write(

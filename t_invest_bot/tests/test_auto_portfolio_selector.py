@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 import pytest
 
@@ -174,7 +174,7 @@ def test_auto_selector_falls_back_to_fewer_levels(
     min_cost = (
         grid_cost(
             "100",
-            10,
+            5,
         )
     )
 
@@ -213,7 +213,7 @@ def test_auto_selector_falls_back_to_fewer_levels(
             0
         ]
         .levels
-        == 10
+        == 5
     )
 
 
@@ -222,7 +222,7 @@ def test_auto_selector_rejects_when_budget_too_small(
     min_cost = (
         grid_cost(
             "100",
-            10,
+            5,
         )
     )
 
@@ -260,6 +260,11 @@ def test_auto_selector_rejects_when_budget_too_small(
             ]
             .reason
         )
+    )
+
+    assert plan.rejected[0].reason == (
+        f"не хватает капитала: нужно минимум {min_cost:.2f} ₽, "
+        f"доступно {min_cost - Decimal('0.01'):.2f} ₽"
     )
 
 
@@ -335,7 +340,7 @@ def test_auto_selector_respects_max_price_and_duplicates(
     )
 
     assert (
-        "цена выше лимита"
+        "цена выше лимита: 500.00 ₽, лимит 100.00 ₽"
         in reasons
     )
 
@@ -371,7 +376,7 @@ def test_auto_selector_invalid_arguments(
             )
 
 
-def test_index_selector_splits_capital_equally(
+def test_index_selector_fits_instruments_within_budget(
 ) -> None:
     plan = (
         IndexPortfolioSelector()
@@ -457,8 +462,60 @@ def test_index_selector_splits_capital_equally(
         )
     )
 
+    assert (
+        plan
+        .selections[
+            0
+        ]
+        .levels
+        == 30
+    )
 
-def test_index_selector_rejects_small_share(
+    assert (
+        plan
+        .selections[
+            1
+        ]
+        .levels
+        == 30
+    )
+
+
+@pytest.mark.parametrize("selector", [AutoPortfolioSelector(), IndexPortfolioSelector()])
+def test_budget_rejections_round_amounts_without_changing_costs(selector) -> None:
+    minimum = grid_cost("100.123456", 5)
+    budget = minimum - Decimal("0.001")
+    plan = selector.select([make_snapshot("AAA", "100.123456", "5")], budget)
+    needed_text = str(minimum.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    available_text = str(budget.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    assert plan.is_empty
+    assert plan.capital == budget
+    assert plan.rejected[0].reason == (
+        f"не хватает капитала: нужно минимум {needed_text} ₽, доступно {available_text} ₽"
+    )
+
+
+def test_index_skips_unaffordable_assets_and_spends_remaining_on_later_assets() -> None:
+    budget = grid_cost("100", 30) + grid_cost("200", 5)
+    plan = IndexPortfolioSelector().select(
+        [
+            make_snapshot("EXPENSIVE", "100000", "9"),
+            make_snapshot("AAA", "100", "5"),
+            make_snapshot("BBB", "200", "4"),
+            make_snapshot("bbb", "200", "4"),
+            make_snapshot("NO_PRICE", "0", "3"),
+        ],
+        budget,
+    )
+    assert [(item.ticker, item.levels) for item in plan.selections] == [("AAA", 30), ("BBB", 5)]
+    assert plan.spent_capital == budget
+    assert plan.remaining_capital == 0
+    assert [item.ticker for item in plan.rejected] == ["EXPENSIVE", "BBB", "NO_PRICE"]
+    assert plan.rejected[1].reason == "дубликат"
+    assert plan.rejected[2].reason == "нет цены"
+
+
+def test_index_selector_rejects_when_budget_exhausted(
 ) -> None:
     plan = (
         IndexPortfolioSelector()
@@ -480,15 +537,32 @@ def test_index_selector_rejects_small_share(
             capital=(
                 grid_cost(
                     "100",
-                    10,
+                    5,
                 )
             ),
         )
     )
 
+    assert [
+        selection
+        .ticker
+
+        for selection
+        in (
+            plan
+            .selections
+        )
+    ] == [
+        "AAA",
+    ]
+
     assert (
         plan
-        .is_empty
+        .selections[
+            0
+        ]
+        .levels
+        == 5
     )
 
     assert (
@@ -496,5 +570,16 @@ def test_index_selector_rejects_small_share(
             plan
             .rejected
         )
-        == 2
+        == 1
+    )
+
+    assert (
+        "не хватает капитала"
+        in (
+            plan
+            .rejected[
+                0
+            ]
+            .reason
+        )
     )

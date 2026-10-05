@@ -7,6 +7,7 @@ from typing import Protocol
 class PlacedOrder:
     order_id: str
     request_id: str | None = None
+    reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -18,9 +19,16 @@ class BrokerActiveOrder:
     # "BUY" | "SELL"
     direction: str
 
-    quantity_lots: int
+    quantity_lots: int | Decimal
 
     price: Decimal
+
+
+def require_integer_lots(quantity: int | Decimal) -> int:
+    value = Decimal(quantity)
+    if not value.is_finite() or value <= 0 or value != value.to_integral_value():
+        raise ValueError("T-Invest order quantity must be a positive integer number of lots")
+    return int(value)
 
 
 class OrderExecutor(Protocol):
@@ -28,7 +36,7 @@ class OrderExecutor(Protocol):
         self,
         account_id: str,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
     ) -> PlacedOrder:
         pass
@@ -37,7 +45,7 @@ class OrderExecutor(Protocol):
         self,
         account_id: str,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
     ) -> PlacedOrder:
         pass

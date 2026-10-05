@@ -117,10 +117,19 @@ class MultiInstrumentTradingSessionFactory:
     #
     # Push-уведомления v1.2 (п. 3):
     # уведомления об исполненных
-    # ордерах (Telegram по
+    # ордерах (ntfy по
     # умолчанию).
     #
     notifier: Any = None
+
+    #
+    # Комиссия с прибыли v1.3:
+    # списание в ЛК-баланс после
+    # каждой прибыльной SELL.
+    #
+    commission_service: Any = None
+
+    broker: str | None = None
 
     def create_sandbox_session(
         self,
@@ -475,7 +484,7 @@ class MultiInstrumentTradingSessionFactory:
 
             current_price = (
                 price_provider
-                .get_last_price(
+                .get_mid_price(
                     instrument_uid=(
                         instrument.id
                     ),
@@ -615,6 +624,15 @@ class MultiInstrumentTradingSessionFactory:
 
                         trading_account_id=(
                             account_id
+                        ),
+
+                        commission_service=(
+                            self
+                            .commission_service
+                        ),
+
+                        broker=(
+                            self.broker
                         ),
                     )
                 ),

@@ -17,7 +17,7 @@ class OrderExecutionState:
     # Количество фактически
     # исполненных лотов.
     #
-    executed_quantity: int
+    executed_quantity: int | Decimal
 
     executed_price: (
         Decimal | None

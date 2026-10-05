@@ -106,7 +106,7 @@ class OrderStateTracker:
                 )
             )
 
-            if state.is_executed:
+            if state.is_executed or (state.is_terminal_without_execution and state.executed_quantity > 0):
                 executed_order = (
                     ExecutedOrder(
                         order_record=(

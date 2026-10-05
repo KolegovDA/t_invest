@@ -203,6 +203,11 @@ class LiveOrderManager:
             command,
             PlaceSellLimitCommand,
         ):
+            if command.is_market:
+                executor = getattr(self.order_executor, "place_market_sell", None)
+                if executor is None:
+                    raise ValueError("Market sell is not supported by this executor")
+                return executor(account_id=self.account_id, instrument_id=command.instrument_id, quantity=command.quantity)
             return (
                 self.order_executor
                 .place_limit_sell(
@@ -223,7 +228,7 @@ class LiveOrderManager:
             command,
             PlaceSellAllLimitCommand,
         ):
-            return (
+            placed_order = (
                 self.order_executor
                 .place_limit_sell(
                     account_id=(
@@ -238,6 +243,16 @@ class LiveOrderManager:
                     price=command.price,
                 )
             )
+
+            if (
+                placed_order
+                is not None
+            ):
+                placed_order.reason = (
+                    command.reason
+                )
+
+            return placed_order
 
         return None
 

@@ -1,3 +1,6 @@
+import { useState } from "react"
+import { AppModal } from "./AppModal"
+
 import type {
     OperationLogEntry,
 } from "../types"
@@ -25,6 +28,12 @@ const eventTypeLabels: Record<
     ACCOUNT_REMOVED:
     "Счёт удалён",
 
+    PLATFORM_CONNECTED:
+    "Платформа подключена",
+
+    PLATFORM_UPDATED:
+    "Ключи платформы обновлены",
+
     PHANTOMS_REMOVED:
     "Фантомы удалены",
 
@@ -33,6 +42,33 @@ const eventTypeLabels: Record<
 
     WITHDRAWAL:
     "Вывод",
+
+    COMMISSION:
+    "Списание комиссии ЛК",
+
+    COMMISSION_CHARGED: "Списание комиссии ЛК",
+
+    BROKER_OPERATION: "Операция платформы",
+
+    BROKER_COMMISSION: "Комиссия брокера",
+
+    DIVIDEND: "Дивиденды",
+
+    COUPON: "Купон",
+
+    TAX: "Налог",
+
+    ORDER_RECONCILE:
+    "Сверка ордеров",
+
+    POSITION_CLEARED:
+    "Позиции сняты",
+
+    POSITION_MISMATCH:
+    "Расхождение позиций",
+
+    RECONCILE_ERROR:
+    "Ошибка сверки",
 }
 
 
@@ -40,23 +76,35 @@ const eventTypeColors: Record<
     string,
     string
 > = {
-    BUY: "#15803d",
+    BUY: "var(--profit)",
 
-    SELL: "#b91c1c",
+    SELL: "var(--loss)",
 
-    ORDER_PLACED: "#6b7280",
+    ORDER_PLACED: "var(--text-muted)",
 
-    ACCOUNT_ADDED: "#2563eb",
+    ACCOUNT_ADDED: "var(--accent)",
 
-    ACCOUNT_UPDATED: "#2563eb",
+    ACCOUNT_UPDATED: "var(--accent)",
 
-    ACCOUNT_REMOVED: "#9a3412",
+    ACCOUNT_REMOVED: "var(--accent)",
 
-    PHANTOMS_REMOVED: "#9a3412",
+    PHANTOMS_REMOVED: "var(--accent)",
 
-    DEPOSIT: "#15803d",
+    DEPOSIT: "var(--profit)",
 
-    WITHDRAWAL: "#b91c1c",
+    WITHDRAWAL: "var(--loss)",
+
+    COMMISSION: "var(--loss)",
+
+    COMMISSION_CHARGED: "var(--loss)",
+
+    ORDER_RECONCILE: "var(--text-muted)",
+
+    POSITION_CLEARED: "var(--loss)",
+
+    POSITION_MISMATCH: "var(--accent)",
+
+    RECONCILE_ERROR: "var(--loss)",
 }
 
 
@@ -79,7 +127,7 @@ function formatEventColor(
         eventTypeColors[
             eventType
         ]
-        ?? "#374151"
+        ?? "var(--text)"
     )
 }
 
@@ -121,11 +169,21 @@ export function OperationsHistoryCard({
     operations:
     OperationLogEntry[]
 }) {
+    const [gridHistory, setGridHistory] = useState<any[] | null>(null)
+    const [gridError, setGridError] = useState<string | null>(null)
+    async function loadGridHistory() {
+        try {
+            const response = await fetch('/api/grid-history')
+            if (!response.ok) throw new Error(`HTTP ${response.status}`)
+            const data = await response.json()
+            setGridHistory(data.grids)
+            setGridError(null)
+        } catch (error) { setGridError(String(error)) }
+    }
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
 
                 borderRadius:
                 14,
@@ -148,12 +206,42 @@ export function OperationsHistoryCard({
             >
                 История операций
             </h3>
+            <button onClick={loadGridHistory} style={{ border: 'none', borderRadius: 8, padding: '8px 12px', background: 'var(--card-soft)', color: 'var(--accent)', cursor: 'pointer' }}>Закрытые сетки</button>
+            {gridError && <div style={{ color: 'var(--loss)' }}>{gridError}</div>}
+            {gridHistory !== null && <AppModal title="История закрытых сеток" onClose={() => setGridHistory(null)}>
+                {gridHistory.length === 0 ? <div>Закрытых сеток пока нет.</div> : gridHistory.map(grid => {
+                    const validPoint = (point: any) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(Date.parse(point.time))
+                    const eventPoints = (grid.events || []).map((event: any) => ({ ...event, price: Number(/цена=([\d.]+)/.exec(event.details)?.[1]) })).filter(validPoint)
+                    const pricePoints = (grid.price_points || []).map((point: any) => ({ ...point, price: Number(point.price) })).filter(validPoint).sort((left: any, right: any) => Date.parse(left.time) - Date.parse(right.time))
+                    const tradePoints = eventPoints.filter((point: any) => point.side === "BUY" || point.side === "SELL")
+                    const trailingPoints = eventPoints.filter((point: any) => point.side === "TRAILING")
+                    const points = [...pricePoints, ...eventPoints].sort((left: any, right: any) => Date.parse(left.time) - Date.parse(right.time))
+                    const basePrice = pricePoints[0]?.price ?? tradePoints[0]?.price ?? points[0]?.price ?? 1
+                    const relativePrice = (price: number) => (price / basePrice - 1) * 100
+                    const min = points.length ? Math.min(...points.map((point: any) => relativePrice(point.price))) : 0
+                    const max = points.length ? Math.max(...points.map((point: any) => relativePrice(point.price))) : 0
+                    const start = points.length ? Math.min(...points.map((point: any) => Date.parse(point.time))) : 0
+                    const end = points.length ? Math.max(...points.map((point: any) => Date.parse(point.time))) : 0
+                    const x = (time: string) => 10 + (Date.parse(time) - start) / Math.max(end - start, 1) * 620
+                    const y = (price: number) => 280 - (relativePrice(price) - min) / Math.max(max - min, 0.01) * 260
+                    return <details key={grid.grid_id} style={{ background: 'var(--card-soft)', padding: 12, borderRadius: 12, marginBottom: 12 }}>
+                        <summary>{grid.ticker} · {formatTime(grid.closed_at)} · прибыль {grid.profit} · закрыто {grid.closed_orders}</summary>
+                        {points.length > 0 && <svg viewBox="0 0 640 300" style={{ width: '100%', height: 300 }}>
+                            <path d={pricePoints.map((point: any, index: number) => `${index ? 'L' : 'M'}${x(point.time)},${y(point.price)}`).join(' ')} fill="none" stroke="var(--accent)" />
+                            {trailingPoints.map((point: any, index: number) => <circle key={`trail-${index}`} cx={x(point.time)} cy={y(point.price)} r="3" fill="#a78bfa"><title>Тралл · {point.price}</title></circle>)}
+                            {tradePoints.map((point: any, index: number) => <circle key={`trade-${index}`} cx={x(point.time)} cy={y(point.price)} r="4" fill={point.side === 'BUY' ? 'var(--profit)' : 'var(--loss)'}><title>{point.side} · {point.price}</title></circle>)}
+                        </svg>}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Цена — линия; BUY/SELL — зелёные/красные точки; траллы — фиолетовые. Диапазон {min.toFixed(2)}%…{max.toFixed(2)}% от первой сохранённой цены {basePrice}.</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Сессия: {grid.session_id} · {grid.started_at ? formatTime(grid.started_at) : 'начало не сохранено'}</div>
+                    </details>
+                })}
+            </AppModal>}
 
             {operations.length === 0 ? (
                 <div
                     style={{
                         color:
-                        "#6b7280",
+                        "var(--text-muted)",
 
                         fontSize:
                         13,
@@ -196,7 +284,7 @@ export function OperationsHistoryCard({
                                 index
                                 === 0
                                 ? "none"
-                                : "1px solid #e5e7eb",
+                                : "1px solid var(--border)",
                             }}
                         >
                             <div
@@ -241,6 +329,12 @@ export function OperationsHistoryCard({
                                         }
                                     </span>
 
+                                    {operation.broker && (
+                                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                                            {operation.broker === "tinvest" ? "Т-Инвест" : operation.broker === "bybit" ? "Bybit" : operation.broker}
+                                        </span>
+                                    )}
+
                                     {
                                         operation.ticker
                                         && (
@@ -264,7 +358,7 @@ export function OperationsHistoryCard({
                                 <div
                                     style={{
                                         color:
-                                        "#6b7280",
+                                        "var(--text-muted)",
 
                                         fontSize:
                                         12,
@@ -282,7 +376,7 @@ export function OperationsHistoryCard({
                             <div
                                 style={{
                                     color:
-                                    "#9ca3af",
+                                    "var(--text-dim)",
 
                                     fontSize:
                                     11,

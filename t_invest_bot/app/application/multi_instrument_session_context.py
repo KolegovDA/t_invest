@@ -7,9 +7,6 @@ from application.multi_instrument_sandbox_session import (
 )
 from application.portfolio_manager import PortfolioManager
 from application.trade_capital_service import TradeCapitalService
-from infrastructure.tinvest.last_price_provider import (
-    TInvestLastPriceProvider,
-)
 from infrastructure.tinvest.live_position_provider import (
     TInvestLivePositionProvider,
 )
@@ -24,7 +21,7 @@ class MultiInstrumentSessionContext:
 
     portfolio_manager: PortfolioManager
     trade_capital_service: TradeCapitalService
-    price_provider: TInvestLastPriceProvider
+    price_provider: Any
 
     sandbox_account_provider: (
         TInvestSandboxAccountProvider | None

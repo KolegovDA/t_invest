@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -61,6 +62,18 @@ class FakeOrderExecutor:
         **kwargs,
     ):
         pass
+
+
+def test_session_started_at_survives_snapshot_updates_and_restart(tmp_path):
+    repository = TradingStateRepository(str(tmp_path / "state.db"))
+    service = TradingSessionStateService(repository)
+    context = create_context()[0]
+    first = service.build_state(context, "session", "account")
+    repository.save(first)
+    second = service.build_state(context, "session", "account")
+    assert first.started_at
+    assert second.started_at == first.started_at
+    assert repository.get("session").started_at == first.started_at
 
 
 def create_context():
@@ -153,6 +166,63 @@ def create_context():
         manager,
         reservation_manager,
     )
+
+
+def test_closed_grid_is_archived_once_without_stopping_session(tmp_path):
+    from application.operation_log_service import OperationLogService
+    from infrastructure.sqlite.sqlite_database import SQLiteDatabase
+    from infrastructure.sqlite.operation_log_repository import SQLiteOperationLogRepository
+
+    database = SQLiteDatabase(tmp_path / "history.db")
+    database.initialize()
+    repository = TradingStateRepository(str(database.database_path))
+    log = OperationLogService(SQLiteOperationLogRepository(database))
+    service = TradingSessionStateService(repository, operation_log=log)
+    context, engine, manager, _ = create_context()
+    service.save(context, "session", "account")
+    engine.on_trade_executed(TradeExecutedEvent("SBER_UID", 1, "BUY", 1, Decimal("100")))
+    log.record_trade("account", "SBER_UID", "SBER", "BUY", 1, 1, Decimal("100"), Decimal("0"))
+    engine.on_trade_executed(TradeExecutedEvent("SBER_UID", 1, "SELL", 1, Decimal("110")))
+    log.record_trade("account", "SBER_UID", "SBER", "SELL", 1, 1, Decimal("110"), Decimal("0"))
+    engine.completed_cycles[-1]["events_until"] = datetime.now(timezone.utc).isoformat()
+    assert engine.completed_cycles
+    engine.completed_cycles[0]["price_points"] = [{"time": engine.completed_cycles[0]["started_at"], "price": "100"}, {"time": engine.completed_cycles[0]["closed_at"], "price": "110"}]
+    service.save(context, "session", "account")
+    assert repository.get("session").status == "RUNNING"
+    grids = repository.closed_grids()
+    assert len(grids) == 1
+    assert grids[0]["ticker"] == "SBER"
+    assert grids[0]["closed_orders"] == 1
+    assert len(grids[0]["price_points"]) == 2
+    assert [event["side"] for event in grids[0]["events"]] == ["BUY", "SELL"]
+    service.save(context, "session", "account")
+    assert len(repository.closed_grids()) == 1
+
+
+def test_closed_grid_archive_failure_retries_after_restart_without_duplicates(tmp_path, monkeypatch):
+    import pytest
+
+    repository = TradingStateRepository(str(tmp_path / "archive-retry.db"))
+    service = TradingSessionStateService(repository)
+    context, engine, _, _ = create_context()
+    service.save(context, "session", "account")
+    engine.on_trade_executed(TradeExecutedEvent("SBER_UID", 1, "BUY", 1, Decimal("100")))
+    engine.on_trade_executed(TradeExecutedEvent("SBER_UID", 1, "SELL", 1, Decimal("110")))
+    original = TradingStateRepository.record_closed_grid
+    monkeypatch.setattr(TradingStateRepository, "record_closed_grid", lambda *args: (_ for _ in ()).throw(RuntimeError("archive unavailable")))
+    with pytest.raises(RuntimeError, match="archive unavailable"):
+        service.save(context, "session", "account")
+    assert engine.completed_cycles
+    assert repository.get("session").instruments[0].completed_cycles
+    monkeypatch.setattr(TradingStateRepository, "record_closed_grid", original)
+    restored_context, restored_engine, _, _ = create_context()
+    service.restore(restored_context, "session")
+    assert restored_engine.completed_cycles
+    service.save(restored_context, "session", "account")
+    assert len(repository.closed_grids()) == 1
+    assert not restored_engine.completed_cycles
+    service.save(restored_context, "session", "account")
+    assert len(repository.closed_grids()) == 1
 
 
 def test_full_session_state_survives_restart(

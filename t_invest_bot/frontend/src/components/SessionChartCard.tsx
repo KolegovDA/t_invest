@@ -13,11 +13,46 @@ import type {
 
 
 const WIDTH = 640
-const HEIGHT = 280
+const HEIGHT = 480
+const TRAILING_COLOR = "#a78bfa"
 const PADDING_LEFT = 8
 const PADDING_RIGHT = 8
 const PADDING_TOP = 12
 const PADDING_BOTTOM = 22
+
+
+const INTERVAL_OPTIONS: {
+    value: string
+    label: string
+}[] = [
+        {
+            value: "15m",
+            label: "15м",
+        },
+        {
+            value: "1h",
+            label: "1ч",
+        },
+        {
+            value: "4h",
+            label: "4ч",
+        },
+        {
+            value: "1d",
+            label: "1д",
+        },
+    ]
+
+
+const PLANNED_LEVEL_STATUSES = (
+    [
+        "WAITING_PRICE",
+
+        "WAITING_FOR_FUNDS",
+
+        "TRAILING_ENTRY",
+    ]
+)
 
 
 export function SessionChartCard({
@@ -32,6 +67,16 @@ export function SessionChartCard({
         SessionChartResponse
         | null
     >(null)
+
+    const [
+        interval,
+        setIntervalValue,
+    ] = useState(
+        "15m"
+    )
+    const [zoom, setZoom] = useState(1)
+    const [verticalZoom, setVerticalZoom] = useState(1)
+    const [offset, setOffset] = useState(0)
 
     const [
         isLoading,
@@ -61,10 +106,12 @@ export function SessionChartCard({
                 null
             )
 
-            getSessionChart(
-                ticker,
-                90
-            )
+            function loadChart() {
+                getSessionChart(
+                    ticker,
+                    interval === "15m" ? 7 : interval === "1h" ? 30 : 90,
+                    interval
+                )
                 .then(
                     data => {
                         if (
@@ -109,17 +156,50 @@ export function SessionChartCard({
                         )
                     }
                 )
+            }
+            loadChart()
+            const timer = window.setInterval(loadChart, 15000)
 
             return () => {
                 cancelled = true
+                window.clearInterval(timer)
             }
         },
 
         [
             ticker,
+
+            interval,
         ]
     )
 
+
+    const intervalButtons = (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {INTERVAL_OPTIONS.map(option => (
+                <button
+                    key={option.value}
+                    onClick={() => {
+                        setIntervalValue(option.value)
+                        setZoom(1)
+                        setVerticalZoom(1)
+                        setOffset(0)
+                    }}
+                    aria-pressed={interval === option.value}
+                    style={{
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                        color: "var(--text)",
+                        background: interval === option.value ? "var(--accent-soft)" : "var(--card-soft)",
+                        cursor: "pointer",
+                    }}
+                >
+                    {option.label}
+                </button>
+            ))}
+        </div>
+    )
 
     if (
         isLoading
@@ -127,8 +207,7 @@ export function SessionChartCard({
         return (
             <div
                 style={{
-                    background:
-                    "white",
+                    background: "var(--card)",
 
                     borderRadius:
                     14,
@@ -140,13 +219,14 @@ export function SessionChartCard({
                     10,
 
                     color:
-                    "#6b7280",
+                    "var(--text-muted)",
 
                     fontSize:
                     13,
                 }}
             >
-                График загружается...
+                {intervalButtons}
+                <div style={{ height: 280 }}>График загружается...</div>
             </div>
         )
     }
@@ -157,8 +237,7 @@ export function SessionChartCard({
         return (
             <div
                 style={{
-                    background:
-                    "white",
+                    background: "var(--card)",
 
                     borderRadius:
                     14,
@@ -170,12 +249,13 @@ export function SessionChartCard({
                     10,
 
                     color:
-                    "#b91c1c",
+                    "var(--loss)",
 
                     fontSize:
                     13,
                 }}
             >
+                {intervalButtons}
                 График недоступен: {
                     error
                 }
@@ -183,10 +263,10 @@ export function SessionChartCard({
         )
     }
 
-    const candles = (
-        chart?.candles
-        ?? []
-    )
+    const candles = [...(chart?.candles ?? [])]
+        .filter(candle => Number.isFinite(new Date(candle.time).getTime())
+            && [candle.open, candle.high, candle.low, candle.close].every(value => Number.isFinite(Number(value))))
+        .sort((left, right) => new Date(left.time).getTime() - new Date(right.time).getTime())
 
     const levels = (
         chart?.levels
@@ -210,8 +290,7 @@ export function SessionChartCard({
         return (
             <div
                 style={{
-                    background:
-                    "white",
+                    background: "var(--card)",
 
                     borderRadius:
                     14,
@@ -223,12 +302,13 @@ export function SessionChartCard({
                     10,
 
                     color:
-                    "#6b7280",
+                    "var(--text-muted)",
 
                     fontSize:
                     13,
                 }}
             >
+                {intervalButtons}
                 Нет данных свечей для графика
                 {
                     " "
@@ -250,26 +330,15 @@ export function SessionChartCard({
         )
     )
 
-    const levelPrices = (
-        levels.map(
-            level =>
-                Number(
-                    level.price
-                )
+    const buyPrices = (
+        trades
+        .filter(
+            trade => (
+                trade.side
+                === "BUY"
+            )
         )
-    )
-
-    const entryPrices = (
-        positions.map(
-            position =>
-                Number(
-                    position.entry_price
-                )
-        )
-    )
-
-    const tradePrices = (
-        trades.map(
+        .map(
             trade =>
                 Number(
                     trade.price
@@ -277,12 +346,82 @@ export function SessionChartCard({
         )
     )
 
-    const allValues = [
-        ...closes,
-        ...levelPrices,
-        ...entryPrices,
-        ...tradePrices,
-    ]
+    const sellPrices = (
+        trades
+        .filter(
+            trade => (
+                trade.side
+                === "SELL"
+            )
+        )
+        .map(
+            trade =>
+                Number(
+                    trade.price
+                )
+        )
+    )
+
+    const avgBuy = (
+        buyPrices.length
+        > 0
+            ? (
+                buyPrices
+                .reduce(
+                    (
+                        sum,
+                        value
+                    ) => (
+                        sum
+                        + value
+                    ),
+
+                    0
+                )
+                / buyPrices.length
+            )
+            : null
+    )
+
+    const avgSell = (
+        sellPrices.length
+        > 0
+            ? (
+                sellPrices
+                .reduce(
+                    (
+                        sum,
+                        value
+                    ) => (
+                        sum
+                        + value
+                    ),
+
+                    0
+                )
+                / sellPrices.length
+            )
+            : null
+    )
+
+    const plannedLevels = (
+        levels
+        .filter(
+            level => (
+                PLANNED_LEVEL_STATUSES
+                .includes(
+                    level.status
+                )
+            )
+        )
+    )
+
+    const candleValues = candles.flatMap(candle => [
+        Number(candle.low),
+        Number(candle.high),
+        Number(candle.close),
+    ]).filter(Number.isFinite)
+    const allValues = candleValues.length > 0 ? candleValues : closes
 
     const rawMin = (
         Math
@@ -304,17 +443,9 @@ export function SessionChartCard({
         || 1
     )
 
-    const minValue = (
-        rawMin
-        - span
-        * 0.05
-    )
-
-    const maxValue = (
-        rawMax
-        + span
-        * 0.05
-    )
+    const centerValue = (rawMin + rawMax) / 2
+    const minValue = centerValue - span * 0.55 / verticalZoom
+    const maxValue = centerValue + span * 0.55 / verticalZoom
 
     const plotHeight = (
         HEIGHT
@@ -360,18 +491,13 @@ export function SessionChartCard({
         )
     )
 
-    const minTime = (
-        times[
-            0
-        ]
-    )
-
-    const maxTime = (
-        times[
-            times.length
-            - 1
-        ]
-    )
+    const historyEnd = times[times.length - 1]
+    const startedAt = chart?.started_at ? Date.parse(chart.started_at) : NaN
+    const historyStart = Number.isFinite(startedAt) ? startedAt : times[0]
+    const historySpan = Math.max(historyEnd - historyStart, 1)
+    const visibleSpan = historySpan / zoom
+    const maxTime = historyEnd - offset * (historySpan - visibleSpan)
+    const minTime = maxTime - visibleSpan
 
 
     function xByTime(
@@ -439,7 +565,7 @@ export function SessionChartCard({
 
     const firstDate = (
         new Date(
-            times[0]
+            minTime
         )
     )
 
@@ -456,8 +582,7 @@ export function SessionChartCard({
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
 
                 borderRadius:
                 14,
@@ -469,35 +594,127 @@ export function SessionChartCard({
                 10,
             }}
         >
-            <h3
+            <div
                 style={{
-                    marginTop:
-                    0,
+                    display:
+                    "flex",
+
+                    justifyContent:
+                    "space-between",
+
+                    alignItems:
+                    "center",
+
+                    gap:
+                    8,
+
+                    flexWrap:
+                    "wrap",
 
                     marginBottom:
                     8,
                 }}
             >
-                График {
-                    ticker
-                }
-                {" — уровни, входы, траллы"}
-            </h3>
+                <h3
+                    style={{
+                        marginTop:
+                        0,
 
+                        marginBottom:
+                        0,
+                    }}
+                >
+                    График {
+                        ticker
+                    }
+                    {" — уровни, входы, траллы"}
+                </h3>
+
+                <div
+                    style={{
+                        display:
+                        "flex",
+
+                        gap:
+                        4,
+                    }}
+                >
+                    {
+                        INTERVAL_OPTIONS
+                        .map(
+                            option => (
+                                <button
+                                    key={
+                                        option.value
+                                    }
+
+                                    onClick={() => {
+                                        setIntervalValue(
+                                            option.value
+                                        )
+                                    }}
+
+                                    style={{
+                                        border:
+                                        "none",
+
+                                        background: (
+                                            interval
+                                            === option.value
+                                                ? "var(--accent-soft)"
+                                                : "var(--card-soft)"
+                                        ),
+
+                                        color:
+                                        "var(--text)",
+
+                                        borderRadius:
+                                        6,
+
+                                        padding:
+                                        "4px 8px",
+
+                                        fontSize:
+                                        11,
+
+                                        fontWeight:
+                                        interval
+                                        === option.value
+                                            ? 700
+                                            : 500,
+
+                                        cursor:
+                                        "pointer",
+                                    }}
+                                >
+                                    {
+                                        option.label
+                                    }
+                                </button>
+                            )
+                        )
+                    }
+                </div>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10, fontSize: 12 }}>
+                <label>Время ×{zoom.toFixed(1)} <input aria-label="Масштаб времени" type="range" min="1" max="20" step="0.5" value={zoom} onChange={event => setZoom(Number(event.target.value))} /></label>
+                <label>Цена ×{verticalZoom.toFixed(1)} <input aria-label="Масштаб цены" type="range" min="0.5" max="5" step="0.1" value={verticalZoom} onChange={event => setVerticalZoom(Number(event.target.value))} /></label>
+                {zoom > 1 && <label>История <input aria-label="Сдвиг временного окна" type="range" min="0" max="1" step="0.01" value={offset} onChange={event => setOffset(Number(event.target.value))} /></label>}
+                <button onClick={() => { setZoom(1); setVerticalZoom(1); setOffset(0) }} style={{ border: "none", borderRadius: 8, padding: "6px 10px", background: "var(--card-soft)", color: "var(--text)", cursor: "pointer" }}>Сбросить</button>
+            </div>
             <svg
                 viewBox=
                     {`0 0 ${WIDTH} ${HEIGHT}`}
 
-                style={{
-                    width:
-                    "100%",
-
-                    height:
-                    "auto",
-
-                    display:
-                    "block",
+                preserveAspectRatio="none"
+                onWheel={event => {
+                    if (event.ctrlKey) {
+                        event.preventDefault()
+                        setZoom(current => Math.max(1, Math.min(20, current + (event.deltaY < 0 ? 0.5 : -0.5))))
+                    }
                 }}
+                style={{ width: "100%", height: 480, display: "block", overflow: "hidden" }}
             >
                 {levels.map(
                     level => {
@@ -548,7 +765,7 @@ export function SessionChartCard({
                                     }
 
                                     stroke=
-                                        "#d1d5db"
+                                        "var(--border)"
 
                                     strokeDasharray=
                                         "4 4"
@@ -575,7 +792,7 @@ export function SessionChartCard({
                                         "9"
 
                                     fill=
-                                        "#9ca3af"
+                                        "var(--text-dim)"
                                 >
                                     ур.{
                                         level.level_index
@@ -650,7 +867,7 @@ export function SessionChartCard({
                                     }
 
                                     stroke=
-                                        "#15803d"
+                                        "var(--profit)"
 
                                     strokeWidth=
                                         "2"
@@ -670,7 +887,7 @@ export function SessionChartCard({
                                         "9"
 
                                     fill=
-                                        "#15803d"
+                                        "var(--profit)"
                                 >
                                     вход #{
                                         position.level_index
@@ -714,8 +931,7 @@ export function SessionChartCard({
                                                     )
                                                 }
 
-                                                stroke=
-                                                    "#ea580c"
+                                                stroke={TRAILING_COLOR}
 
                                                 strokeDasharray=
                                                     "6 3"
@@ -743,8 +959,7 @@ export function SessionChartCard({
                                                 fontSize=
                                                     "9"
 
-                                                fill=
-                                                    "#ea580c"
+                                                fill={TRAILING_COLOR}
                                             >
                                                 тралл #{
                                                     position.level_index
@@ -767,11 +982,205 @@ export function SessionChartCard({
                         "none"
 
                     stroke=
-                        "#2563eb"
+                        "var(--accent)"
 
                     strokeWidth=
                         "2"
                 />
+
+                {avgBuy
+                !== null
+                && avgBuy
+                >= minValue
+                && avgBuy
+                <= maxValue
+                && (
+                    <g
+                        key="avg-buy"
+                    >
+                        <line
+                            x1={
+                                PADDING_LEFT
+                            }
+
+                            y1={
+                                y(
+                                    avgBuy
+                                )
+                            }
+
+                            x2={
+                                WIDTH
+                                - PADDING_RIGHT
+                            }
+
+                            y2={
+                                y(
+                                    avgBuy
+                                )
+                            }
+
+                            stroke=
+                                "var(--profit)"
+
+                            strokeDasharray=
+                                "2 3"
+
+                            strokeWidth=
+                                "1.5"
+                        />
+
+                        <text
+                            x={
+                                PADDING_LEFT
+                                + 2
+                            }
+
+                            y={
+                                y(
+                                    avgBuy
+                                )
+                                - 3
+                            }
+
+                            fontSize=
+                                "9"
+
+                            fill=
+                                "var(--profit)"
+                        >
+                            Avg.Buy {
+                                avgBuy
+                                .toFixed(
+                                    2
+                                )
+                            }
+                        </text>
+                    </g>
+                )}
+
+                {avgSell
+                !== null
+                && avgSell
+                >= minValue
+                && avgSell
+                <= maxValue
+                && (
+                    <g
+                        key="avg-sell"
+                    >
+                        <line
+                            x1={
+                                PADDING_LEFT
+                            }
+
+                            y1={
+                                y(
+                                    avgSell
+                                )
+                            }
+
+                            x2={
+                                WIDTH
+                                - PADDING_RIGHT
+                            }
+
+                            y2={
+                                y(
+                                    avgSell
+                                )
+                            }
+
+                            stroke=
+                                "var(--loss)"
+
+                            strokeDasharray=
+                                "2 3"
+
+                            strokeWidth=
+                                "1.5"
+                        />
+
+                        <text
+                            x={
+                                PADDING_LEFT
+                                + 2
+                            }
+
+                            y={
+                                y(
+                                    avgSell
+                                )
+                                + 10
+                            }
+
+                            fontSize=
+                                "9"
+
+                            fill=
+                                "var(--loss)"
+                        >
+                            Avg.Sell {
+                                avgSell
+                                .toFixed(
+                                    2
+                                )
+                            }
+                        </text>
+                    </g>
+                )}
+
+                {plannedLevels.map(
+                    level => {
+                        const value = (
+                            Number(
+                                level.price
+                            )
+                        )
+
+                        if (
+                            value
+                            < minValue
+                            || value
+                            > maxValue
+                        ) {
+                            return null
+                        }
+
+                        return (
+                            <circle
+                                key={
+                                    "plan-"
+                                    + level.level_index
+                                }
+
+                                cx={
+                                    WIDTH
+                                    - PADDING_RIGHT
+                                    - 5
+                                }
+
+                                cy={
+                                    y(
+                                        value
+                                    )
+                                }
+
+                                r=
+                                    "3"
+
+                                fill=
+                                    "none"
+
+                                stroke=
+                                    "var(--accent)"
+
+                                strokeWidth=
+                                    "1.5"
+                            />
+                        )
+                    }
+                )}
 
                 {trades.map(
                     (
@@ -839,8 +1248,7 @@ export function SessionChartCard({
                                     r=
                                         "2.5"
 
-                                    fill=
-                                        "#ea580c"
+                                    fill={TRAILING_COLOR}
                                 />
                             )
                         }
@@ -865,8 +1273,8 @@ export function SessionChartCard({
 
                                 fill={
                                     isBuy
-                                        ? "#15803d"
-                                        : "#b91c1c"
+                                        ? "var(--profit)"
+                                        : "var(--loss)"
                                 }
 
                                 stroke=
@@ -893,7 +1301,7 @@ export function SessionChartCard({
                         "9"
 
                     fill=
-                        "#9ca3af"
+                        "var(--text-dim)"
                 >
                     {
                         firstDate
@@ -921,7 +1329,7 @@ export function SessionChartCard({
                         "9"
 
                     fill=
-                        "#9ca3af"
+                        "var(--text-dim)"
                 >
                     {
                         lastDate
@@ -945,7 +1353,7 @@ export function SessionChartCard({
                         "9"
 
                     fill=
-                        "#9ca3af"
+                        "var(--text-dim)"
                 >
                     {
                         maxValue
@@ -969,7 +1377,7 @@ export function SessionChartCard({
                         "9"
 
                     fill=
-                        "#9ca3af"
+                        "var(--text-dim)"
                 >
                     {
                         minValue
@@ -998,26 +1406,26 @@ export function SessionChartCard({
                     11,
 
                     color:
-                    "#6b7280",
+                    "var(--text-muted)",
                 }}
             >
                 <span>
                     <b
                         style={{
                             color:
-                            "#2563eb",
+                            "var(--accent)",
                         }}
                     >
                         ─
                     </b>
-                    {" цена закрытия дня"}
+                    {" цена закрытия свечи"}
                 </span>
 
                 <span>
                     <b
                         style={{
                             color:
-                            "#d1d5db",
+                            "var(--border)",
                         }}
                     >
                         ┅
@@ -1029,7 +1437,7 @@ export function SessionChartCard({
                     <b
                         style={{
                             color:
-                            "#15803d",
+                            "var(--profit)",
                         }}
                     >
                         ─
@@ -1041,7 +1449,7 @@ export function SessionChartCard({
                     <b
                         style={{
                             color:
-                            "#ea580c",
+                            TRAILING_COLOR,
                         }}
                     >
                         ┅
@@ -1053,7 +1461,7 @@ export function SessionChartCard({
                     <b
                         style={{
                             color:
-                            "#ea580c",
+                            TRAILING_COLOR,
                         }}
                     >
                         •
@@ -1065,7 +1473,7 @@ export function SessionChartCard({
                     <b
                         style={{
                             color:
-                            "#15803d",
+                            "var(--profit)",
                         }}
                     >
                         ●
@@ -1077,12 +1485,36 @@ export function SessionChartCard({
                     <b
                         style={{
                             color:
-                            "#b91c1c",
+                            "var(--loss)",
                         }}
                     >
                         ●
                     </b>
                     {" продажа"}
+                </span>
+
+                <span>
+                    <b
+                        style={{
+                            color:
+                            "var(--profit)",
+                        }}
+                    >
+                        ┄
+                    </b>
+                    {" Avg.Buy / Avg.Sell"}
+                </span>
+
+                <span>
+                    <b
+                        style={{
+                            color:
+                            "var(--accent)",
+                        }}
+                    >
+                        ○
+                    </b>
+                    {" плановые точки"}
                 </span>
             </div>
         </div>

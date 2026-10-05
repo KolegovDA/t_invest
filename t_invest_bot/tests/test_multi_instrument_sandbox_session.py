@@ -12,7 +12,16 @@ class FakeSession:
     def __init__(self) -> None:
         self.called = False
 
-    def on_price(self, price):
+    def on_price(
+        self,
+        price,
+        buy_reference_price=(
+            None
+        ),
+        sell_reference_price=(
+            None
+        ),
+    ):
         self.called = True
         return []
 

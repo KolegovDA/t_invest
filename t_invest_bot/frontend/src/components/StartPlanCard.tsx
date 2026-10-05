@@ -14,7 +14,7 @@ export function StartPlanCard({
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginTop: 16,
@@ -73,7 +73,7 @@ export function StartPlanCard({
                 <div
                     key={instrument.ticker}
                     style={{
-                        borderTop: "1px solid #eee",
+                        borderTop: "1px solid var(--border)",
                         paddingTop: 10,
                         marginTop: 10,
                     }}
@@ -104,8 +104,8 @@ export function StartPlanCard({
                     borderRadius: 14,
                     border: "none",
                     background: startPlan.can_start
-                        ? "#16a34a"
-                        : "#f97316",
+                        ? "var(--profit)"
+                        : "var(--accent)",
                     color: "white",
                 }}
             >
@@ -122,8 +122,8 @@ export function StartPlanCard({
                         borderRadius: 12,
                         background:
                             startResult.real_sandbox_status === "started"
-                                ? "#dcfce7"
-                                : "#ffedd5",
+                                ? "var(--profit-soft)"
+                                : "var(--accent-soft)",
                     }}
                 >
                     <p>

@@ -86,6 +86,7 @@ class FakeTradingAccountService:
         custom_buy_commission_percent,
         custom_sell_commission_percent,
         enabled,
+        base_currency=None,
     ):
         self.sequence += 1
 
@@ -109,6 +110,10 @@ class FakeTradingAccountService:
             ),
 
             mode=mode,
+
+            base_currency=(
+                base_currency
+            ),
 
             commission_mode=(
                 commission_mode
@@ -190,6 +195,7 @@ class FakeTradingAccountService:
         broker_account_id=None,
         credentials=None,
         mode=None,
+        base_currency=None,
         commission_mode=None,
         custom_buy_commission_percent=None,
         custom_sell_commission_percent=None,
@@ -215,6 +221,14 @@ class FakeTradingAccountService:
 
         if mode is not None:
             account.mode = mode
+
+        if (
+            base_currency
+            is not None
+        ):
+            account.base_currency = (
+                base_currency
+            )
 
         if (
             commission_mode

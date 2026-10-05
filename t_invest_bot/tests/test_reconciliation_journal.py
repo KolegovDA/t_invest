@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from broker.broker_order_reconciler import (
     OrderReconcileResult,
 )
@@ -25,6 +27,45 @@ class FakeRepository:
         )
 
 
+class FakeOperationLog:
+    def __init__(
+        self,
+    ):
+        self.records = []
+
+    def record(
+        self,
+        event_type,
+        trading_account_id=(
+            None
+        ),
+        instrument_id=(
+            None
+        ),
+        ticker=None,
+        details="",
+    ):
+        self.records.append(
+            {
+                "event_type": (
+                    event_type
+                ),
+
+                "trading_account_id": (
+                    trading_account_id
+                ),
+
+                "instrument_id": (
+                    instrument_id
+                ),
+
+                "details": (
+                    details
+                ),
+            }
+        )
+
+
 class BrokenRepository:
     def record(
         self,
@@ -32,6 +73,16 @@ class BrokenRepository:
     ):
         raise RuntimeError(
             "database is locked"
+        )
+
+
+class BrokenOperationLog:
+    def record(
+        self,
+        **kwargs,
+    ):
+        raise RuntimeError(
+            "operation log is locked"
         )
 
 
@@ -215,3 +266,156 @@ def test_journal_without_repository_is_noop() -> None:
         trading_account_id=None,
         result=result,
     )
+
+
+def test_journal_duplicates_events_to_operation_log() -> None:
+    repository = FakeRepository()
+
+    operation_log = (
+        FakeOperationLog()
+    )
+
+    journal = ReconciliationJournal(
+        repository=repository,
+
+        operation_log=(
+            operation_log
+        ),
+    )
+
+    journal.record_error(
+        trading_account_id=(
+            "tinvest:123"
+        ),
+
+        stage="positions",
+
+        error=TimeoutError(
+            "timeout"
+        ),
+    )
+
+    assert len(
+        repository.events
+    ) == 1
+
+    assert len(
+        operation_log.records
+    ) == 1
+
+    record = (
+        operation_log
+        .records[0]
+    )
+
+    assert (
+        record[
+            "event_type"
+        ]
+        == "RECONCILE_ERROR"
+    )
+
+    assert (
+        record[
+            "trading_account_id"
+        ]
+        == "tinvest:123"
+    )
+
+    assert (
+        "stage=positions"
+        in record[
+            "details"
+        ]
+    )
+
+
+def test_journal_without_repository_writes_operation_log() -> None:
+    operation_log = (
+        FakeOperationLog()
+    )
+
+    journal = ReconciliationJournal(
+        operation_log=(
+            operation_log
+        ),
+    )
+
+    journal.record_error(
+        trading_account_id=None,
+        stage="orders",
+
+        error=TimeoutError(
+            "timeout"
+        ),
+    )
+
+    assert len(
+        operation_log.records
+    ) == 1
+
+
+def test_journal_position_cleared_details_include_cost() -> None:
+    repository = FakeRepository()
+
+    journal = ReconciliationJournal(
+        repository=repository,
+    )
+
+    report = (
+        PositionReconcileReport()
+    )
+
+    report.instruments_cleared.append(
+        "SBER_UID"
+    )
+
+    report\
+        .cleared_purchase_cost[
+            "SBER_UID"
+        ] = Decimal(
+            "596.00"
+        )
+
+    journal.record_position_report(
+        trading_account_id=(
+            "tinvest:123"
+        ),
+
+        report=report,
+    )
+
+    event = (
+        repository
+        .events[0]
+    )
+
+    assert (
+        "стоимость=596.00"
+        in event.details
+    )
+
+
+def test_journal_never_raises_on_operation_log_failure() -> None:
+    repository = FakeRepository()
+
+    journal = ReconciliationJournal(
+        repository=repository,
+
+        operation_log=(
+            BrokenOperationLog()
+        ),
+    )
+
+    journal.record_error(
+        trading_account_id=None,
+        stage="orders",
+
+        error=TimeoutError(
+            "timeout"
+        ),
+    )
+
+    assert len(
+        repository.events
+    ) == 1

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -150,6 +151,7 @@ class TradingSessionStateService:
                 )
             )
 
+            instrument_state.cycle_price_points = list(getattr(trading_session, "cycle_price_points", []))
             engine = (
                 trading_session
                 .grid_engine
@@ -324,7 +326,11 @@ class TradingSessionStateService:
             )
 
         return TradingSessionState(
-            schema_version=4,
+            schema_version=5,
+            started_at=(
+                existing_state.started_at if existing_state is not None and existing_state.started_at
+                else datetime.now(timezone.utc).isoformat()
+            ),
 
             session_id=(
                 session_id
@@ -411,6 +417,32 @@ class TradingSessionStateService:
         self.repository.save(
             state
         )
+        for instrument_id, trading_session in context.session.sessions.items():
+            engine = trading_session.grid_engine
+            completed = getattr(engine, "completed_cycles", [])
+            if trading_session.live_order_manager.active_orders or engine.open_positions:
+                continue
+            for cycle in list(completed):
+                import hashlib
+                grid_id = hashlib.sha256(f"{session_id}|{instrument_id}|{cycle['closed_at']}".encode()).hexdigest()
+                ticker = getattr(context, "tickers_by_instrument_id", {}).get(instrument_id) or next((name for name, uid in getattr(context, "instrument_ids_by_ticker", {}).items() if uid == instrument_id), instrument_id)
+                events = []
+                if self.operation_log is not None and getattr(self.operation_log, "repository", None) is not None:
+                    events = [
+                        {"time": event.created_at, "side": event.event_type, "details": event.details}
+                        for event in self.operation_log.repository.get_since(cycle.get("started_at") or state.started_at or "2000-01-01")
+                        if event.instrument_id == instrument_id and event.trading_account_id == trading_account_id
+                        and event.created_at <= cycle.get("events_until", cycle["closed_at"])
+                    ]
+                self.repository.record_closed_grid({
+                    **cycle, "grid_id": grid_id, "session_id": session_id,
+                    "trading_account_id": trading_account_id, "ticker": ticker,
+                    "instrument_id": instrument_id, "events": events,
+                })
+                completed.remove(cycle)
+                if self.operation_log is not None:
+                    self.operation_log.record("GRID_CLOSED", trading_account_id, instrument_id, ticker,
+                                              f"сетка={grid_id} прибыль={cycle['profit']}")
 
         self._record_trailing_moves(
             previous_state=(
@@ -562,6 +594,7 @@ class TradingSessionStateService:
         self,
         context: MultiInstrumentSessionContext,
         session_id: str,
+        use_current_rules: bool = False,
     ) -> TradingSessionState | None:
         state = (
             self.repository.get(
@@ -618,7 +651,10 @@ class TradingSessionStateService:
                     trading_session
                     .live_order_manager
                 ),
+                use_current_rules=use_current_rules,
             )
+            if hasattr(trading_session, "cycle_price_points"):
+                trading_session.cycle_price_points = list(instrument_state.cycle_price_points)
 
             engine = (
                 trading_session
@@ -642,6 +678,22 @@ class TradingSessionStateService:
                     instrument_state
                     .total_sell_commission
                 )
+
+            instrument = context.portfolio_manager.get_or_create(instrument_state.instrument_uid)
+            positions = list(engine.open_positions.values())
+            instrument.position_quantity = sum((position.quantity for position in positions), Decimal("0"))
+            instrument.buy_commission_total = sum((position.buy_commission for position in positions), Decimal("0"))
+            gross_cost = sum((
+                position.purchase_cost - position.buy_commission
+                if position.purchase_cost is not None
+                else position.entry_price * position.quantity
+                for position in positions
+            ), Decimal("0"))
+            instrument.average_price = (
+                gross_cost / instrument.position_quantity
+                if instrument.position_quantity > 0 else Decimal("0")
+            )
+            instrument.realized_profit = instrument_state.realized_profit
 
         reservation_manager = (
             context

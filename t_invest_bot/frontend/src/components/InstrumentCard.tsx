@@ -5,6 +5,10 @@ type Props = {
     instrument: Instrument
     onConfigure: (instrument: Instrument) => void
     onRemove: (ticker: string) => void
+    disabled?: boolean
+    name?: string
+    volatilityPercent?: string
+    riskBand?: string
 }
 
 
@@ -12,11 +16,15 @@ export function InstrumentCard({
     instrument,
     onConfigure,
     onRemove,
+    disabled = false,
+    name,
+    volatilityPercent,
+    riskBand,
 }: Props) {
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 18,
                 padding: 16,
                 marginBottom: 12,
@@ -40,10 +48,11 @@ export function InstrumentCard({
                     >
                         {instrument.ticker}
                     </h3>
+                    {name && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>{name}</div>}
 
                     <div
                         style={{
-                            color: "#6b7280",
+                            color: "var(--text-muted)",
                             marginTop: 5,
                         }}
                     >
@@ -58,7 +67,7 @@ export function InstrumentCard({
                     }}
                 >
                     {instrument.price > 0
-                        ? `${instrument.price.toLocaleString()} ₽`
+                        ? `${instrument.price.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`
                         : "—"}
                 </div>
             </div>
@@ -73,7 +82,7 @@ export function InstrumentCard({
                 }}
             >
                 <div>
-                    <div style={{ color: "#9ca3af" }}>
+                    <div style={{ color: "var(--text-dim)" }}>
                         Базовый лот
                     </div>
 
@@ -83,15 +92,20 @@ export function InstrumentCard({
                 </div>
 
                 <div>
-                    <div style={{ color: "#9ca3af" }}>
+                    <div style={{ color: "var(--text-dim)" }}>
                         Капитал
                     </div>
 
                     <b>
-                        {instrument.required_capital.toLocaleString()} ₽
+                        {(instrument.required_capital ?? 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽
                     </b>
                 </div>
             </div>
+
+            {(volatilityPercent !== undefined || riskBand) && <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-muted)" }}>
+                {volatilityPercent !== undefined && <>Волатильность: {Number(volatilityPercent).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}%</>}
+                {riskBand && <> · {riskBand}</>}
+            </div>}
 
             <div
                 style={{
@@ -101,6 +115,8 @@ export function InstrumentCard({
                 }}
             >
                 <button
+                    type="button"
+                    disabled={disabled}
                     onClick={() =>
                         onConfigure(instrument)
                     }
@@ -109,8 +125,8 @@ export function InstrumentCard({
                         padding: 12,
                         borderRadius: 11,
                         border:
-                            "1px solid #d1d5db",
-                        background: "white",
+                            "1px solid var(--border)",
+                        background: "var(--card)",
                         fontWeight: 600,
                     }}
                 >
@@ -118,6 +134,8 @@ export function InstrumentCard({
                 </button>
 
                 <button
+                    type="button"
+                    disabled={disabled}
                     onClick={() =>
                         onRemove(instrument.ticker)
                     }
@@ -126,8 +144,8 @@ export function InstrumentCard({
                         borderRadius: 11,
                         border:
                             "1px solid #fecaca",
-                        background: "#fff",
-                        color: "#dc2626",
+                        background: "var(--card)",
+                        color: "var(--loss)",
                     }}
                 >
                     Удалить

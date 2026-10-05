@@ -132,6 +132,44 @@ def create_tinvest_account(
     )
 
 
+def test_credentials_follow_updated_platform_and_match_account_mode(tmp_path):
+    from types import SimpleNamespace
+
+    service = create_service(tmp_path)
+    account = create_tinvest_account(service, token="old-token")
+    platforms = [
+        SimpleNamespace(id="sandbox", broker=BrokerType.TINVEST, mode=TradingAccountMode.SANDBOX),
+        SimpleNamespace(id="live", broker=BrokerType.TINVEST, mode=TradingAccountMode.LIVE),
+    ]
+    credentials = {"sandbox": {"token": "sandbox-token"}, "live": {"token": "new-token"}}
+    service.platform_connection_service = SimpleNamespace(
+        get_all=lambda: platforms,
+        get_credentials=lambda platform_id: credentials[platform_id],
+    )
+    assert service.get_credentials(account.id).require("token") == "new-token"
+    credentials["live"] = {"token": "updated-token"}
+    assert service.get_credentials(account.id).require("token") == "updated-token"
+    platforms.clear()
+    assert service.get_credentials(account.id).require("token") == "old-token"
+
+
+def test_market_token_uses_connected_platform_without_environment_token():
+    from types import SimpleNamespace
+    from application.instrument_market_service import InstrumentMarketService
+
+    live = SimpleNamespace(id="live", broker=BrokerType.TINVEST, mode=TradingAccountMode.LIVE)
+    sandbox = SimpleNamespace(id="sandbox", broker=BrokerType.TINVEST, mode=TradingAccountMode.SANDBOX)
+    market = InstrumentMarketService(
+        settings=SimpleNamespace(tinvest_token=None, tinvest_sandbox_token=None),
+        trading_account_service=SimpleNamespace(get_enabled=lambda: []),
+        platform_connection_service=SimpleNamespace(
+            get_all=lambda: [sandbox, live],
+            get_credentials=lambda platform_id: {"token": f"{platform_id}-token"},
+        ),
+    )
+    assert market._resolve_token(None) == "live-token"
+
+
 def test_create_account_and_read_token(
     tmp_path,
 ) -> None:
@@ -847,4 +885,233 @@ def test_disabled_accounts_are_not_returned_by_get_enabled(
     assert (
         enabled[0].name
         == "Enabled"
+    )
+
+
+def create_bybit_account(
+    service: TradingAccountService,
+
+    name: str = "Bybit основной",
+
+    broker_account_id: str = "UNIFIED",
+
+    base_currency: (
+        str | None
+    ) = None,
+):
+    return service.create(
+        name=name,
+
+        broker=(
+            BrokerType.BYBIT
+        ),
+
+        broker_account_id=(
+            broker_account_id
+        ),
+
+        credentials={
+            "api_key":
+                "key",
+
+            "api_secret":
+                "secret",
+        },
+
+        base_currency=(
+            base_currency
+        ),
+    )
+
+
+def test_bybit_base_currency_defaults_to_usdt(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    account = (
+        create_bybit_account(
+            service=service,
+        )
+    )
+
+    assert (
+        account.base_currency
+        == "USDT"
+    )
+
+
+def test_bybit_base_currency_is_normalized(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    account = (
+        create_bybit_account(
+            service=service,
+
+            base_currency=(
+                " usdc "
+            ),
+        )
+    )
+
+    assert (
+        account.base_currency
+        == "USDC"
+    )
+
+
+def test_bybit_rejects_unknown_base_currency(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    try:
+        create_bybit_account(
+            service=service,
+
+            base_currency=(
+                "BTC"
+            ),
+        )
+
+        raise (
+            AssertionError(
+                "expected ValueError"
+            )
+        )
+
+    except ValueError:
+        pass
+
+
+def test_tinvest_rejects_base_currency(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    try:
+        service.create(
+            name="Рублёвый",
+
+            broker=(
+                BrokerType
+                .TINVEST
+            ),
+
+            broker_account_id="1",
+
+            credentials={
+                "token":
+                    "secret",
+            },
+
+            base_currency=(
+                "USDT"
+            ),
+        )
+
+        raise (
+            AssertionError(
+                "expected ValueError"
+            )
+        )
+
+    except ValueError:
+        pass
+
+
+def test_bybit_base_currency_is_persisted(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    account = (
+        create_bybit_account(
+            service=service,
+
+            base_currency=(
+                "USDC"
+            ),
+        )
+    )
+
+    loaded = (
+        service.get(
+            account.id
+        )
+    )
+
+    assert (
+        loaded.base_currency
+        == "USDC"
+    )
+
+
+def test_bybit_base_currency_can_be_updated(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    account = (
+        create_bybit_account(
+            service=service,
+        )
+    )
+
+    updated = (
+        service.update(
+            account_id=(
+                account.id
+            ),
+
+            base_currency=(
+                "USDC"
+            ),
+        )
+    )
+
+    assert (
+        updated.base_currency
+        == "USDC"
+    )
+
+    assert (
+        service.get(
+            account.id
+        )
+        .base_currency
+        == "USDC"
+    )
+
+
+def test_tinvest_base_currency_stays_none(
+    tmp_path,
+) -> None:
+    service = create_service(
+        tmp_path
+    )
+
+    account = (
+        create_tinvest_account(
+            service=service,
+        )
+    )
+
+    assert (
+        account.base_currency
+        is None
     )

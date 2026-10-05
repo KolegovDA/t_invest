@@ -51,10 +51,10 @@ function eventColor(
         || eventType
         === "POSITION_MISMATCH"
     ) {
-        return "#b91c1c"
+        return "var(--loss)"
     }
 
-    return "#2563eb"
+    return "var(--accent)"
 }
 
 
@@ -171,8 +171,7 @@ export function ReconciliationCard() {
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginBottom: 16,
@@ -190,7 +189,7 @@ export function ReconciliationCard() {
 
             <p
                 style={{
-                    color: "#6b7280",
+                    color: "var(--text-muted)",
                     fontSize: 13,
                 }}
             >
@@ -227,7 +226,7 @@ export function ReconciliationCard() {
                                     borderRadius:
                                     999,
                                     background:
-                                    "#eff6ff",
+                                    "var(--accent-soft)",
                                     color:
                                     eventColor(
                                         eventType
@@ -257,7 +256,7 @@ export function ReconciliationCard() {
                 <div
                     style={{
                         color:
-                        "#b91c1c",
+                        "var(--loss)",
                         fontSize: 13,
                         marginBottom: 8,
                     }}
@@ -297,7 +296,7 @@ export function ReconciliationCard() {
                         }
                         style={{
                             borderTop:
-                            "1px solid #eee",
+                            "1px solid var(--border)",
                             paddingTop: 10,
                             marginTop: 10,
                             fontSize: 13,
@@ -329,7 +328,7 @@ export function ReconciliationCard() {
                             <span
                                 style={{
                                     color:
-                                    "#9ca3af",
+                                    "var(--text-dim)",
                                     fontSize:
                                     11,
                                 }}
@@ -349,7 +348,7 @@ export function ReconciliationCard() {
                         <div
                             style={{
                                 color:
-                                "#374151",
+                                "var(--text)",
                                 marginTop: 4,
                             }}
                         >
@@ -362,7 +361,7 @@ export function ReconciliationCard() {
                         <div
                             style={{
                                 color:
-                                "#6b7280",
+                                "var(--text-muted)",
                                 marginTop: 2,
                                 wordBreak:
                                 "break-word",

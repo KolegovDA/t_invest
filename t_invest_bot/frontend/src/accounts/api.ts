@@ -3,9 +3,12 @@ import type {
     BrokerInfo,
     BrokerPortfolio,
     BrokerType,
+    CreatePlatformConnectionPayload,
     CreateTradingAccountPayload,
     DiscoverBrokerAccountsResponse,
+    DiscoverPlatformAccountsResponse,
     MoneyMovementsResponse,
+    PlatformConnection,
     TradingAccount,
     TradingAccountMode,
     UpdateTradingAccountPayload,
@@ -210,6 +213,118 @@ export async function discoverBrokerAccounts(
                     JSON.stringify(
                         payload
                     ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function getPlatforms():
+    Promise<PlatformConnection[]> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/platforms`
+        )
+
+    const data =
+        await parseJsonResponse(
+            response
+        )
+
+    return data.platforms
+}
+
+
+export async function createPlatform(
+    payload:
+        CreatePlatformConnectionPayload
+): Promise<PlatformConnection> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/platforms`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify(
+                        payload
+                    ),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function updatePlatformCredentials(
+    platformId: string,
+
+    credentials:
+        Record<string, string>
+): Promise<PlatformConnection> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/platforms/${encodeURIComponent(platformId)}`,
+            {
+                method:
+                    "PUT",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+                },
+
+                body:
+                    JSON.stringify({
+                        credentials,
+                    }),
+            }
+        )
+
+    return parseJsonResponse(
+        response
+    )
+}
+
+
+export async function deletePlatform(
+    platformId: string
+): Promise<void> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/platforms/${encodeURIComponent(platformId)}`,
+            {
+                method:
+                    "DELETE",
+            }
+        )
+
+    await parseJsonResponse(
+        response
+    )
+}
+
+
+export async function discoverPlatformAccounts(
+    platformId: string
+): Promise<DiscoverPlatformAccountsResponse> {
+    const response =
+        await fetch(
+            `${API_BASE_URL}/api/platforms/${encodeURIComponent(platformId)}/discover`,
+            {
+                method:
+                    "POST",
             }
         )
 

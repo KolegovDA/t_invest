@@ -14,7 +14,7 @@ class InstrumentConfig:
     ticker: str
 
     levels_count: int
-    quantity: int
+    quantity: int | Decimal
 
     history_years: int = 3
 
@@ -66,11 +66,11 @@ class InstrumentConfig:
 
     #
     # Минимальная чистая прибыль
-    # будем окончательно считать
-    # следующим блоком.
+    # (тестовый режим:
+    # временно 0.30%).
     #
     min_profit_percent: Decimal = (
-        Decimal("0.15")
+        Decimal("0.30")
     )
 
     #
@@ -91,10 +91,35 @@ class InstrumentConfig:
         Decimal("3")
     )
 
+    early_close_min_working_time_seconds: (
+        int
+    ) = 86400
+
+    early_close_profit_loss_ratio: (
+        Decimal
+    ) = Decimal("3")
+
+    take_profit_percent: Decimal | None = None
+    max_take_profit_percent: Decimal | None = None
+    base_order_amount: Decimal | None = None
+    order_amount_multiplier: Decimal = Decimal("1.05")
+    max_order_amount_multiplier: Decimal = Decimal("3")
+    quantity_step: Decimal = Decimal("1")
+    min_quantity: Decimal = Decimal("0")
+    min_order_amount: Decimal = Decimal("0")
+
     def to_grid_engine_config(
         self,
     ) -> GridEngineConfig:
         return GridEngineConfig(
+            take_profit_percent=self.take_profit_percent,
+            max_take_profit_percent=self.max_take_profit_percent,
+            base_order_amount=self.base_order_amount,
+            order_amount_multiplier=self.order_amount_multiplier,
+            max_order_amount_multiplier=self.max_order_amount_multiplier,
+            quantity_step=self.quantity_step,
+            min_quantity=self.min_quantity,
+            min_order_amount=self.min_order_amount,
             quantity=(
                 self.quantity
             ),
@@ -140,6 +165,16 @@ class InstrumentConfig:
             compensation_multiplier=(
                 self
                 .compensation_multiplier
+            ),
+
+            early_close_min_working_time_seconds=(
+                self
+                .early_close_min_working_time_seconds
+            ),
+
+            early_close_profit_loss_ratio=(
+                self
+                .early_close_profit_loss_ratio
             ),
         )
 

@@ -6,6 +6,8 @@ from datetime import (
     timezone,
 )
 from decimal import Decimal
+from domain.commands import PlaceBuyLimitCommand, PlaceSellLimitCommand
+from domain.enums import GridLevelStatus
 from threading import (
     Lock,
     Thread,
@@ -119,6 +121,17 @@ class WebRunnerService:
     # ордеров для истории на Главной.
     #
     operation_log: Any | None = None
+
+    #
+    # Комиссия v1.3: при
+    # отрицательном ЛК-балансе
+    # авторебаланс не запускает
+    # новые инструменты
+    # (принудительная сушка).
+    #
+    commission_service: (
+        Any | None
+    ) = None
 
     is_running: bool = False
 
@@ -281,6 +294,8 @@ class WebRunnerService:
         # усыновление живых заявок,
         # откат зависших уровней.
         #
+        if self.lifecycle_status == "STOPPING":
+            return self._tick_market_stop()
         self._reconcile_broker_orders_safe()
 
         if (
@@ -323,15 +338,71 @@ class WebRunnerService:
             .instrument_ids_by_ticker
             .items()
         ):
-            price = (
+            #
+            # Цены v1.5: mid стакана;
+            # покупки — от лучшего
+            # ask, продажи — от
+            # лучшего bid. Пустой
+            # стакан — цена последней
+            # сделки.
+            #
+            quote = (
                 self.context
                 .price_provider
-                .get_last_price(
+                .get_order_book_quote(
                     instrument_uid=(
                         instrument_id
                     ),
                 )
             )
+
+            price = (
+                quote
+                .mid_price()
+            )
+
+            if price is None:
+                price = (
+                    quote
+                    .last_price
+                )
+
+            if price is None:
+                price = (
+                    self.context
+                    .price_provider
+                    .get_last_price(
+                        instrument_uid=(
+                            instrument_id
+                        ),
+                    )
+                )
+
+            buy_reference_price = (
+                quote
+                .buy_reference_price()
+            )
+
+            if (
+                buy_reference_price
+                is None
+            ):
+                buy_reference_price = (
+                    price
+                )
+
+            sell_reference_price = (
+                quote
+                .sell_reference_price()
+            )
+
+            if (
+                sell_reference_price
+                is None
+            ):
+                sell_reference_price = (
+                    price
+                )
 
             price = Decimal(
                 str(price)
@@ -339,7 +410,9 @@ class WebRunnerService:
 
             self.api_usage_repository.record(
                 source="tinvest",
-                operation="get_last_price",
+                operation=(
+                    "get_order_book"
+                ),
                 weight=1,
                 ticker=ticker,
             )
@@ -366,12 +439,27 @@ class WebRunnerService:
                         instrument_id=(
                             instrument_id
                         ),
+
                         price=price,
                     )
 
             #
             # Основная стратегия.
             #
+            trading_session = getattr(self.context.session, "sessions", {}).get(instrument_id)
+            if (
+                self.commission_service is not None
+                and trading_session is not None
+                and not trading_session.grid_engine.open_positions
+                and self.commission_service.is_forced_drain()
+            ):
+                manager = trading_session.live_order_manager
+                for order_id, record in list(manager.active_orders.items()):
+                    if isinstance(record.command, PlaceBuyLimitCommand):
+                        manager.order_executor.cancel_order(manager.account_id, order_id)
+                result.prices_checked += 1
+                continue
+
             placed_orders = (
                 self.context
                 .session
@@ -379,7 +467,17 @@ class WebRunnerService:
                     instrument_id=(
                         instrument_id
                     ),
+
                     price=price,
+
+                    buy_reference_price=(
+                        buy_reference_price
+                    ),
+
+                    sell_reference_price=(
+                        sell_reference_price
+                    ),
+                    **({"order_book": quote} if quote.enforce_depth else {}),
                 )
             )
 
@@ -527,6 +625,50 @@ class WebRunnerService:
 
         return result
 
+    def request_market_stop(self) -> None:
+        if self.lifecycle_status == "STOPPED":
+            return
+        self.lifecycle_status = "STOPPING"
+        self._save_state("STOPPING")
+
+    def _tick_market_stop(self) -> WebRunnerTickResult:
+        result = WebRunnerTickResult()
+        self.context.session.poll_executions()
+        awaiting_broker_orders = False
+        for instrument_id, session in self.context.session.sessions.items():
+            manager = session.live_order_manager
+            executor = manager.order_executor
+            for order_id, record in list(manager.active_orders.items()):
+                if not isinstance(record.command, PlaceSellLimitCommand) or not record.command.is_market:
+                    executor.cancel_order(manager.account_id, order_id)
+            session.poll_executions()
+            if manager.active_orders:
+                continue
+            broker_orders = executor.list_active_orders(manager.account_id) if hasattr(executor, "list_active_orders") else []
+            matching = [order for order in broker_orders if order.instrument_id == instrument_id]
+            if matching:
+                awaiting_broker_orders = True
+                for order in matching:
+                    executor.cancel_order(manager.account_id, order.order_id)
+                continue
+            for position in list(session.grid_engine.open_positions.values()):
+                command = PlaceSellLimitCommand(
+                    instrument_id, position.level_index, position.quantity, position.entry_price,
+                    is_market=True,
+                )
+                placed = manager.submit_commands([command])
+                if placed:
+                    session.grid_engine._get_level_by_index(position.level_index).status = GridLevelStatus.ORDER_PLACED
+                    result.orders_placed += len(placed)
+                    break
+        if not awaiting_broker_orders and self._get_open_positions_count() == 0 and not any(
+            session.live_order_manager.active_orders for session in self.context.session.sessions.values()
+        ):
+            self._complete_drain()
+        else:
+            self._save_state("STOPPING")
+        return result
+
     def request_drain(self) -> None:
         """
         Перевести runner в режим DRAINING / «Сушка».
@@ -594,6 +736,22 @@ class WebRunnerService:
             == "DRAINING"
         ):
             return
+
+        if (
+            self
+            .commission_service
+            is not None
+        ):
+            try:
+                if (
+                    self
+                    .commission_service
+                    .is_forced_drain()
+                ):
+                    return
+
+            except Exception:
+                return
 
         sessions = getattr(
             getattr(
@@ -844,8 +1002,8 @@ class WebRunnerService:
                 #
                 self._save_state(
                     status=(
-                        "DRAINING"
-                        if self.lifecycle_status == "DRAINING"
+                        self.lifecycle_status
+                        if self.lifecycle_status in {"DRAINING", "STOPPING"}
                         else "RECOVERY"
                     ),
                     suppress_errors=True,

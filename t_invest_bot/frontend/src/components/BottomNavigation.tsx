@@ -1,9 +1,8 @@
 export type AppTab =
     | "home"
-    | "sessions"
-    | "accounts"
+    | "trading"
+    | "profile"
     | "settings"
-    | "api"
 
 
 type Props = {
@@ -23,24 +22,19 @@ const items: {
             label: "Главная",
         },
         {
-            tab: "sessions",
-            icon: "◉",
-            label: "Сессии",
+            tab: "trading",
+            icon: "⇅",
+            label: "Торговля",
         },
         {
-            tab: "accounts",
-            icon: "▣",
-            label: "Счета",
+            tab: "profile",
+            icon: "◉",
+            label: "Профиль",
         },
         {
             tab: "settings",
             icon: "⚙",
             label: "Настройки",
-        },
-        {
-            tab: "api",
-            icon: "↕",
-            label: "API",
         },
     ]
 
@@ -59,10 +53,10 @@ export function BottomNavigation({
                 zIndex: 500,
 
                 background:
-                    "rgba(255,255,255,0.96)",
+                    "var(--nav-bg)",
 
                 borderTop:
-                    "1px solid #e5e7eb",
+                    "1px solid var(--border)",
 
                 backdropFilter:
                     "blur(14px)",
@@ -76,7 +70,7 @@ export function BottomNavigation({
                     display: "grid",
 
                     gridTemplateColumns:
-                        "repeat(5, 1fr)",
+                        "repeat(4, 1fr)",
 
                     paddingBottom:
                         "env(safe-area-inset-bottom)",
@@ -112,8 +106,8 @@ export function BottomNavigation({
 
                                     color:
                                         active
-                                            ? "#2563eb"
-                                            : "#6b7280",
+                                            ? "var(--accent)"
+                                            : "var(--text-muted)",
 
                                     cursor:
                                         "pointer",

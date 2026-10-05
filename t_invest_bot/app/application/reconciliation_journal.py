@@ -18,9 +18,16 @@ class ReconciliationJournal:
     влиять на торговый тик:
     все записи оборачиваются
     в try/except.
+
+    Все события дополнительно
+    дублируются в operations_log,
+    чтобы попадать в историю
+    операций на Главной.
     """
 
     repository: Any = None
+
+    operation_log: Any = None
 
     def record_order_result(
         self,
@@ -68,6 +75,29 @@ class ReconciliationJournal:
         for instrument_id in (
             report.instruments_cleared
         ):
+            details = (
+                "позиции закрыты "
+                "вне бота, уровни "
+                "освобождены"
+            )
+
+            cleared_cost = (
+                report
+                .cleared_purchase_cost
+                .get(
+                    instrument_id
+                )
+            )
+
+            if (
+                cleared_cost
+                is not None
+            ):
+                details += (
+                    " стоимость="
+                    f"{cleared_cost}"
+                )
+
             self._record(
                 trading_account_id=trading_account_id,
 
@@ -79,11 +109,7 @@ class ReconciliationJournal:
                     "POSITION_CLEARED"
                 ),
 
-                details=(
-                    "позиции закрыты "
-                    "вне бота, уровни "
-                    "освобождены"
-                ),
+                details=details,
             )
 
         for warning in (
@@ -138,6 +164,8 @@ class ReconciliationJournal:
         if (
             self.repository
             is None
+            and self.operation_log
+            is None
         ):
             return
 
@@ -145,15 +173,56 @@ class ReconciliationJournal:
             ReconciliationEvent,
         )
 
-        try:
-            self.repository.record(
-                ReconciliationEvent(
-                    created_at=(
-                        datetime
-                        .now(
-                            timezone.utc,
-                        )
-                        .isoformat()
+        if (
+            self.repository
+            is not None
+        ):
+            try:
+                self.repository.record(
+                    ReconciliationEvent(
+                        created_at=(
+                            datetime
+                            .now(
+                                timezone.utc,
+                            )
+                            .isoformat()
+                        ),
+
+                        trading_account_id=(
+                            trading_account_id
+                        ),
+
+                        instrument_id=(
+                            instrument_id
+                        ),
+
+                        event_type=(
+                            event_type
+                        ),
+
+                        details=details,
+                    )
+                )
+
+            except Exception as error:
+                #
+                # Журнал не имеет права
+                # ломать торговлю.
+                #
+                print(
+                    "RECONCILIATION JOURNAL "
+                    "ERROR:",
+                    repr(error),
+                )
+
+        if (
+            self.operation_log
+            is not None
+        ):
+            try:
+                self.operation_log.record(
+                    event_type=(
+                        event_type
                     ),
 
                     trading_account_id=(
@@ -164,21 +233,12 @@ class ReconciliationJournal:
                         instrument_id
                     ),
 
-                    event_type=(
-                        event_type
-                    ),
-
                     details=details,
                 )
-            )
 
-        except Exception as error:
-            #
-            # Журнал не имеет права
-            # ломать торговлю.
-            #
-            print(
-                "RECONCILIATION JOURNAL "
-                "ERROR:",
-                repr(error),
-            )
+            except Exception as error:
+                print(
+                    "RECONCILIATION JOURNAL "
+                    "OPERATION LOG ERROR:",
+                    repr(error),
+                )

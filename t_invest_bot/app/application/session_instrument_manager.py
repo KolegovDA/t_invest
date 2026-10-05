@@ -6,12 +6,13 @@ from datetime import (
     timedelta,
     timezone,
 )
-from decimal import Decimal
 from typing import Any
 
 from application.multi_instrument_session_config import (
     InstrumentConfig,
+    MultiInstrumentSessionConfig,
 )
+from application.trading_settings_service import TradingSettingsService
 from application.sandbox_trading_session import (
     SandboxTradingSession,
 )
@@ -63,6 +64,14 @@ class SessionInstrumentManager:
 
     operation_log: Any = None
 
+    commission_service: Any = None
+
+    broker: str | None = None
+
+    trading_settings_service: TradingSettingsService | None = None
+
+    instrument_availability_check: Any = None
+
     history_years: int = 3
 
     exclude_first_days: int = 7
@@ -100,6 +109,9 @@ class SessionInstrumentManager:
             return (
                 existing
             )
+
+        if self.instrument_availability_check is not None:
+            self.instrument_availability_check(normalized)
 
         (
             executor,
@@ -229,7 +241,7 @@ class SessionInstrumentManager:
         current_price = (
             context
             .price_provider
-            .get_last_price(
+            .get_mid_price(
                 instrument_uid=(
                     instrument
                     .id
@@ -298,6 +310,12 @@ class SessionInstrumentManager:
                 ),
             )
         )
+
+        if self.trading_settings_service is not None and self.broker is not None:
+            self.trading_settings_service.apply_to_config(
+                MultiInstrumentSessionConfig(instruments=[instrument_config]),
+                self.broker,
+            )
 
         grid_engine = (
             GridEngine(
@@ -402,6 +420,15 @@ class SessionInstrumentManager:
                         trading_account_id=(
                             context
                             .account_id
+                        ),
+
+                        commission_service=(
+                            self
+                            .commission_service
+                        ),
+
+                        broker=(
+                            self.broker
                         ),
                     )
                 ),

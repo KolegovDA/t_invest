@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
+from application.bybit_session_factory import BybitSessionFactory
 from application.multi_instrument_session_config import (
     InstrumentConfig,
     MultiInstrumentSessionConfig,
@@ -15,6 +17,7 @@ from application.trading_account_service import (
 from application.trading_session_state_service import (
     TradingSessionStateService,
 )
+from application.trading_settings_service import TradingSettingsService
 from application.web_runner_registry import (
     WebRunnerRegistry,
 )
@@ -30,6 +33,7 @@ from domain.trading_state import (
     InstrumentTradingState,
     TradingSessionState,
 )
+from infrastructure.sqlite.api_usage_repository import SQLiteApiUsageRepository
 from infrastructure.sqlite.trading_state_repository import (
     TradingStateRepository,
 )
@@ -49,13 +53,18 @@ class WebRunnerRecoveryService:
     state_service: TradingSessionStateService
     trading_account_service: TradingAccountService
     runner_registry: WebRunnerRegistry
-    api_usage_repository: object
+    api_usage_repository: SQLiteApiUsageRepository
 
     reconciliation_journal: (
         object | None
     ) = None
 
     polling_interval_seconds: int = 10
+    trading_settings_service: TradingSettingsService | None = None
+    commission_service: Any = None
+    operation_log: Any = None
+    knowledge_engine: Any = None
+    notifier: Any = None
 
     def recover_active_runners(
         self,
@@ -153,10 +162,26 @@ class WebRunnerRecoveryService:
         config = self._build_config(
             state
         )
+        if self.runner_registry is not None:
+            self.runner_registry.ensure_instruments_available(
+                state.trading_account_id,
+                [instrument.ticker for instrument in config.instruments],
+            )
+        try:
+            broker = self.trading_account_service.get(state.trading_account_id).broker.value if self.trading_account_service is not None else "tinvest"
+        except KeyError:
+            broker = "tinvest"
+        if self.trading_settings_service is not None:
+            config = self.trading_settings_service.apply_to_config(config, broker)
 
         factory = (
             MultiInstrumentTradingSessionFactory(
                 settings=self.settings,
+                commission_service=self.commission_service,
+                operation_log=self.operation_log,
+                knowledge_engine=self.knowledge_engine,
+                notifier=self.notifier,
+                broker=broker,
             )
         )
 
@@ -166,12 +191,18 @@ class WebRunnerRecoveryService:
             config=config,
         )
 
+        for trading_session in getattr(context.session, "sessions", {}).values():
+            handler = trading_session.trade_event_handler
+            handler.trading_account_id = state.trading_account_id
+            handler.broker = broker
+
         restored_state = (
             self.state_service.restore(
                 context=context,
                 session_id=(
                     state.session_id
                 ),
+                use_current_rules=True,
             )
         )
 
@@ -185,6 +216,12 @@ class WebRunnerRecoveryService:
         # Restored active broker orders are already present in the
         # LiveOrderManager at this point.
         context.session.poll_executions()
+        self.state_service.save(
+            context=context,
+            session_id=state.session_id,
+            trading_account_id=state.trading_account_id,
+            status=state.status,
+        )
 
         runner = WebRunnerService(
             context=context,
@@ -209,9 +246,11 @@ class WebRunnerRecoveryService:
             planned_initial_capital=(
                 state.initial_deposit
             ),
+            commission_service=self.commission_service,
+            operation_log=self.operation_log,
             lifecycle_status=(
-                "DRAINING"
-                if state.status.upper() == "DRAINING"
+                state.status.upper()
+                if state.status.upper() in {"DRAINING", "STOPPING"}
                 else "RUNNING"
             ),
         )
@@ -262,6 +301,14 @@ class WebRunnerRecoveryService:
                 raise RuntimeError(
                     "Trading account is disabled"
                 )
+
+            if account.broker == BrokerType.BYBIT:
+                if account.mode != TradingAccountMode.LIVE or account.broker_account_id != state.broker_account_id:
+                    raise RuntimeError("Saved Bybit account mode or ID mismatch")
+                return BybitSessionFactory(
+                    operation_log=self.operation_log, notifier=self.notifier,
+                    commission_service=self.commission_service, knowledge_engine=self.knowledge_engine,
+                ).create(config, self.trading_account_service.get_credentials(account.id), account.broker_account_id, account.id, (account.base_currency or "USDT").upper(), validate_entry=False)
 
             if (
                 account.broker
@@ -374,7 +421,8 @@ class WebRunnerRecoveryService:
                 (
                     instrument.ticker.upper(),
                     len(instrument.levels),
-                    int(quantity),
+                    quantity,
+                    getattr(config, "base_order_amount", None),
                 )
             )
 
@@ -439,31 +487,8 @@ class WebRunnerRecoveryService:
             levels_count=levels_count,
             quantity=quantity,
         )
-
         if config is not None:
-            instrument.entry_rebound_percent = (
-                config.entry_rebound_percent
-            )
-            instrument.entry_limit_offset_percent = (
-                config.entry_limit_offset_percent
-            )
-            instrument.exit_limit_offset_percent = (
-                config.exit_limit_offset_percent
-            )
-            instrument.trailing_percent = (
-                config.trailing_percent
-            )
-            instrument.min_profit_percent = (
-                config.min_profit_percent
-            )
-            instrument.take_profit_buffer_percent = (
-                config.take_profit_buffer_percent
-            )
-            instrument.min_open_positions_for_compensation = (
-                config.min_open_positions_for_compensation
-            )
-            instrument.compensation_multiplier = (
-                config.compensation_multiplier
-            )
+            for field in ("base_order_amount", "order_amount_multiplier", "max_order_amount_multiplier", "quantity_step", "min_quantity", "min_order_amount"):
+                setattr(instrument, field, getattr(config, field, getattr(instrument, field)))
 
         return instrument

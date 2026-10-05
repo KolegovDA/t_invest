@@ -19,9 +19,9 @@ function profitColor(
         Number(value)
         < 0
 
-        ? "#b91c1c"
+        ? "var(--loss)"
 
-        : "#15803d"
+        : "var(--profit)"
     )
 }
 
@@ -65,6 +65,7 @@ export function KnowledgeCard() {
 
                             setInstruments(
                                 data.instruments
+                                ?? []
                             )
 
                             setError(
@@ -152,8 +153,7 @@ export function KnowledgeCard() {
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginBottom: 16,
@@ -171,7 +171,7 @@ export function KnowledgeCard() {
 
             <p
                 style={{
-                    color: "#6b7280",
+                    color: "var(--text-muted)",
                     fontSize: 13,
                 }}
             >
@@ -191,8 +191,8 @@ export function KnowledgeCard() {
                         style={{
                             padding: "4px 10px",
                             borderRadius: 999,
-                            background: "#eff6ff",
-                            color: "#2563eb",
+                            background: "var(--accent-soft)",
+                            color: "var(--accent)",
                             fontSize: 12,
                             fontWeight: 700,
                         }}
@@ -207,8 +207,8 @@ export function KnowledgeCard() {
                         style={{
                             padding: "4px 10px",
                             borderRadius: 999,
-                            background: "#eff6ff",
-                            color: "#2563eb",
+                            background: "var(--accent-soft)",
+                            color: "var(--accent)",
                             fontSize: 12,
                             fontWeight: 700,
                         }}
@@ -223,7 +223,7 @@ export function KnowledgeCard() {
                         style={{
                             padding: "4px 10px",
                             borderRadius: 999,
-                            background: "#f0fdf4",
+                            background: "var(--profit-soft)",
                             color: profitColor(
                                 String(
                                     totalProfit
@@ -246,7 +246,7 @@ export function KnowledgeCard() {
             {error && (
                 <div
                     style={{
-                        color: "#b91c1c",
+                        color: "var(--loss)",
                         fontSize: 13,
                         marginBottom: 8,
                     }}
@@ -279,7 +279,7 @@ export function KnowledgeCard() {
                         }
                         style={{
                             borderTop:
-                            "1px solid #eee",
+                            "1px solid var(--border)",
                             paddingTop: 10,
                             marginTop: 10,
                             fontSize: 13,
@@ -316,7 +316,7 @@ export function KnowledgeCard() {
                                 display: "flex",
                                 flexWrap: "wrap",
                                 gap: 12,
-                                color: "#6b7280",
+                                color: "var(--text-muted)",
                                 marginTop: 4,
                             }}
                         >

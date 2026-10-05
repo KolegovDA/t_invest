@@ -10,6 +10,7 @@ from t_tech.invest import (
 from domain.order_execution import (
     BrokerActiveOrder,
     PlacedOrder,
+    require_integer_lots,
 )
 from infrastructure.tinvest.client_factory import (
     TInvestClientFactory,
@@ -216,7 +217,7 @@ class TInvestLiveOrderExecutor:
         self,
         account_id: str,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
     ) -> PlacedOrder:
         return self._place_limit_order(
@@ -234,7 +235,7 @@ class TInvestLiveOrderExecutor:
         self,
         account_id: str,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
     ) -> PlacedOrder:
         return self._place_limit_order(
@@ -247,6 +248,17 @@ class TInvestLiveOrderExecutor:
                 .ORDER_DIRECTION_SELL
             ),
         )
+
+    def place_market_sell(self, account_id: str, instrument_id: str, quantity: int | Decimal) -> PlacedOrder:
+        quantity = require_integer_lots(quantity)
+        request_id = str(uuid4())
+        with self.client_factory.create_live_client() as client:
+            response = client.orders.post_order(
+                account_id=account_id, instrument_id=instrument_id, quantity=quantity,
+                direction=OrderDirection.ORDER_DIRECTION_SELL,
+                order_type=OrderType.ORDER_TYPE_MARKET, order_id=request_id,
+            )
+        return PlacedOrder(order_id=response.order_id, request_id=request_id, reason="STOP_MARKET")
 
     def cancel_order(
         self,
@@ -266,10 +278,11 @@ class TInvestLiveOrderExecutor:
         self,
         account_id: str,
         instrument_id: str,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         direction: OrderDirection,
     ) -> PlacedOrder:
+        quantity = require_integer_lots(quantity)
         request_id = str(
             uuid4()
         )

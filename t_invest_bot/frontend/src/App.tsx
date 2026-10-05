@@ -6,12 +6,14 @@ import {
 import {
     calculateStartPlan,
     drainSession,
-    getApiUsage,
+    getAccountsOverview,
+    getAuthMe,
+    getAuthStatus,
     getDashboard,
+    getHealth,
     getInstruments,
     getLiveStatus,
     getOperations,
-    getRunnerStatus,
     getSession,
     getSessions,
     resumeSession,
@@ -31,16 +33,25 @@ import {
 } from "./accounts/AccountsPanel"
 
 import {
+    getDeviceId,
+} from "./auth/security"
+
+import {BybitStartForm} from "./components/BybitStartForm"
+import {
     AddInstrumentForm,
 } from "./components/AddInstrumentForm"
 
 import {
-    ApiUsageCard,
-} from "./components/ApiUsageCard"
+    OverviewAccountsCard,
+} from "./components/AccountsOverviewCard"
 
 import {
     AppModal,
 } from "./components/AppModal"
+
+import {
+    AuthScreen,
+} from "./components/AuthScreen"
 
 import {
     AppTab,
@@ -64,14 +75,6 @@ import {
 } from "./components/InstrumentSelectionCard"
 
 import {
-    KnowledgeCard,
-} from "./components/KnowledgeCard"
-
-import {
-    LiveStatusCard,
-} from "./components/LiveStatusCard"
-
-import {
     NotificationSettingsCard,
 } from "./components/NotificationSettingsCard"
 
@@ -80,16 +83,12 @@ import {
 } from "./components/OperationsHistoryCard"
 
 import {
-    PhantomAuditCard,
-} from "./components/PhantomAuditCard"
+    PlatformApiCard,
+} from "./components/PlatformApiCard"
 
 import {
-    ReconciliationCard,
-} from "./components/ReconciliationCard"
-
-import {
-    RunnerStatusCard,
-} from "./components/RunnerStatusCard"
+    SecuritySettingsCard,
+} from "./components/SecuritySettingsCard"
 
 import {
     SessionChartCard,
@@ -100,27 +99,39 @@ import {
 } from "./components/SessionDetailCard"
 
 import {
-    SessionsCard,
-} from "./components/SessionsCard"
-
-import {
     StartPlanCard,
 } from "./components/StartPlanCard"
+
+import {
+    ThemeToggle,
+} from "./components/ThemeToggle"
+
+import {
+    TradingOverviewCard,
+} from "./components/TradingOverviewCard"
+
+import {
+    UserSettingsCard,
+} from "./components/UserSettingsCard"
+
+import type {
+    AuthUser,
+} from "./api"
 
 import type {
     TradingAccount,
 } from "./accounts/types"
 
 import type {
+    AccountsOverview,
     ActiveSession,
-    ApiUsage,
     Dashboard,
+    DashboardAccountDetail,
     Instrument,
     InstrumentSearchResult,
     LiveStartValidationResult,
     LiveStatus,
     OperationLogEntry,
-    RunnerStatus,
     StartPlan,
     StartSandboxResult,
 } from "./types"
@@ -157,18 +168,21 @@ export default function App() {
     >(null)
 
     const [
-        apiUsage,
-        setApiUsage,
+        overview,
+        setOverview,
     ] = useState<
-        ApiUsage | null
+        AccountsOverview | null
     >(null)
 
+    const [selectionOpen, setSelectionOpen] = useState(false)
+    const [accountsOpen, setAccountsOpen] = useState(false)
+
     const [
-        runners,
-        setRunners,
+        appVersion,
+        setAppVersion,
     ] = useState<
-        RunnerStatus[]
-    >([])
+        string | null
+    >(null)
 
     const [
         liveStatus,
@@ -324,19 +338,45 @@ export default function App() {
         "1"
     )
 
+    const deviceId = (
+        getDeviceId()
+    )
 
-    const tradingMode =
-        liveStatus
-            ?.trading_mode
-            === "live"
-            ? "live"
-            : "sandbox"
+    const [
+        authChecked,
+        setAuthChecked,
+    ] = useState(
+        false
+    )
+
+    const [
+        authUser,
+        setAuthUser,
+    ] = useState<
+        AuthUser | null
+    >(null)
+
+    const [
+        authMode,
+        setAuthMode,
+    ] = useState<
+        "register"
+        | "login"
+        | "pin"
+    >(
+        "login"
+    )
 
 
-    const liveTradingEnabled =
-        liveStatus
-            ?.live_trading_enabled
-        === true
+    useEffect(() => {
+        if (!authUser) return
+        const timer = setInterval(() => { getAuthMe().catch(() => {}) }, 30000)
+        return () => clearInterval(timer)
+    }, [authUser])
+
+    const [startPlatform, setStartPlatform] = useState("")
+
+    const tradingMode: string = "live"
 
 
     const enabledLiveAccounts =
@@ -361,11 +401,117 @@ export default function App() {
 
     useEffect(
         () => {
+            let cancelled = false
+
+            getAuthStatus(
+                deviceId
+            )
+
+                .then(
+                    async status => {
+                        let user: (
+                            AuthUser
+                            | null
+                        ) = null
+
+                        try {
+                            const data = (
+                                await getAuthMe()
+                            )
+
+                            user = (
+                                data
+                                    .user
+                            )
+                        } catch {
+                            user = null
+                        }
+
+                        if (cancelled) {
+                            return
+                        }
+
+                        setAuthChecked(
+                            true
+                        )
+
+                        if (
+                            !status
+                                .has_users
+                        ) {
+                            setAuthMode(
+                                "register"
+                            )
+
+                            return
+                        }
+
+                        if (user) {
+                            setAuthUser(
+                                user
+                            )
+
+                            return
+                        }
+
+                        setAuthMode(
+                            status
+                                .device_has_pin
+                                ? "pin"
+                                : "login"
+                        )
+                    }
+                )
+
+                .catch(
+                    () => {
+                        if (cancelled) {
+                            return
+                        }
+
+                        setAuthChecked(
+                            true
+                        )
+
+                        setAuthMode(
+                            "login"
+                        )
+                    }
+                )
+
+            return () => {
+                cancelled = true
+            }
+        },
+
+        [deviceId]
+    )
+
+    useEffect(
+        () => {
             refreshAll()
 
             refreshLiveStatus()
 
             refreshTradingAccounts()
+
+            getHealth()
+                .then(
+                    health => {
+                        setAppVersion(
+                            health.version
+                            ?? null
+                        )
+                    }
+                )
+
+                .catch(
+                    () => {
+                        setAppVersion(
+                            null
+                        )
+                    }
+                )
 
             getInstruments()
                 .then(
@@ -393,7 +539,7 @@ export default function App() {
             const intervalId =
                 window.setInterval(
                     refreshAll,
-                    5000
+                    15000
                 )
 
             return () =>
@@ -402,22 +548,19 @@ export default function App() {
                         intervalId
                     )
         },
-        []
+        [authUser]
     )
 
 
     function refreshAll() {
         refreshDashboard()
         refreshSessions()
-        refreshApiUsage()
-        refreshRunnerStatus()
+        refreshOverview()
         refreshOperations()
     }
 
     function refreshOperations() {
-        getOperations(
-            100
-        )
+        getOperations()
             .then(
                 data => {
                     setOperations(
@@ -590,6 +733,50 @@ export default function App() {
             .then(
                 setDashboard
             )
+
+            .catch(
+                handleAuthError
+            )
+    }
+
+
+    function handleAuthError(
+        error: unknown
+    ) {
+        const message = (
+            error
+            instanceof Error
+                ? error.message
+                : ""
+        )
+
+        if (
+            message
+                .includes(
+                    "Сессия истекла"
+                )
+
+            || message
+                .includes(
+                    "Требуется "
+                    + "авториза"
+                )
+        ) {
+            setAuthUser(
+                null
+            )
+
+            setAuthMode(
+                "login"
+            )
+
+            return
+        }
+
+        console.error(
+            "API error:",
+            error
+        )
     }
 
 
@@ -599,26 +786,24 @@ export default function App() {
                 data => {
                     setSessions(
                         data.sessions
+                        ?? []
                     )
                 }
             )
     }
 
 
-    function refreshApiUsage() {
-        getApiUsage()
+    function refreshOverview() {
+        getAccountsOverview()
             .then(
-                setApiUsage
+                setOverview
             )
-    }
 
-
-    function refreshRunnerStatus() {
-        getRunnerStatus()
-            .then(
-                data => {
-                    setRunners(
-                        data.runners
+            .catch(
+                error => {
+                    console.error(
+                        "Overview error:",
+                        error
                     )
                 }
             )
@@ -655,6 +840,7 @@ export default function App() {
                                 account.enabled
                                 && account.mode
                                 === "live"
+                                && account.broker === "tinvest"
                         )
 
                     setSelectedTradingAccountId(
@@ -926,7 +1112,34 @@ export default function App() {
     }
 
 
+    function openNewSession() {
+        setStartPlatform("")
+        setInstruments([])
+        setStartPlan(null)
+        setStartResult(null)
+        resetValidation()
+        refreshTradingAccounts()
+        setSelectionOpen(true)
+    }
+
+    function changeSessionPlatform(platform: string) {
+        setStartPlatform(platform)
+        setInstruments([])
+        setStartPlan(null)
+        setStartResult(null)
+        resetValidation()
+    }
+
+    function changeSessionAccount(accountId: string | null) {
+        setSelectedTradingAccountId(accountId)
+        setInstruments([])
+        setStartPlan(null)
+        setStartResult(null)
+        resetValidation()
+    }
+
     function openStartModal() {
+        setSelectionOpen(false)
         refreshTradingAccounts()
 
         setStartPlan(null)
@@ -1018,7 +1231,7 @@ export default function App() {
 
             tradingMode === "live"
                 ? selectedTradingAccountId
-                : null,
+                : selectedSandboxAccountId,
 
             tradingMode === "sandbox"
                 ? 100000
@@ -1032,7 +1245,6 @@ export default function App() {
 
                     setStartResult(null)
 
-                    refreshApiUsage()
                 }
             )
             .catch(
@@ -1051,17 +1263,6 @@ export default function App() {
         if (
             tradingMode === "live"
         ) {
-            if (
-                !liveTradingEnabled
-            ) {
-                setStartError(
-                    "Live trading отключен. "
-                    + "LIVE_TRADING_ENABLED=0"
-                )
-
-                return
-            }
-
             if (
                 !selectedTradingAccountId
             ) {
@@ -1135,7 +1336,7 @@ export default function App() {
                         setModal(null)
 
                         setActiveTab(
-                            "sessions"
+                            "trading"
                         )
                     },
                     1200
@@ -1178,6 +1379,7 @@ export default function App() {
     function stopSelectedSession(
         ticker: string
     ) {
+        if (!window.confirm("Сессия остановится, все её текущие активы будут проданы по рынку. Подтвердить остановку?")) return
         stopSession(
             ticker
         )
@@ -1190,9 +1392,7 @@ export default function App() {
                         setModal(null)
 
                     } else {
-                        setSelectedSession(
-                            result
-                        )
+                        setSelectedSession(current => current ? { ...current, status: result.status } : current)
                     }
 
                     refreshAll()
@@ -1277,6 +1477,35 @@ export default function App() {
     }
 
 
+    if (!authChecked) {
+        return (
+            <div
+                style={{
+                    padding: 20,
+
+                    fontFamily:
+                        "Arial, sans-serif",
+                }}
+            >
+                Проверка доступа...
+            </div>
+        )
+    }
+
+    if (!authUser) {
+        return (
+            <AuthScreen
+                initialMode={
+                    authMode
+                }
+
+                onAuthenticated={
+                    setAuthUser
+                }
+            />
+        )
+    }
+
     if (!dashboard) {
         return (
             <div
@@ -1300,7 +1529,7 @@ export default function App() {
                     "100vh",
 
                 background:
-                    "#f4f6f8",
+                    "var(--bg)",
 
                 fontFamily:
                     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
@@ -1308,11 +1537,7 @@ export default function App() {
         >
             <div
                 style={{
-                    maxWidth:
-                        activeTab
-                            === "accounts"
-                            ? 900
-                            : 560,
+                    maxWidth: 560,
 
                     margin:
                         "0 auto",
@@ -1321,7 +1546,12 @@ export default function App() {
                         "18px 16px 105px",
                 }}
             >
-                <Header />
+                <Header
+                    fullName={
+                        authUser
+                            .full_name
+                    }
+                />
 
                 {activeTab === "home" && (
                     <>
@@ -1331,36 +1561,17 @@ export default function App() {
                             }
                         />
 
-                        <QuickActions
-                            sessionsCount={
-                                sessions.length
-                            }
-
-                            tradingMode={
-                                tradingMode
-                            }
-
-                            onStart={
-                                openStartModal
-                            }
-
-                            onSessions={() =>
-                                setActiveTab(
-                                    "sessions"
-                                )
-                            }
-                        />
-
                         <AccountsSummary
                             accounts={
                                 tradingAccounts
                             }
 
-                            onAccounts={() =>
-                                setActiveTab(
-                                    "accounts"
-                                )
+                            accountsDetail={
+                                dashboard
+                                    .accounts_detail
+                                    ?? []
                             }
+
                         />
 
                         <OperationsHistoryCard
@@ -1371,47 +1582,80 @@ export default function App() {
                     </>
                 )}
 
-                {activeTab === "sessions" && (
+                {activeTab === "trading" && (
                     <>
                         <SectionTitle
-                            title="Сессии"
-
+                            title="Торговля"
+                            compact
                             subtitle={
                                 `${sessions.length} активных`
                             }
+
+                            action={
+                                <div
+                                    style={{
+                                        display:
+                                        "flex",
+
+                                        gap:
+                                        6,
+                                    }}
+                                >
+                                    <button
+                                        onClick={() => setAccountsOpen(true)}
+                                        style={smallPrimaryButton}
+                                    >
+                                        + Счёт
+                                    </button>
+                                    <button
+                                        onClick={openNewSession}
+                                        style={smallPrimaryButton}
+                                    >
+                                        + Сессия
+                                    </button>
+                                </div>
+                            }
                         />
 
-                        {sessions.length > 0 ? (
-                            <SessionsCard
-                                sessions={
-                                    sessions
-                                }
+                        <SectionTitle title="Активные счета" />
+                        <OverviewAccountsCard overview={overview} sessions={sessions} onOpenTicker={openSession} />
+                        <TradingOverviewCard overview={overview} sessions={sessions} onOpenTicker={openSession} />
+                    </>
+                )}
 
-                                onOpen={
-                                    openSession
-                                }
-                            />
-                        ) : (
-                            <EmptyState
-                                title=
-                                "Нет активных сессий"
+                {selectionOpen && (
+                    <AppModal
+                        title="Новая сессия"
+                        onClose={() => setSelectionOpen(false)}
+                    >
 
-                                text=
-                                "Запусти первую стратегию"
-
-                                button=
-                                "Запустить"
-
-                                onClick={
-                                    openStartModal
-                                }
-                            />
-                        )}
-
-                        <div
+                        <label style={{ display: "block", fontSize: 13 }}>
+                            Платформа
+                            <select aria-label="Платформа новой сессии" value={startPlatform} onChange={event => changeSessionPlatform(event.target.value)} style={{ width: "100%", marginTop: 6, padding: 10 }}>
+                                <option value="">Выберите платформу</option>
+                                <option value="tinvest">Т-Инвест</option>
+                                <option value="bybit">Bybit</option>
+                            </select>
+                        </label>
+                        {startPlatform === "bybit" && <BybitStartForm accounts={enabledLiveAccounts.filter(account => account.broker === "bybit")} onStarted={() => {
+                            refreshAll()
+                            refreshTradingAccounts()
+                            setSelectionOpen(false)
+                            setActiveTab("trading")
+                        }} />}
+                        {startPlatform === "tinvest" && <>
+                            <label style={{ display: "block", marginTop: 12, fontSize: 13 }}>
+                                Счёт Т-Инвест
+                                <select aria-label="Счёт новой сессии Т-Инвест" value={selectedTradingAccountId ?? ""} onChange={event => changeSessionAccount(event.target.value || null)} style={{ width: "100%", marginTop: 6, padding: 10 }}>
+                                    <option value="">Выберите счёт</option>
+                                    {enabledLiveAccounts.filter(account => account.broker === "tinvest").map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                                </select>
+                            </label>
+                            {!enabledLiveAccounts.some(account => account.broker === "tinvest") && <div style={{ marginTop: 8, fontSize: 13 }}>Добавьте боевой счёт Т-Инвест.</div>}
+                        {selectedTradingAccountId && <div
                             style={{
                                 marginTop:
-                                    28,
+                                    12,
                             }}
                         >
                             <SectionTitle
@@ -1438,9 +1682,16 @@ export default function App() {
                                 }
                             />
 
-                            <InstrumentSelectionCard />
-
-                            <KnowledgeCard />
+                            <InstrumentSelectionCard key={selectedTradingAccountId} tradingAccountId={selectedTradingAccountId} onSelect={selected => {
+                                setInstruments(current => {
+                                    const merged = new Map(current.map(item => [item.ticker, item]))
+                                    selected.forEach(item => merged.set(item.ticker, item))
+                                    return Array.from(merged.values())
+                                })
+                                setStartPlan(null)
+                                setStartResult(null)
+                                resetValidation()
+                            }} />
 
                             {instruments.map(
                                 instrument => (
@@ -1478,75 +1729,86 @@ export default function App() {
                                     primaryButton
                                 }
                             >
-                                Запустить
+                                Проверить и запустить
                             </button>
-                        </div>
-                    </>
+                        </div>}
+                        </>}
+                    </AppModal>
                 )}
 
-                {activeTab === "accounts" && (
-                    <>
-                        <SectionTitle
-                            title="Счета"
-
-                            subtitle=
-                                "Управление торговыми аккаунтами"
-                        />
-
+                {accountsOpen && (
+                    <AppModal
+                        title="Управление счетами"
+                        onClose={() => {
+                            setAccountsOpen(false)
+                            refreshTradingAccounts()
+                            refreshAll()
+                        }}
+                    >
                         <AccountsPanel />
-
-                        <PhantomAuditCard
-                            onResolved={() => {
-                                refreshAll()
-
-                                refreshOperations()
-                            }}
-                        />
-                    </>
+                    </AppModal>
                 )}
 
-                {activeTab === "api" && (
-                    <>
-                        <SectionTitle
-                            title=
-                            "API и Runner"
-
-                            subtitle=
-                            "Монитор нагрузки"
-                        />
-
-                        <ApiUsageCard
-                            apiUsage={
-                                apiUsage
-                            }
-                        />
-
-                        <ReconciliationCard />
-
-                        <RunnerStatusCard
-                            runners={
-                                runners
-                            }
-                        />
-                    </>
-                )}
+                {activeTab === "profile" && <UserSettingsCard user={authUser} onUpdated={setAuthUser} />}
 
                 {activeTab === "settings" && (
                     <>
-                        <SectionTitle
-                            title="Настройки"
+                        <div
+                            style={{
+                                display:
+                                "flex",
 
-                            subtitle=
-                                "ESM Trade System v1.2.0-dev"
-                        />
+                                justifyContent:
+                                "space-between",
 
-                        <LiveStatusCard
-                            status={
-                                liveStatus
-                            }
-                        />
+                                alignItems:
+                                "center",
+
+                                marginBottom:
+                                14,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    fontSize:
+                                    12,
+
+                                    color:
+                                    "var(--text-muted)",
+                                }}
+                            >
+                                v{
+                                    appVersion
+                                    ?? "…"
+                                }
+                            </div>
+
+                            <ThemeToggle />
+                        </div>
+
+                        <PlatformApiCard />
 
                         <NotificationSettingsCard />
+
+                        <SecuritySettingsCard
+                            deviceId={
+                                deviceId
+                            }
+
+                            user={
+                                authUser
+                            }
+
+                            onLoggedOut={() => {
+                                setAuthUser(
+                                    null
+                                )
+
+                                setAuthMode(
+                                    "login"
+                                )
+                            }}
+                        />
                     </>
                 )}
             </div>
@@ -1677,6 +1939,9 @@ export default function App() {
                         setModal(null)
                     }
                 >
+                    <div style={{ fontSize: 13, marginBottom: 8 }}>Т-Инвест · {tradingAccounts.find(account => account.id === selectedTradingAccountId)?.name ?? "Счёт не выбран"}</div>
+                    <button type="button" onClick={() => {setModal(null); setSelectionOpen(true)}} style={smallPrimaryButton}>Назад к инструментам</button>
+                    {startPlatform === "tinvest" && <>
                     <div
                         style={
                             modeCardStyle
@@ -1706,7 +1971,7 @@ export default function App() {
                                 Торговый счёт
                             </div>
 
-                            {enabledLiveAccounts.length > 0 ? (
+                            {enabledLiveAccounts.some(account => account.broker === "tinvest") ? (
                                 <select
                                     value={
                                         selectedTradingAccountId
@@ -1715,16 +1980,9 @@ export default function App() {
 
                                     onChange={
                                         event => {
-                                            setSelectedTradingAccountId(
-                                                event
-                                                    .target
-                                                    .value
-                                                || null
-                                            )
-
-                                            setLiveValidation(
-                                                null
-                                            )
+                                             changeSessionAccount(event.target.value || null)
+                                             setModal(null)
+                                             setSelectionOpen(true)
                                         }
                                     }
 
@@ -1739,7 +1997,7 @@ export default function App() {
                                             10,
                                     }}
                                 >
-                                    {enabledLiveAccounts.map(
+                                    {enabledLiveAccounts.filter(account => account.broker === "tinvest").map(
                                         account => (
                                             <option
                                                 key={
@@ -1876,7 +2134,7 @@ export default function App() {
                                         13,
 
                                     color:
-                                        "#6b7280",
+                                        "var(--text-muted)",
                                 }}
                             >
                                 {
@@ -1948,7 +2206,7 @@ export default function App() {
                                         <div
                                             style={{
                                                 marginTop: 8,
-                                                color: "#9a3412",
+                                                color: "var(--accent)",
                                                 fontSize: 13,
                                             }}
                                         >
@@ -2000,6 +2258,7 @@ export default function App() {
                             )}
                         </>
                     )}
+                    </>}
                 </AppModal>
             )}
 
@@ -2019,16 +2278,23 @@ export default function App() {
                             setModal(null)
                         }
                     >
+                        <SessionChartCard ticker={selectedSession.ticker} />
+                        <SessionDetailCard
+                            session={selectedSession}
+                            onClose={() => setModal(null)}
+                            onStop={stopSelectedSession}
+                        />
                         <div
                             style={{
+                                marginTop: 16,
                                 marginBottom: 12,
                                 padding: 12,
                                 borderRadius: 12,
                                 background:
                                     selectedSession.status
                                     === "DRAINING"
-                                        ? "#fff7ed"
-                                        : "#f9fafb",
+                                        ? "var(--accent-soft)"
+                                        : "var(--card-soft)",
                             }}
                         >
                             <div
@@ -2042,7 +2308,7 @@ export default function App() {
 
                             <div
                                 style={{
-                                    color: "#6b7280",
+                                    color: "var(--text-muted)",
                                     fontSize: 13,
                                     marginBottom: 10,
                                     lineHeight: 1.4,
@@ -2076,8 +2342,8 @@ export default function App() {
                                     background:
                                         selectedSession.status
                                         === "DRAINING"
-                                            ? "#2563eb"
-                                            : "#f59e0b",
+                                            ? "var(--accent)"
+                                            : "var(--accent)",
                                     color:
                                         "white",
                                     fontWeight: 700,
@@ -2094,25 +2360,6 @@ export default function App() {
                             </button>
                         </div>
 
-                        <SessionDetailCard
-                            session={
-                                selectedSession
-                            }
-
-                            onClose={() =>
-                                setModal(null)
-                            }
-
-                            onStop={
-                                stopSelectedSession
-                            }
-                        />
-
-                        <SessionChartCard
-                            ticker={
-                                selectedSession.ticker
-                            }
-                        />
                     </AppModal>
                 )
             }
@@ -2298,7 +2545,7 @@ function LiveValidationCard({
                                     "12px 0",
 
                                 borderTop:
-                                    "1px solid #e5e7eb",
+                                    "1px solid var(--border)",
                             }}
                         >
                             <div
@@ -2395,7 +2642,7 @@ function ValidationRow({
             <span
                 style={{
                     color:
-                        "#6b7280",
+                        "var(--text-muted)",
                 }}
             >
                 {
@@ -2418,7 +2665,11 @@ function ValidationRow({
 }
 
 
-function Header() {
+function Header({
+    fullName,
+}: {
+    fullName: string | null
+}) {
     return (
         <div
             style={{
@@ -2426,12 +2677,11 @@ function Header() {
                     20,
             }}
         >
-            <div>
-                ESM Trade System
-            </div>
-
             <h1>
-                Портфель
+                {
+                    fullName
+                    || "Портфель"
+                }
             </h1>
         </div>
     )
@@ -2442,10 +2692,12 @@ function SectionTitle({
     title,
     subtitle,
     action,
+    compact = false,
 }: {
     title: string
     subtitle?: string
     action?: React.ReactNode
+    compact?: boolean
 }) {
     return (
         <div
@@ -2457,11 +2709,13 @@ function SectionTitle({
                     "space-between",
 
                 marginBottom:
-                    16,
+                    compact ? 6 : 16,
+                alignItems: "center",
+                gap: 8,
             }}
         >
-            <div>
-                <h2>
+            <div style={{ display: compact ? "flex" : "block", alignItems: "baseline", gap: 8 }}>
+                <h2 style={compact ? { margin: 0, fontSize: 18 } : undefined}>
                     {
                         title
                     }
@@ -2487,92 +2741,33 @@ function SectionTitle({
 }
 
 
-function QuickActions({
-    sessionsCount,
-    tradingMode,
-    onStart,
-    onSessions,
-}: {
-    sessionsCount: number
-
-    tradingMode:
-    "sandbox"
-    | "live"
-
-    onStart:
-    () => void
-
-    onSessions:
-    () => void
-}) {
-    return (
-        <div
-            style={{
-                display:
-                    "grid",
-
-                gridTemplateColumns:
-                    "1fr 1fr",
-
-                gap:
-                    10,
-
-                marginBottom:
-                    16,
-            }}
-        >
-            <button
-                onClick={
-                    onStart
-                }
-
-                style={
-                    primaryButton
-                }
-            >
-                {
-                    tradingMode
-                        === "live"
-                        ? "+ Торговать"
-                        : "+ Запустить"
-                }
-            </button>
-
-            <button
-                onClick={
-                    onSessions
-                }
-
-                style={
-                    primaryButton
-                }
-            >
-                Сессии (
-                {
-                    sessionsCount
-                }
-                )
-            </button>
-        </div>
-    )
-}
-
-
 function AccountsSummary({
     accounts,
-    onAccounts,
+    accountsDetail,
 }: {
     accounts:
     TradingAccount[]
 
-    onAccounts:
-    () => void
+    accountsDetail:
+    DashboardAccountDetail[]
+
 }) {
+    const detailById = (
+        new Map(
+            accountsDetail.map(
+                detail => [
+                    detail.id,
+
+                    detail,
+                ]
+            )
+        )
+    )
+
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
 
                 borderRadius:
                 14,
@@ -2608,50 +2803,16 @@ function AccountsSummary({
                     Счета
                 </h3>
 
-                <button
-                    onClick={
-                        onAccounts
-                    }
-
-                    style={{
-                        border:
-                        "1px solid #d1d5db",
-
-                        background:
-                        "white",
-
-                        borderRadius:
-                        9,
-
-                        padding:
-                        "6px 10px",
-
-                        fontSize:
-                        12,
-
-                        fontWeight:
-                        600,
-
-                        color:
-                        "#2563eb",
-
-                        cursor:
-                        "pointer",
-                    }}
-                >
-                    Все счета (
-                    {
-                        accounts.length
-                    }
-                    )
-                </button>
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                    {accounts.length}
+                </span>
             </div>
 
             {accounts.length === 0 ? (
                 <div
                     style={{
                         color:
-                        "#6b7280",
+                        "var(--text-muted)",
 
                         fontSize:
                         13,
@@ -2661,127 +2822,320 @@ function AccountsSummary({
                 </div>
             ) : (
                 accounts.map(
-                    account => (
-                        <div
-                            key={
+                    account => {
+                        const detail = (
+                            detailById.get(
                                 account.id
-                            }
+                            )
+                        )
 
-                            style={{
-                                display:
-                                "flex",
+                        const balance = (
+                            detail
+                                ?.balance
+                                ?? null
+                        )
 
-                                justifyContent:
-                                "space-between",
+                        const pnlToday = (
+                            detail
+                                ?.pnl_today
+                                ?? null
+                        )
 
-                                alignItems:
-                                "center",
-
-                                gap:
-                                8,
-
-                                padding:
-                                "8px 0",
-
-                                borderTop:
-                                "1px solid #e5e7eb",
-                            }}
-                        >
+                        return (
                             <div
+                                key={
+                                    account.id
+                                }
+
                                 style={{
-                                    minWidth:
-                                    0,
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontWeight:
-                                        600,
+                                    display:
+                                    "flex",
 
-                                        fontSize:
-                                        14,
-                                    }}
-                                >
-                                    {
-                                        account.name
-                                    }
-                                </div>
+                                    alignItems:
+                                    "center",
 
-                                <div
-                                    style={{
-                                        color:
-                                        "#6b7280",
-
-                                        fontSize:
-                                        12,
-                                    }}
-                                >
-                                    {
-                                        account.broker
-                                    }
-                                    {" · "}
-                                    {
-                                        account
-                                            .broker_account_id
-                                    }
-                                </div>
-                            </div>
-
-                            <div
-                                style={{
-                                    fontSize:
-                                    11,
-
-                                    fontWeight:
-                                    700,
+                                    gap:
+                                    12,
 
                                     padding:
-                                    "3px 8px",
+                                    "10px 0",
 
-                                    borderRadius:
-                                    8,
-
-                                    background:
-                                    account
-                                        .mode
-                                        === "live"
-                                        ? "#dbeafe"
-                                        : "#f3f4f6",
-
-                                    color:
-                                    account
-                                        .mode
-                                        === "live"
-                                        ? "#1d4ed8"
-                                        : "#6b7280",
-
-                                    whiteSpace:
-                                    "nowrap",
+                                    borderTop:
+                                    "1px solid var(--border)",
                                 }}
                             >
-                                {
-                                    account
-                                        .mode
-                                        === "live"
-                                        ? "LIVE"
-                                        : "SANDBOX"
-                                }
+                                <div
+                                    style={{
+                                        width:
+                                        38,
 
-                                {
-                                    !(
-                                        account.enabled
-                                    )
-                                    && (
-                                        " · выкл"
-                                    )
-                                }
+                                        height:
+                                        38,
+
+                                        borderRadius:
+                                        12,
+
+                                        flexShrink:
+                                        0,
+
+                                        display:
+                                        "flex",
+
+                                        alignItems:
+                                        "center",
+
+                                        justifyContent:
+                                        "center",
+
+                                        background:
+                                        "var(--card-soft)",
+
+                                        color:
+                                        "var(--accent)",
+
+                                        fontSize:
+                                        17,
+
+                                        fontWeight:
+                                        700,
+                                    }}
+                                >
+                                    {
+                                        account
+                                            .name
+                                            .trim()
+                                            .charAt(
+                                                0
+                                            )
+                                            .toUpperCase()
+                                        || "•"
+                                    }
+                                </div>
+
+                                <div
+                                    style={{
+                                        minWidth:
+                                        0,
+
+                                        flex:
+                                        1,
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            fontWeight:
+                                            600,
+
+                                            fontSize:
+                                            14,
+
+                                            whiteSpace:
+                                            "nowrap",
+
+                                            overflow:
+                                            "hidden",
+
+                                            textOverflow:
+                                            "ellipsis",
+                                        }}
+                                    >
+                                        {
+                                            account.name
+                                        }
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            color:
+                                            "var(--text-muted)",
+
+                                            fontSize:
+                                            12,
+                                        }}
+                                    >
+                                        {
+                                            account.broker
+                                        }
+                                        {" · "}
+                                        {
+                                            detail
+                                                ?.currency
+                                                ?? "RUB"
+                                        }
+                                    </div>
+                                </div>
+
+                                <div
+                                    style={{
+                                        display:
+                                        "flex",
+
+                                        flexDirection:
+                                        "column",
+
+                                        alignItems:
+                                        "flex-end",
+
+                                        gap:
+                                        2,
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            fontWeight:
+                                            700,
+
+                                            fontSize:
+                                            15,
+                                        }}
+                                    >
+                                        {
+                                            balance
+                                            === null
+                                                ? "—"
+                                                : `${
+                                                    balance.toLocaleString(
+                                                        "ru-RU",
+                                                        {
+                                                            maximumFractionDigits: 2,
+                                                        }
+                                                    )
+                                                } ${
+                                                    currencySign(
+                                                        detail
+                                                            ?.currency
+                                                            ?? "RUB"
+                                                    )
+                                                }`
+                                        }
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            fontSize:
+                                            12,
+
+                                            fontWeight:
+                                            600,
+
+                                            color:
+                                            pnlToday
+                                            === null
+                                                ? "var(--text-dim)"
+                                                : (
+                                                    pnlToday
+                                                    >= 0
+                                                        ? "var(--profit)"
+                                                        : "var(--loss)"
+                                                ),
+                                        }}
+                                    >
+                                        {
+                                            pnlToday
+                                            === null
+                                                ? "—"
+                                                : `${
+                                                    pnlToday
+                                                    > 0
+                                                        ? "+"
+                                                        : ""
+                                                }${
+                                                    pnlToday.toLocaleString(
+                                                        "ru-RU",
+                                                        {
+                                                            maximumFractionDigits: 2,
+                                                        }
+                                                    )
+                                                } ${
+                                                    currencySign(
+                                                        detail
+                                                            ?.currency
+                                                            ?? "RUB"
+                                                    )
+                                                }`
+                                        }
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            fontSize:
+                                            11,
+
+                                            fontWeight:
+                                            700,
+
+                                            padding:
+                                            "2px 8px",
+
+                                            borderRadius:
+                                            8,
+
+                                            background: (
+                                                detail
+                                                    ?.mode
+                                                    ?? account.mode
+                                            )
+                                            === "live"
+                                                ? "var(--accent-soft)"
+                                                : "var(--card-soft)",
+
+                                            color: (
+                                                detail
+                                                    ?.mode
+                                                    ?? account.mode
+                                            )
+                                            === "live"
+                                                ? "var(--accent)"
+                                                : "var(--text-muted)",
+
+                                            whiteSpace:
+                                            "nowrap",
+                                        }}
+                                    >
+                                        {
+                                            (
+                                                detail
+                                                    ?.mode
+                                                    ?? account.mode
+                                            )
+                                            === "live"
+                                                ? "LIVE"
+                                                : "SANDBOX"
+                                        }
+
+                                        {
+                                            !(
+                                                detail
+                                                    ?.enabled
+                                                    ?? account.enabled
+                                            )
+                                            && (
+                                                " · выкл"
+                                            )
+                                        }
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    )
+                        )
+                    }
                 )
             )}
         </div>
     )
+}
+
+
+function currencySign(
+    currency: string
+): string {
+    if (
+        currency
+        === "RUB"
+    ) {
+        return "₽"
+    }
+
+    return currency
 }
 
 
@@ -2846,7 +3200,7 @@ const primaryButton = {
         "none",
 
     background:
-        "#2563eb",
+        "var(--accent)",
 
     color:
         "white",
@@ -2864,7 +3218,7 @@ const primaryButton = {
 
 const smallPrimaryButton = {
     padding:
-        "10px 13px",
+        "6px 10px",
 
     borderRadius:
         11,
@@ -2873,7 +3227,7 @@ const smallPrimaryButton = {
         "none",
 
     background:
-        "#2563eb",
+        "var(--accent)",
 
     color:
         "white",
@@ -2887,8 +3241,7 @@ const smallPrimaryButton = {
 
 
 const cardStyle = {
-    background:
-        "white",
+    background: "var(--card)",
 
     borderRadius:
         14,
@@ -2926,10 +3279,10 @@ const errorStyle = {
         12,
 
     background:
-        "#fee2e2",
+        "var(--loss-soft)",
 
     color:
-        "#991b1b",
+        "var(--loss)",
 
     fontSize:
         14,

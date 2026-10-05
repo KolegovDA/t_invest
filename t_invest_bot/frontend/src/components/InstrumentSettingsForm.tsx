@@ -19,7 +19,7 @@ export function InstrumentSettingsForm({
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 18,
                 padding: 16,
             }}
@@ -53,11 +53,11 @@ export function InstrumentSettingsForm({
                             border:
                                 levels === value
                                     ? "2px solid #2563eb"
-                                    : "1px solid #d1d5db",
+                                    : "1px solid var(--border)",
                             background:
                                 levels === value
-                                    ? "#eff6ff"
-                                    : "white",
+                                    ? "var(--accent-soft)"
+: "var(--card)",
                             fontWeight: 600,
                         }}
                     >
@@ -89,7 +89,7 @@ export function InstrumentSettingsForm({
                     marginTop: 8,
                     marginBottom: 20,
                     borderRadius: 12,
-                    border: "1px solid #d1d5db",
+                    border: "1px solid var(--border)",
                     fontSize: 17,
                 }}
             />
@@ -101,7 +101,7 @@ export function InstrumentSettingsForm({
                     padding: 15,
                     border: "none",
                     borderRadius: 13,
-                    background: "#2563eb",
+                    background: "var(--accent)",
                     color: "white",
                     fontSize: 17,
                     fontWeight: 600,

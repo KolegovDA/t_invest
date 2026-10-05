@@ -6,7 +6,7 @@ from decimal import Decimal
 class InstrumentPortfolio:
     instrument_id: str
 
-    position_quantity: int = 0
+    position_quantity: int | Decimal = 0
     average_price: Decimal = Decimal("0")
 
     buy_commission_total: Decimal = Decimal("0")

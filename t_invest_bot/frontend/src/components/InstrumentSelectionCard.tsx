@@ -1,1506 +1,226 @@
-import {
-    useEffect,
-    useState,
-} from "react"
+import { useEffect, useRef, useState } from "react"
+import type { CSSProperties } from "react"
+import { getSelectionOptions, previewAutoSelection, previewGridSelection, previewIndexSelection, searchInstruments } from "../api"
+import { InstrumentCard } from "./InstrumentCard"
+import type { GridSelectionPlan, Instrument, InstrumentSearchResult, SelectionOptions } from "../types"
 
-import type {
-    CSSProperties,
-} from "react"
+type TabMode = "index" | "manual" | "auto"
+type CandidateForm = { ticker: string; levels: string; quantity: string }
+type SelectedInstrument = Instrument & { name?: string; volatility_percent?: string; risk_band?: string }
+const formatAmount = (value: string | number) => Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 2 })
+const inputStyle: CSSProperties = { flex: 1, minWidth: 60, padding: 10, borderRadius: 10, border: "1px solid var(--border)", fontSize: 14 }
+const buttonStyle: CSSProperties = { padding: 12, borderRadius: 10, border: "1px solid var(--border)", background: "var(--accent)", color: "white", fontWeight: 700, cursor: "pointer" }
+const candidateDefaults = (): CandidateForm => ({ ticker: "", levels: "30", quantity: "1" })
+const toInstrument = (item: GridSelectionPlan["selections"][number]): SelectedInstrument => ({
+    ticker: item.ticker, levels: item.levels, quantity: item.quantity, name: item.name,
+    price: Number(item.price), required_capital: Number(item.estimated_cost),
+    volatility_percent: item.volatility_percent, risk_band: item.risk_band,
+})
 
-import {
-    getSelectionOptions,
-    previewAutoSelection,
-    previewIndexSelection,
-    previewInstrumentSelection,
-} from "../api"
+export function InstrumentSelectionCard({ onSelect, tradingAccountId }: {
+    onSelect?: (instruments: Instrument[]) => void
+    tradingAccountId?: string | null
+}) {
+    const version = useRef(0)
+    const [tab, setTab] = useState<TabMode>("index")
+    const [capital, setCapital] = useState("100000")
+    const [quantity, setQuantity] = useState("1")
+    const [options, setOptions] = useState<SelectionOptions | null>(null)
+    const [selectedIndexId, setSelectedIndexId] = useState("blue_chips")
+    const [autoMaxInstruments, setAutoMaxInstruments] = useState(5)
+    const [autoMaxPrice, setAutoMaxPrice] = useState("")
+    const [candidates, setCandidates] = useState<CandidateForm[]>([candidateDefaults()])
+    const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null)
+    const [searchResults, setSearchResults] = useState<InstrumentSearchResult[]>([])
+    const [isSearching, setIsSearching] = useState(false)
+    const [searchError, setSearchError] = useState<string | null>(null)
+    const [plan, setPlan] = useState<GridSelectionPlan | null>(null)
+    const [selectedInstruments, setSelectedInstruments] = useState<SelectedInstrument[]>([])
+    const [selectionCapital, setSelectionCapital] = useState("0")
+    const [selectionReady, setSelectionReady] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [isCalculating, setIsCalculating] = useState(false)
+    const [addedTicker, setAddedTicker] = useState("")
+    const [addedLevels, setAddedLevels] = useState("30")
+    const [addedQuantity, setAddedQuantity] = useState("1")
+    const [addedSearchActive, setAddedSearchActive] = useState(false)
+    const [editingTicker, setEditingTicker] = useState<string | null>(null)
 
-import type {
-    GridSelectionPlan,
-    InstrumentSelectionPreview,
-    SelectionOptions,
-} from "../types"
+    useEffect(() => {
+        let cancelled = false
+        getSelectionOptions().then(result => { if (!cancelled) setOptions(result) }).catch(() => {})
+        return () => { cancelled = true; version.current += 1 }
+    }, [])
+    const searchQuery = addedSearchActive ? addedTicker.trim()
+        : tab === "manual" && activeSearchIndex !== null ? candidates[activeSearchIndex]?.ticker.trim() ?? "" : ""
+    useEffect(() => {
+        setSearchResults([])
+        setSearchError(null)
+        if (!searchQuery || !tradingAccountId) { setIsSearching(false); return }
+        let cancelled = false
+        setIsSearching(true)
+        const timer = setTimeout(() => {
+            searchInstruments(searchQuery, tradingAccountId, 30)
+                .then(result => { if (!cancelled) setSearchResults(result.instruments) })
+                .catch(failure => { if (!cancelled) setSearchError(failure instanceof Error ? failure.message : String(failure)) })
+                .finally(() => { if (!cancelled) setIsSearching(false) })
+        }, 250)
+        return () => { cancelled = true; clearTimeout(timer) }
+    }, [searchQuery, activeSearchIndex, addedSearchActive, tradingAccountId, tab])
 
-
-type TabMode =
-    | "index"
-    | "manual"
-    | "auto"
-
-
-type CandidateForm = {
-    ticker:
-    string
-
-    risk_value:
-    string
-
-    confidence_value:
-    string
-}
-
-
-const inputStyle: CSSProperties =
-    {
-        flex: 1,
-
-        minWidth: 60,
-
-        padding: 10,
-
-        borderRadius: 10,
-
-        border:
-        "1px solid #e5e7eb",
-
-        fontSize: 14,
+    const selectedCost = selectedInstruments.reduce((total, item) => total + item.required_capital, 0)
+    const selectedRemaining = Number(selectionCapital) - selectedCost
+    function updateCandidate(index: number, patch: Partial<CandidateForm>) {
+        setCandidates(current => current.map((item, position) => position === index ? { ...item, ...patch } : item))
     }
-
-
-const tabStyle = (
-    active: boolean,
-): CSSProperties =>
-    ({
-        flex: 1,
-
-        padding: 10,
-
-        borderRadius: 10,
-
-        border:
-        active
-        ? "1px solid #2563eb"
-        : "1px solid #e5e7eb",
-
-        background:
-        active
-        ? "#eff6ff"
-        : "transparent",
-
-        color:
-        active
-        ? "#2563eb"
-        : "#6b7280",
-
-        fontWeight: 700,
-
-        cursor: "pointer",
-    })
-
-
-const actionButtonStyle = (
-    busy: boolean,
-): CSSProperties =>
-    ({
-        width: "100%",
-
-        padding: 12,
-
-        borderRadius: 10,
-
-        border: "none",
-
-        background:
-        busy
-        ? "#93c5fd"
-        : "#2563eb",
-
-        color: "white",
-
-        fontWeight: 700,
-
-        cursor:
-        busy
-        ? "default"
-        : "pointer",
-    })
-
-
-export function InstrumentSelectionCard() {
-    const [
-        tab,
-        setTab,
-    ] = useState<
-        TabMode
-    >(
-        "index"
-    )
-
-    const [
-        capital,
-        setCapital,
-    ] = useState(
-        "100000"
-    )
-
-    const [
-        quantity,
-        setQuantity,
-    ] = useState(
-        "1"
-    )
-
-    const [
-        options,
-        setOptions,
-    ] = useState<
-        SelectionOptions | null
-    >(null)
-
-    const [
-        selectedIndexId,
-        setSelectedIndexId,
-    ] = useState(
-        "blue_chips"
-    )
-
-    const [
-        maxInstruments,
-        setMaxInstruments,
-    ] = useState(
-        5
-    )
-
-    const [
-        minConfidence,
-        setMinConfidence,
-    ] = useState(
-        "40"
-    )
-
-    const [
-        allowHighRisk,
-        setAllowHighRisk,
-    ] = useState(
-        false
-    )
-
-    const [
-        candidates,
-        setCandidates,
-    ] = useState<
-        CandidateForm[]
-    >([
-        {
-            ticker:
-            "",
-
-            risk_value:
-            "20",
-
-            confidence_value:
-            "",
-        },
-    ])
-
-    const [
-        autoMaxInstruments,
-        setAutoMaxInstruments,
-    ] = useState(
-        5
-    )
-
-    const [
-        autoMaxPrice,
-        setAutoMaxPrice,
-    ] = useState(
-        ""
-    )
-
-    const [
-        plan,
-        setPlan,
-    ] = useState<
-        GridSelectionPlan | null
-    >(null)
-
-    const [
-        manualPreview,
-        setManualPreview,
-    ] = useState<
-        InstrumentSelectionPreview | null
-    >(null)
-
-    const [
-        error,
-        setError,
-    ] = useState<
-        string | null
-    >(null)
-
-    const [
-        isCalculating,
-        setIsCalculating,
-    ] = useState(
-        false
-    )
-
-    useEffect(
-        () => {
-            let cancelled =
-                false
-
-            getSelectionOptions()
-                .then(
-                    result => {
-                        if (
-                            !cancelled
-                        ) {
-                            setOptions(
-                                result
-                            )
-                        }
-                    }
-                )
-
-                .catch(
-                    () => {
-                        //
-                    }
-                )
-
-            return () => {
-                cancelled =
-                    true
+    function changeTab(mode: TabMode) {
+        if (tab === mode) return
+        version.current += 1
+        setTab(mode)
+        setIsCalculating(false)
+        setPlan(null)
+        setSelectedInstruments([])
+        setSelectionReady(false)
+        setActiveSearchIndex(null)
+        setAddedSearchActive(false)
+        setEditingTicker(null)
+        setAddedTicker("")
+        setError(null)
+    }
+    function gridInput(ticker: string, levels: string, units: string) {
+        const count = Number(levels)
+        const baseQuantity = Number(units)
+        if (!ticker.trim() || !Number.isInteger(count) || count < 5 || count > 30 || !Number.isInteger(baseQuantity) || baseQuantity < 1) {
+            throw new Error("Укажите тикер, от 5 до 30 уровней и целое количество лотов больше нуля.")
+        }
+        return { ticker: ticker.trim().toUpperCase(), levels: count, quantity: baseQuantity }
+    }
+    async function calculate(mode: TabMode) {
+        const capitalValue = capital.trim()
+        if (!Number.isFinite(Number(capitalValue)) || Number(capitalValue) <= 0) { setError("Укажите капитал больше нуля."); return }
+        const requestVersion = ++version.current
+        setIsCalculating(true)
+        setSelectionReady(false)
+        setSelectedInstruments([])
+        setPlan(null)
+        setError(null)
+        try {
+            let result: GridSelectionPlan
+            if (mode === "manual") {
+                const filled = candidates.filter(item => item.ticker.trim())
+                if (!filled.length) throw new Error("Добавьте хотя бы один инструмент.")
+                const instruments = filled.map(item => gridInput(item.ticker, item.levels, item.quantity))
+                if (new Set(instruments.map(item => item.ticker)).size !== instruments.length) throw new Error("Уберите дублирующиеся инструменты.")
+                result = await previewGridSelection({ capital: capitalValue, instruments, trading_account_id: tradingAccountId })
+            } else {
+                const units = gridInput("CHECK", "30", quantity).quantity
+                result = mode === "index"
+                    ? await previewIndexSelection({ capital: capitalValue, index_id: selectedIndexId, quantity: units, trading_account_id: tradingAccountId })
+                    : await previewAutoSelection({ capital: capitalValue, quantity: units, max_instruments: autoMaxInstruments, max_price: autoMaxPrice.trim() || null, trading_account_id: tradingAccountId })
             }
-        },
-
-        []
-    )
-
-    const selectedPreset =
-        options?.indexes.find(
-            index =>
-                index.index_id
-                === selectedIndexId
-        )
-
-    function updateCandidate(
-        index: number,
-
-        patch: Partial<CandidateForm>
-    ) {
-        setCandidates(
-            current =>
-                current.map(
-                    (
-                        candidate,
-                        candidateIndex
-                    ) =>
-                        candidateIndex
-                        === index
-
-                        ? {
-                            ...candidate,
-                            ...patch,
-                        }
-
-                        : candidate
-                )
-        )
-    }
-
-    function addCandidate() {
-        setCandidates(
-            current => [
-                ...current,
-
-                {
-                    ticker:
-                    "",
-
-                    risk_value:
-                    "20",
-
-                    confidence_value:
-                    "",
-                },
-            ]
-        )
-    }
-
-    function removeCandidate(
-        index: number
-    ) {
-        setCandidates(
-            current =>
-                current.filter(
-                    (
-                        _candidate,
-                        candidateIndex
-                    ) =>
-                        candidateIndex
-                        !== index
-                )
-        )
-    }
-
-    function readCapital():
-        string | null {
-        const capitalValue =
-            capital.trim()
-
-        if (
-            !capitalValue
-            || Number(
-                capitalValue
-            )
-            <= 0
-        ) {
-            setError(
-                "Укажите капитал больше нуля."
-            )
-
-            return null
-        }
-
-        return capitalValue
-    }
-
-    function readQuantity():
-        number | null {
-        const quantityValue =
-            Math.max(
-                1,
-
-                Math.trunc(
-                    Number(
-                        quantity.trim()
-                        || "1"
-                    )
-                )
-            )
-
-        if (
-            !Number.isFinite(
-                quantityValue
-            )
-        ) {
-            setError(
-                "Количество штук должно быть числом."
-            )
-
-            return null
-        }
-
-        return quantityValue
-    }
-
-    async function calculateIndex() {
-        const capitalValue =
-            readCapital()
-
-        if (
-            capitalValue
-            === null
-        ) {
-            return
-        }
-
-        const quantityValue =
-            readQuantity()
-
-        if (
-            quantityValue
-            === null
-        ) {
-            return
-        }
-
-        setIsCalculating(
-            true
-        )
-
-        setError(
-            null
-        )
-
-        setPlan(
-            null
-        )
-
-        try {
-            const result =
-                await previewIndexSelection(
-                    {
-                        index_id:
-                        selectedIndexId,
-
-                        capital:
-                        capitalValue,
-
-                        quantity:
-                        quantityValue,
-                    }
-                )
-
-            setPlan(
-                result
-            )
-
-        } catch (calculateError) {
-            setError(
-                calculateError instanceof Error
-                ? calculateError.message
-                : String(
-                    calculateError
-                )
-            )
-
+            if (requestVersion !== version.current) return
+            setPlan(result)
+            setSelectionCapital(result.capital ?? capitalValue)
+            setSelectedInstruments(result.selections.map(toInstrument))
+            setSelectionReady(true)
+        } catch (failure) {
+            if (requestVersion === version.current) setError(failure instanceof Error ? failure.message : String(failure))
         } finally {
-            setIsCalculating(
-                false
-            )
+            if (requestVersion === version.current) setIsCalculating(false)
         }
     }
-
-    async function calculateAuto() {
-        const capitalValue =
-            readCapital()
-
-        if (
-            capitalValue
-            === null
-        ) {
-            return
-        }
-
-        const quantityValue =
-            readQuantity()
-
-        if (
-            quantityValue
-            === null
-        ) {
-            return
-        }
-
-        const maxPriceValue =
-            autoMaxPrice.trim()
-
-        setIsCalculating(
-            true
-        )
-
-        setError(
-            null
-        )
-
-        setPlan(
-            null
-        )
-
+    function configureSelectedInstrument(instrument: Instrument) {
+        setEditingTicker(instrument.ticker)
+        setAddedTicker(instrument.ticker)
+        setAddedLevels(String(instrument.levels))
+        setAddedQuantity(String(instrument.quantity))
+        setAddedSearchActive(false)
+        setActiveSearchIndex(null)
+    }
+    async function saveSelectedInstrument() {
+        const requestVersion = ++version.current
+        setIsCalculating(true)
+        setError(null)
         try {
-            const result =
-                await previewAutoSelection(
-                    {
-                        capital:
-                        capitalValue,
-
-                        quantity:
-                        quantityValue,
-
-                        max_instruments:
-                        autoMaxInstruments,
-
-                        max_price:
-                        maxPriceValue
-                        || null,
-                    }
-                )
-
-            setPlan(
-                result
-            )
-
-        } catch (calculateError) {
-            setError(
-                calculateError instanceof Error
-                ? calculateError.message
-                : String(
-                    calculateError
-                )
-            )
-
+            const input = gridInput(addedTicker, addedLevels, addedQuantity)
+            if (selectedInstruments.some(item => item.ticker === input.ticker && item.ticker !== editingTicker)) throw new Error(`Инструмент ${input.ticker} уже добавлен.`)
+            const result = await previewGridSelection({ capital: selectionCapital, instruments: [input], trading_account_id: tradingAccountId })
+            if (requestVersion !== version.current) return
+            const item = result.selections.find(value => value.ticker === input.ticker)
+            if (!item || !Number.isFinite(Number(item.estimated_cost)) || !Number.isFinite(Number(item.price)) || Number(item.price) <= 0) throw new Error("Не удалось рассчитать сетку инструмента.")
+            const available = selectedRemaining + (selectedInstruments.find(value => value.ticker === editingTicker)?.required_capital ?? 0)
+            if (Number(item.estimated_cost) > available) throw new Error(`Не хватает капитала: нужно ${formatAmount(item.estimated_cost)} ₽, доступно ${formatAmount(available)} ₽.`)
+            const instrument = toInstrument(item)
+            setSelectedInstruments(current => editingTicker ? current.map(value => value.ticker === editingTicker ? instrument : value) : [...current, instrument])
+            setEditingTicker(null)
+            setAddedTicker("")
+            setAddedSearchActive(false)
+        } catch (failure) {
+            if (requestVersion === version.current) setError(failure instanceof Error ? failure.message : String(failure))
         } finally {
-            setIsCalculating(
-                false
-            )
+            if (requestVersion === version.current) setIsCalculating(false)
         }
     }
-
-    async function calculateManual() {
-        const capitalValue =
-            readCapital()
-
-        if (
-            capitalValue
-            === null
-        ) {
-            return
-        }
-
-        const filled =
-            candidates.filter(
-                candidate =>
-                    candidate
-                    .ticker
-                    .trim()
-            )
-
-        if (
-            filled.length
-            === 0
-        ) {
-            setError(
-                "Добавьте хотя бы один инструмент."
-            )
-
-            return
-        }
-
-        setIsCalculating(
-            true
-        )
-
-        setError(
-            null
-        )
-
-        setManualPreview(
-            null
-        )
-
-        try {
-            const result =
-                await previewInstrumentSelection(
-                    {
-                        capital:
-                        capitalValue,
-
-                        max_instruments:
-                        maxInstruments,
-
-                        min_confidence:
-                        minConfidence.trim()
-                        || "40",
-
-                        allow_high_risk:
-                        allowHighRisk,
-
-                        candidates:
-                        filled.map(
-                            candidate => ({
-                                ticker:
-                                candidate.ticker
-                                .trim()
-                                .toUpperCase(),
-
-                                risk_value:
-                                candidate.risk_value.trim()
-                                || "0",
-
-                                confidence_value:
-                                candidate.confidence_value.trim(),
-                            })
-                        ),
-                    }
-                )
-
-            setManualPreview(
-                result
-            )
-
-        } catch (calculateError) {
-            setError(
-                calculateError instanceof Error
-                ? calculateError.message
-                : String(
-                    calculateError
-                )
-            )
-
-        } finally {
-            setIsCalculating(
-                false
-            )
-        }
-    }
-
-    return (
-        <div
-            style={{
-                background:
-                "white",
-                borderRadius: 16,
-                padding: 16,
-                marginBottom: 16,
-                boxShadow:
-                "0 6px 16px rgba(0,0,0,0.06)",
-            }}
-        >
-            <h2
-                style={{
-                    marginTop: 0,
-                }}
-            >
-                Подбор инструментов
-            </h2>
-
-            <p
-                style={{
-                    color: "#6b7280",
-                    fontSize: 13,
-                }}
-            >
-                Три режима (v1.1): индексный — готовые составы, ручной — RiskScore/ConfidenceScore, авторежим — самые волатильные акции под капитал.
-            </p>
-
-            <div
-                style={{
-                    display: "flex",
-                    gap: 8,
-                    marginBottom: 12,
-                }}
-            >
-                <button
-                    style={
-                        tabStyle(
-                            tab
-                            === "index"
-                        )
-                    }
-
-                    onClick={() =>
-                        setTab(
-                            "index"
-                        )
-                    }
-                >
-                    Индекс
-                </button>
-
-                <button
-                    style={
-                        tabStyle(
-                            tab
-                            === "manual"
-                        )
-                    }
-
-                    onClick={() =>
-                        setTab(
-                            "manual"
-                        )
-                    }
-                >
-                    Ручной
-                </button>
-
-                <button
-                    style={
-                        tabStyle(
-                            tab
-                            === "auto"
-                        )
-                    }
-
-                    onClick={() =>
-                        setTab(
-                            "auto"
-                        )
-                    }
-                >
-                    Авто
-                </button>
-            </div>
-
-            <div
-                style={{
-                    display: "flex",
-                    gap: 8,
-                    marginBottom: 12,
-                }}
-            >
-                <input
-                    style={
-                        inputStyle
-                    }
-                    value={
-                        capital
-                    }
-                    onChange={
-                        event =>
-                            setCapital(
-                                event
-                                    .target
-                                    .value
-                            )
-                    }
-                    placeholder="Капитал"
-                    inputMode="decimal"
-                />
-
-                {tab !== "manual" && (
-                    <input
-                        style={
-                            inputStyle
-                        }
-                        value={
-                            quantity
-                        }
-                        onChange={
-                            event =>
-                                setQuantity(
-                                    event
-                                        .target
-                                        .value
-                                )
-                        }
-                        placeholder="Штук в уровень"
-                        inputMode="numeric"
-                    />
-                )}
-            </div>
-
-            {tab === "index" && (
-                <>
-                    <select
-                        style={{
-                            ...inputStyle,
-                            marginBottom: 8,
-                        }}
-                        value={
-                            selectedIndexId
-                        }
-                        onChange={
-                            event =>
-                                setSelectedIndexId(
-                                    event
-                                        .target
-                                        .value
-                                )
-                        }
-                    >
-                        {(
-                            options?.indexes
-                            ?? []
-                        ).map(
-                            index => (
-                                <option
-                                    key={
-                                        index.index_id
-                                    }
-
-                                    value={
-                                        index.index_id
-                                    }
-                                >
-                                    {
-                                        index.name
-                                    }
-
-                                    {" · "}
-
-                                    {
-                                        index.tickers_count
-                                    }
-
-                                    {" шт."}
-                                </option>
-                            )
-                        )}
-                    </select>
-
-                    {selectedPreset && (
-                        <p
-                            style={{
-                                color: "#6b7280",
-                                fontSize: 13,
-                                marginTop: 0,
-                            }}
-                        >
-                            {
-                                selectedPreset.description
-                            }
-
-                            {" Капитал делится равными долями, в каждую долю вписывается сетка до 30 уровней."}
-                        </p>
-                    )}
-
-                    <button
-                        onClick={
-                            calculateIndex
-                        }
-                        disabled={
-                            isCalculating
-                        }
-                        style={
-                            actionButtonStyle(
-                                isCalculating
-                            )
-                        }
-                    >
-                        {
-                            isCalculating
-                            ? "Расчёт..."
-                            : "Рассчитать индекс"
-                        }
-                    </button>
-                </>
-            )}
-
-            {tab === "manual" && (
-                <>
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            marginBottom: 12,
-                        }}
-                    >
-                        <input
-                            style={
-                                inputStyle
-                            }
-                            value={
-                                maxInstruments
-                            }
-                            onChange={
-                                event =>
-                                    setMaxInstruments(
-                                        Math.max(
-                                            1,
-
-                                            Number(
-                                                event
-                                                    .target
-                                                    .value
-                                                || 1
-                                            )
-                                        )
-                                    )
-                            }
-                            placeholder="Макс. инструментов"
-                            inputMode="numeric"
-                        />
-
-                        <input
-                            style={
-                                inputStyle
-                            }
-                            value={
-                                minConfidence
-                            }
-                            onChange={
-                                event =>
-                                    setMinConfidence(
-                                        event
-                                            .target
-                                            .value
-                                    )
-                            }
-                            placeholder="Min confidence"
-                            inputMode="decimal"
-                        />
-                    </div>
-
-                    <label
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            fontSize: 13,
-                            color: "#374151",
-                            marginBottom: 12,
-                        }}
-                    >
-                        <input
-                            type="checkbox"
-                            checked={
-                                allowHighRisk
-                            }
-                            onChange={
-                                event =>
-                                    setAllowHighRisk(
-                                        event
-                                            .target
-                                            .checked
-                                    )
-                            }
-                        />
-
-                        Разрешить высокий риск
-                    </label>
-
-                    {candidates.map(
-                        (
-                            candidate,
-                            index
-                        ) => (
-                            <div
-                                key={
-                                    index
-                                }
-                                style={{
-                                    display: "flex",
-                                    gap: 8,
-                                    marginBottom: 8,
-                                }}
-                            >
-                                <input
-                                    style={
-                                        inputStyle
-                                    }
-                                    value={
-                                        candidate.ticker
-                                    }
-                                    onChange={
-                                        event =>
-                                            updateCandidate(
-                                                index,
-
-                                                {
-                                                    ticker:
-                                                    event
-                                                        .target
-                                                        .value,
-                                                }
-                                            )
-                                    }
-                                    placeholder="Тикер"
-                                />
-
-                                <input
-                                    style={
-                                        inputStyle
-                                    }
-                                    value={
-                                        candidate.risk_value
-                                    }
-                                    onChange={
-                                        event =>
-                                            updateCandidate(
-                                                index,
-
-                                                {
-                                                    risk_value:
-                                                    event
-                                                        .target
-                                                        .value,
-                                                }
-                                            )
-                                    }
-                                    placeholder="Risk 0-100"
-                                    inputMode="decimal"
-                                />
-
-                                <input
-                                    style={
-                                        inputStyle
-                                    }
-                                    value={
-                                        candidate.confidence_value
-                                    }
-                                    onChange={
-                                        event =>
-                                            updateCandidate(
-                                                index,
-
-                                                {
-                                                    confidence_value:
-                                                    event
-                                                        .target
-                                                        .value,
-                                                }
-                                            )
-                                    }
-                                    placeholder="Confidence"
-                                    inputMode="decimal"
-                                />
-
-                                <button
-                                    onClick={() =>
-                                        removeCandidate(
-                                            index
-                                        )
-                                    }
-                                    style={{
-                                        border: "none",
-                                        background: "#fee2e2",
-                                        color: "#b91c1c",
-                                        borderRadius: 10,
-                                        padding: "0 12px",
-                                        cursor: "pointer",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        )
-                    )}
-
-                    <button
-                        onClick={
-                            addCandidate
-                        }
-                        style={{
-                            width: "100%",
-                            padding: 10,
-                            borderRadius: 10,
-                            border: "1px dashed #d1d5db",
-                            background: "transparent",
-                            color: "#6b7280",
-                            cursor: "pointer",
-                            marginBottom: 12,
-                        }}
-                    >
-                        + Инструмент
-                    </button>
-
-                    <button
-                        onClick={
-                            calculateManual
-                        }
-                        disabled={
-                            isCalculating
-                        }
-                        style={
-                            actionButtonStyle(
-                                isCalculating
-                            )
-                        }
-                    >
-                        {
-                            isCalculating
-                            ? "Расчёт..."
-                            : "Рассчитать портфель"
-                        }
-                    </button>
-                </>
-            )}
-
-            {tab === "auto" && (
-                <>
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            marginBottom: 8,
-                        }}
-                    >
-                        <input
-                            style={
-                                inputStyle
-                            }
-                            value={
-                                autoMaxInstruments
-                            }
-                            onChange={
-                                event =>
-                                    setAutoMaxInstruments(
-                                        Math.max(
-                                            1,
-
-                                            Number(
-                                                event
-                                                    .target
-                                                    .value
-                                                || 1
-                                            )
-                                        )
-                                    )
-                            }
-                            placeholder="Макс. инструментов"
-                            inputMode="numeric"
-                        />
-
-                        <input
-                            style={
-                                inputStyle
-                            }
-                            value={
-                                autoMaxPrice
-                            }
-                            onChange={
-                                event =>
-                                    setAutoMaxPrice(
-                                        event
-                                            .target
-                                            .value
-                                    )
-                            }
-                            placeholder="Макс. цена (₽)"
-                            inputMode="decimal"
-                        />
-                    </div>
-
-                    <p
-                        style={{
-                            color: "#6b7280",
-                            fontSize: 13,
-                            marginTop: 0,
-                            marginBottom: 12,
-                        }}
-                    >
-                        Жадно набираются самые волатильные акции из {options?.auto.universe_tickers_count ?? "40+"} ликвидных: каждой — сетка до 30 уровней (минимум 10) в пределах капитала. После полного закрытия сетки бот заменяет акцию на более волатильную и добирает активы до лимита.
-                    </p>
-
-                    <button
-                        onClick={
-                            calculateAuto
-                        }
-                        disabled={
-                            isCalculating
-                        }
-                        style={
-                            actionButtonStyle(
-                                isCalculating
-                            )
-                        }
-                    >
-                        {
-                            isCalculating
-                            ? "Расчёт..."
-                            : "Рассчитать авторежим"
-                        }
-                    </button>
-                </>
-            )}
-
-            {error && (
-                <div
-                    style={{
-                        marginTop: 12,
-                        padding: 12,
-                        borderRadius: 10,
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                        fontSize: 13,
-                    }}
-                >
-                    {
-                        error
-                    }
-                </div>
-            )}
-
-            {tab === "manual"
-            && manualPreview && (
-                <div
-                    style={{
-                        marginTop: 12,
-                    }}
-                >
-                    {manualPreview.selections.map(
-                        selection => (
-                            <div
-                                key={
-                                    selection.ticker
-                                }
-                                style={{
-                                    borderTop:
-                                    "1px solid #eee",
-                                    paddingTop: 10,
-                                    marginTop: 10,
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    <span>
-                                        {
-                                            selection.ticker
-                                        }
-                                    </span>
-
-                                    <span>
-                                        {
-                                            selection.weight_percent
-                                        }
-                                        %
-                                    </span>
-                                </div>
-
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        color: "#6b7280",
-                                        fontSize: 13,
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    <span>
-                                        Капитал:{" "}
-                                        {
-                                            selection.allocated_capital
-                                        }
-                                    </span>
-
-                                    <span>
-                                        Risk:{" "}
-                                        {
-                                            selection.risk_band
-                                            ?? "—"
-                                        }
-
-                                        {" · "}
-
-                                        Confidence:{" "}
-                                        {
-                                            selection.confidence_value
-                                            ?? "—"
-                                        }
-                                    </span>
-                                </div>
-                            </div>
-                        )
-                    )}
-
-                    {manualPreview.rejected.length > 0 && (
-                        <div
-                            style={{
-                                marginTop: 12,
-                                fontSize: 13,
-                                color: "#6b7280",
-                            }}
-                        >
-                            <b>
-                                Отклонено:
-                            </b>
-
-                            {manualPreview.rejected.map(
-                                rejected => (
-                                    <div
-                                        key={
-                                            rejected.ticker
-                                        }
-                                        style={{
-                                            marginTop: 4,
-                                        }}
-                                    >
-                                        {
-                                            rejected.ticker
-                                        }
-                                        {" — "}
-                                        {
-                                            rejected.reason
-                                        }
-                                    </div>
-                                )
-                            )}
-                        </div>
-                    )}
-
-                    {manualPreview.selections.length
-                    === 0 && (
-                        <p
-                            style={{
-                                color: "#b91c1c",
-                            }}
-                        >
-                            Ни один инструмент не прошёл фильтры.
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {tab !== "manual"
-            && plan && (
-                <div
-                    style={{
-                        marginTop: 12,
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: 13,
-                            color: "#374151",
-                            fontWeight: 700,
-                        }}
-                    >
-                        <span>
-                            Потрачено:{" "}
-                            {
-                                plan.spent_capital
-                            }
-                            {" ₽"}
-                        </span>
-
-                        <span>
-                            Остаток:{" "}
-                            {
-                                plan.remaining_capital
-                            }
-                            {" ₽"}
-                        </span>
-                    </div>
-
-                    {plan.selections.map(
-                        selection => (
-                            <div
-                                key={
-                                    selection.ticker
-                                }
-                                style={{
-                                    borderTop:
-                                    "1px solid #eee",
-                                    paddingTop: 10,
-                                    marginTop: 10,
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    <span>
-                                        {
-                                            selection.ticker
-                                        }
-
-                                        {" — "}
-
-                                        {
-                                            selection.name
-                                        }
-                                    </span>
-
-                                    <span>
-                                        {
-                                            selection.estimated_cost
-                                        }
-                                        {" ₽"}
-                                    </span>
-                                </div>
-
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        color: "#6b7280",
-                                        fontSize: 13,
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    <span>
-                                        Цена:{" "}
-                                        {
-                                            selection.price
-                                        }
-                                        {" ₽"}
-
-                                        {" · "}
-
-                                        Уровней:{" "}
-                                        {
-                                            selection.levels
-                                        }
-
-                                        {" · "}
-
-                                        Шт:{" "}
-                                        {
-                                            selection.quantity
-                                        }
-                                    </span>
-
-                                    <span>
-                                        Волатильность:{" "}
-                                        {
-                                            selection.volatility_percent
-                                        }
-                                        %
-
-                                        {" · "}
-
-                                        {
-                                            selection.risk_band
-                                            ?? "—"
-                                        }
-                                    </span>
-                                </div>
-                            </div>
-                        )
-                    )}
-
-                    {plan.rejected.length > 0 && (
-                        <div
-                            style={{
-                                marginTop: 12,
-                                fontSize: 13,
-                                color: "#6b7280",
-                            }}
-                        >
-                            <b>
-                                Отклонено:
-                            </b>
-
-                            {plan.rejected.slice(
-                                0,
-                                10
-                            ).map(
-                                rejected => (
-                                    <div
-                                        key={
-                                            rejected.ticker
-                                        }
-                                        style={{
-                                            marginTop: 4,
-                                        }}
-                                    >
-                                        {
-                                            rejected.ticker
-                                        }
-                                        {" — "}
-                                        {
-                                            rejected.reason
-                                        }
-                                    </div>
-                                )
-                            )}
-
-                            {plan.rejected.length
-                            > 10 && (
-                                <div
-                                    style={{
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    {"...и ещё "}
-
-                                    {
-                                        plan
-                                        .rejected
-                                        .length
-                                        - 10
-                                    }
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {plan.selections.length
-                    === 0 && (
-                        <p
-                            style={{
-                                color: "#b91c1c",
-                            }}
-                        >
-                            Ни один инструмент не подошёл под капитал.
-                        </p>
-                    )}
-                </div>
-            )}
+    const results = (onSelectResult: (item: InstrumentSearchResult) => void) => <div aria-live="polite">
+        {isSearching && <div>Поиск инструментов...</div>}
+        {searchError && <div role="alert">{searchError}</div>}
+        {!isSearching && !searchError && searchQuery && searchResults.length === 0 && <div>Совпадения не найдены.</div>}
+        {searchResults.map(item => <button key={item.instrument_uid} type="button" disabled={isCalculating} onClick={() => onSelectResult(item)}
+            style={{ width: "100%", padding: 8, textAlign: "left", border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)" }}>
+            <b>{item.ticker}</b> · {item.name} · Лот: {item.lot_size} · {item.currency.toUpperCase()}
+        </button>)}
+    </div>
+
+    return <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        <h2>Подбор инструментов</h2>
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Индекс и авто подбирают сетки в бюджет. В ручном режиме выбирайте активы и параметры сеток самостоятельно, без рейтинговых фильтров.</p>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {(["index", "manual", "auto"] as const).map(mode => <button key={mode} type="button" onClick={() => changeTab(mode)} style={{ ...buttonStyle, flex: 1, background: mode === tab ? "var(--accent)" : "var(--card)", color: mode === tab ? "white" : "var(--text)" }}>{mode === "index" ? "Индекс" : mode === "manual" ? "Ручной" : "Авто"}</button>)}
         </div>
-    )
+        <label>Бюджет, ₽ <input aria-label="Бюджет подбора" style={inputStyle} value={capital} disabled={isCalculating} inputMode="decimal" onChange={event => setCapital(event.target.value)} /></label>
+        {tab !== "manual" && <label> Лотов в уровень <input style={inputStyle} value={quantity} inputMode="numeric" onChange={event => setQuantity(event.target.value)} /></label>}
+        {tab === "index" && <div style={{ marginTop: 12 }}>
+            <select style={inputStyle} value={selectedIndexId} onChange={event => setSelectedIndexId(event.target.value)}>{(options?.indexes ?? []).map(index => <option key={index.index_id} value={index.index_id}>{index.name} · {index.tickers_count} шт.</option>)}</select>
+            <p>Сетка от 5 до 30 уровней подбирается в остаток бюджета; слишком дорогие бумаги пропускаются.</p>
+            <button style={buttonStyle} disabled={isCalculating} onClick={() => calculate("index")}>Рассчитать индекс</button>
+        </div>}
+        {tab === "auto" && <div style={{ marginTop: 12 }}>
+            <label>Максимум активов <input style={inputStyle} inputMode="numeric" value={autoMaxInstruments} onChange={event => setAutoMaxInstruments(Math.max(1, Number(event.target.value)))} /></label>
+            <label>Максимальная цена <input style={inputStyle} inputMode="decimal" value={autoMaxPrice} onChange={event => setAutoMaxPrice(event.target.value)} /></label>
+            <p>Самые волатильные акции; сетка от 5 до 30 уровней в пределах бюджета.</p>
+            <button style={buttonStyle} disabled={isCalculating} onClick={() => calculate("auto")}>Рассчитать авторежим</button>
+        </div>}
+        {tab === "manual" && <div style={{ marginTop: 12 }}>
+            {candidates.map((item, index) => <div key={index} style={{ marginBottom: 12 }}>
+                <input aria-label={`Тикер или название актива ${index + 1}`} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} value={item.ticker} disabled={isCalculating} placeholder="Тикер или название" onChange={event => {
+                    updateCandidate(index, { ticker: event.target.value }); setActiveSearchIndex(index); setAddedSearchActive(false); setSearchResults([])
+                }} />
+                {activeSearchIndex === index && results(value => { updateCandidate(index, { ticker: value.ticker }); setActiveSearchIndex(null); setSearchResults([]) })}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                    <label>Уровни (5–30) <input aria-label={`Уровни актива ${index + 1}`} style={inputStyle} value={item.levels} inputMode="numeric" disabled={isCalculating} onChange={event => updateCandidate(index, { levels: event.target.value })} /></label>
+                    <label>Лотов в уровень <input aria-label={`Лотов в уровень актива ${index + 1}`} style={inputStyle} value={item.quantity} inputMode="numeric" disabled={isCalculating} onChange={event => updateCandidate(index, { quantity: event.target.value })} /></label>
+                    <button type="button" disabled={isCalculating} onClick={() => { setCandidates(current => current.filter((_, position) => position !== index)); setActiveSearchIndex(null) }}>Убрать</button>
+                </div>
+            </div>)}
+            <button type="button" disabled={isCalculating} onClick={() => setCandidates(current => [...current, candidateDefaults()])}>+ Инструмент</button>
+            <button style={buttonStyle} disabled={isCalculating} onClick={() => calculate("manual")}>Рассчитать портфель</button>
+        </div>}
+        {error && <div role="alert" style={{ marginTop: 12, color: "var(--loss)" }}>{error}</div>}
+        {isCalculating && <div aria-live="polite">Расчёт...</div>}
+        {selectionReady && <div style={{ marginTop: 12 }}>
+            <h3>Выбранные активы</h3>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 12 }}><b>Потрачено: {formatAmount(selectedCost)} ₽</b><b>Остаток: {formatAmount(selectedRemaining)} ₽</b></div>
+            {selectedInstruments.map(instrument => <InstrumentCard key={instrument.ticker} instrument={instrument} name={instrument.name} volatilityPercent={instrument.volatility_percent} riskBand={instrument.risk_band} disabled={isCalculating} onConfigure={configureSelectedInstrument} onRemove={ticker => { setSelectedInstruments(current => current.filter(item => item.ticker !== ticker)); setError(null) }} />)}
+            <h4>{editingTicker ? `Настройка ${editingTicker}` : "Добавить актив вручную"}</h4>
+            <input aria-label="Тикер или название дополнительного актива" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} value={addedTicker} disabled={isCalculating || editingTicker !== null} onChange={event => { setAddedTicker(event.target.value); setAddedSearchActive(true); setActiveSearchIndex(null); setSearchResults([]) }} />
+            {addedSearchActive && results(item => { setAddedTicker(item.ticker); setAddedSearchActive(false); setSearchResults([]) })}
+            <label>Уровни (5–30) <input aria-label="Уровни дополнительного актива" style={inputStyle} inputMode="numeric" value={addedLevels} disabled={isCalculating} onChange={event => setAddedLevels(event.target.value)} /></label>
+            <label>Лотов в уровень <input aria-label="Штук в уровень дополнительного актива" style={inputStyle} inputMode="numeric" value={addedQuantity} disabled={isCalculating} onChange={event => setAddedQuantity(event.target.value)} /></label>
+            <button style={buttonStyle} disabled={isCalculating || !addedTicker.trim()} onClick={saveSelectedInstrument}>{editingTicker ? "Сохранить параметры актива" : "Добавить актив в подбор"}</button>
+            {editingTicker && <button disabled={isCalculating} onClick={() => { setEditingTicker(null); setAddedTicker("") }}>Отменить настройку</button>}
+            {selectedRemaining < 0 && <div role="alert">Не хватает капитала: нужно {formatAmount(selectedCost)} ₽, доступно {formatAmount(selectionCapital)} ₽. Уберите актив или уменьшите сетку.</div>}
+            {onSelect && selectedInstruments.length > 0 && <button style={{ ...buttonStyle, width: "100%", marginTop: 12 }} disabled={isCalculating || selectedRemaining < 0} onClick={() => onSelect(selectedInstruments)}>Добавить выбранные инструменты</button>}
+        </div>}
+        {plan && plan.rejected?.length > 0 && <div style={{ marginTop: 12 }}><b>Не включены в автоматический подбор:</b>{plan.rejected.map((item, index) => <div key={`${item.ticker}-${index}`}>{item.ticker} — {item.reason}</div>)}</div>}
+    </div>
 }

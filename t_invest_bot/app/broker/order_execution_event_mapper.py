@@ -72,6 +72,11 @@ class OrderExecutionEventMapper:
                     state
                     .total_order_amount
                 ),
+
+                planned_price=(
+                    command
+                    .price
+                ),
             )
 
         if isinstance(
@@ -108,6 +113,11 @@ class OrderExecutionEventMapper:
                     state
                     .total_order_amount
                 ),
+
+                planned_price=(
+                    command
+                    .price
+                ),
             )
 
         if isinstance(
@@ -141,6 +151,11 @@ class OrderExecutionEventMapper:
                 total_amount=(
                     state
                     .total_order_amount
+                ),
+
+                planned_price=(
+                    command
+                    .price
                 ),
             )
 

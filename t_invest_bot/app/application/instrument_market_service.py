@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 
 from application.auto_portfolio_selector import (
     InstrumentMarketSnapshot,
 )
 from application.trading_account_service import (
     TradingAccountService,
+    PlatformCredentialsProvider,
 )
 from config.settings import Settings
 from domain.trading_account import (
@@ -51,6 +51,8 @@ class InstrumentMarketService:
     )
 
     history_days: int = 90
+
+    platform_connection_service: PlatformCredentialsProvider | None = None
 
     def get_snapshots(
         self,
@@ -305,6 +307,23 @@ class InstrumentMarketService:
                     "token"
                 )
             )
+
+        if self.platform_connection_service is not None:
+            platforms = sorted(
+                self.platform_connection_service.get_all(),
+                key=lambda platform: platform.mode.value != "live",
+            )
+            for platform in platforms:
+                if platform.broker == BrokerType.TINVEST:
+                    token = self.platform_connection_service.get_credentials(platform.id).get("token")
+                    if token:
+                        return token
+
+        for account in self.trading_account_service.get_enabled():
+            if account.broker == BrokerType.TINVEST:
+                token = self.trading_account_service.get_credentials(account.id).get("token")
+                if token:
+                    return token
 
         token = (
             self

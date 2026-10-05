@@ -11,8 +11,9 @@ import {
 import {
     createTradingAccount,
     deleteTradingAccount,
-    discoverBrokerAccounts,
+    discoverPlatformAccounts,
     getBrokers,
+    getPlatforms,
     getTradingAccountPortfolio,
     getTradingAccounts,
     testTradingAccount,
@@ -23,23 +24,52 @@ import type {
     BrokerConnectionResult,
     BrokerInfo,
     BrokerPortfolio,
-    BrokerType,
     CommissionMode,
     CreateTradingAccountPayload,
     DiscoveredBrokerAccount,
+    PlatformConnection,
     TradingAccount,
     TradingAccountMode,
 } from "./types"
 
 
+const platformLabels: Record<
+    string,
+    string
+> = {
+    tinvest:
+    "Т-Инвест",
+
+    bybit:
+    "Bybit",
+}
+
+
+const modeLabels: Record<
+    string,
+    string
+> = {
+    live:
+    "Боевой",
+
+    sandbox:
+    "Песочница",
+}
+
+
 type FormState = {
     name: string
+
+    platformId:
+        string | null
 
     broker: string
 
     brokerAccountId: string
 
     mode: TradingAccountMode
+
+    baseCurrency: string
 
     commissionMode: CommissionMode
 
@@ -56,11 +86,15 @@ type FormState = {
 const emptyForm: FormState = {
     name: "",
 
+    platformId: null,
+
     broker: "tinvest",
 
     brokerAccountId: "",
 
     mode: "live",
+
+    baseCurrency: "USDT",
 
     commissionMode: "auto",
 
@@ -132,6 +166,13 @@ export function AccountsPanel() {
         setBrokers,
     ] = useState<
         BrokerInfo[]
+    >([])
+
+    const [
+        platforms,
+        setPlatforms,
+    ] = useState<
+        PlatformConnection[]
     >([])
 
     const [
@@ -226,13 +267,30 @@ export function AccountsPanel() {
         )
 
 
+    const selectedPlatform =
+        useMemo(
+            () =>
+                platforms.find(
+                    platform =>
+                        platform.id
+                        === form.platformId
+                ),
+            [
+                platforms,
+                form.platformId,
+            ]
+        )
+
+
     async function reload() {
         const [
             loadedBrokers,
             loadedAccounts,
+            loadedPlatforms,
         ] = await Promise.all([
             getBrokers(),
             getTradingAccounts(),
+            getPlatforms(),
         ])
 
         setBrokers(
@@ -241,6 +299,10 @@ export function AccountsPanel() {
 
         setAccounts(
             loadedAccounts
+        )
+
+        setPlatforms(
+            loadedPlatforms
         )
     }
 
@@ -306,19 +368,6 @@ export function AccountsPanel() {
                 },
             })
         )
-
-        if (
-            key
-            === "token"
-        ) {
-            setDiscovered(
-                []
-            )
-
-            setDiscoveryError(
-                null
-            )
-        }
     }
 
 
@@ -333,27 +382,35 @@ export function AccountsPanel() {
     }
 
 
-    async function loadBrokerAccounts() {
-        const token = (
-            form
-                .credentials[
-                "token"
-                ]
-                ?? ""
-        ).trim()
+    function selectPlatform(
+        platform: PlatformConnection
+    ) {
+        setForm(
+            previous => ({
+                ...previous,
 
+                platformId:
+                    platform.id,
+
+                broker:
+                    platform.broker,
+
+                mode:
+                    platform.mode,
+                brokerAccountId: platform.broker === "bybit" ? "UNIFIED" : "",
+                commissionMode: "auto",
+            })
+        )
+
+        clearDiscovered()
+    }
+
+
+    async function loadPlatformAccounts() {
         if (
-            token
-            === ""
+            form.platformId
+            === null
         ) {
-            setDiscovered(
-                []
-            )
-
-            setDiscoveryError(
-                null
-            )
-
             return
         }
 
@@ -367,18 +424,9 @@ export function AccountsPanel() {
 
         try {
             const result =
-                await discoverBrokerAccounts(
-                    {
-                        broker:
-                            form.broker as BrokerType,
-
-                        credentials: {
-                            token,
-                        },
-
-                        mode:
-                            form.mode,
-                    }
+                await discoverPlatformAccounts(
+                    form
+                        .platformId
                 )
 
             if (
@@ -392,7 +440,7 @@ export function AccountsPanel() {
                 setDiscoveryError(
                     result
                         .error
-                    ?? "Не удалось получить счета брокера"
+                    ?? "Не удалось получить счета платформы"
                 )
 
                 return
@@ -410,7 +458,7 @@ export function AccountsPanel() {
                 === 0
             ) {
                 setDiscoveryError(
-                    "По этому токену счета не найдены"
+                    "У платформы счета не найдены"
                 )
             }
 
@@ -422,8 +470,7 @@ export function AccountsPanel() {
             )
 
             setDiscoveryError(
-                currentError
-                    instanceof Error
+                currentError instanceof Error
                     ? currentError.message
                     : String(
                         currentError
@@ -488,13 +535,11 @@ export function AccountsPanel() {
             if (
                 editingId
                 === null
-                && Object.keys(
-                    credentials
-                ).length
-                === 0
+                && selectedPlatform
+                    === undefined
             ) {
                 throw new Error(
-                    "Укажите реквизиты доступа к брокеру"
+                    "Выберите подключённую платформу (вкладка «Настройки»)"
                 )
             }
 
@@ -508,16 +553,25 @@ export function AccountsPanel() {
                         form.name,
 
                     broker:
-                        form.broker as CreateTradingAccountPayload["broker"],
+                        selectedPlatform.broker as CreateTradingAccountPayload["broker"],
 
                     broker_account_id:
                         form
                             .brokerAccountId,
 
-                    credentials,
+                    platform_id:
+                        selectedPlatform.id,
 
                     mode:
                         form.mode,
+
+                    ...(form.broker === "bybit"
+                        ? {
+                            base_currency:
+                                form
+                                    .baseCurrency,
+                        }
+                        : {}),
 
                     commission_mode:
                         form
@@ -567,6 +621,14 @@ export function AccountsPanel() {
 
                     mode:
                         form.mode,
+
+                    ...(form.broker === "bybit"
+                        ? {
+                            base_currency:
+                                form
+                                    .baseCurrency,
+                        }
+                        : {}),
 
                     commission_mode:
                         form
@@ -643,6 +705,8 @@ export function AccountsPanel() {
             name:
                 account.name,
 
+            platformId: null,
+
             broker:
                 account.broker,
 
@@ -652,6 +716,11 @@ export function AccountsPanel() {
 
             mode:
                 account.mode,
+
+            baseCurrency:
+                account
+                    .base_currency
+                ?? "USDT",
 
             commissionMode:
                 account
@@ -828,8 +897,7 @@ export function AccountsPanel() {
         >
             <section
                 style={{
-                    background:
-                        "#ffffff",
+                    background: "var(--card)",
 
                     borderRadius:
                         18,
@@ -872,18 +940,6 @@ export function AccountsPanel() {
                                     : "Добавить торговый счёт"
                             }
                         </h2>
-
-                        <div
-                            style={{
-                                marginTop:
-                                    6,
-
-                                opacity:
-                                    0.65,
-                            }}
-                        >
-                                            ESM Trade System v1.2.0-dev
-                        </div>
                     </div>
 
                     {
@@ -949,81 +1005,148 @@ export function AccountsPanel() {
                         />
                     </label>
 
-                    <label>
-                        Брокер
+                    {
+                        editingId
+                        !== null
+                        ? (
+                            <label>
+                                Брокер
 
-                        <select
-                            value={
-                                form.broker
-                            }
+                                <select
+                                    value={
+                                        form.broker
+                                    }
 
-                            disabled={
-                                editingId
-                                !== null
-                            }
+                                    disabled
 
-                            onChange={
-                                event => {
-                                    setForm(
-                                        previous => ({
-                                            ...previous,
+                                    style={{
+                                        width:
+                                            "100%",
 
-                                            broker:
-                                                event
-                                                    .target
-                                                    .value,
+                                        marginTop:
+                                            6,
+                                    }}
+                                >
+                                    <option
+                                        value={
+                                            form.broker
+                                        }
+                                    >
+                                        {
+                                            platformLabels[
+                                                form.broker
+                                            ]
+                                            ?? form.broker
+                                        }
+                                    </option>
+                                </select>
+                            </label>
+                        )
+                        : (
+                            <label>
+                                Платформа
 
-                                            credentials:
-                                                {},
-                                        })
+                                <select
+                                    value={
+                                        form.platformId
+                                        ?? ""
+                                    }
+
+                                    onChange={
+                                        event => {
+                                            const platform = (
+                                                platforms.find(
+                                                    item =>
+                                                        item.id
+                                                        === event
+                                                            .target
+                                                            .value
+                                                )
+                                            )
+
+                                            if (
+                                                platform
+                                            ) {
+                                                selectPlatform(
+                                                    platform
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    style={{
+                                        width:
+                                            "100%",
+
+                                        marginTop:
+                                            6,
+                                    }}
+                                >
+                                    <option
+                                        value=""
+                                        disabled
+                                    >
+                                        Выберите платформу…
+                                    </option>
+
+                                    {
+                                        platforms.filter(platform => platform.mode === "live").map(
+                                            platform => (
+                                                <option
+                                                    key={
+                                                        platform.id
+                                                    }
+
+                                                    value={
+                                                        platform.id
+                                                    }
+                                                >
+                                                    {
+                                                        platformLabels[
+                                                            platform.broker
+                                                        ]
+                                                        ?? platform.broker
+                                                    }
+
+                                                    {" · "}
+
+                                                    {
+                                                        modeLabels[
+                                                            platform.mode
+                                                        ]
+                                                        ?? platform.mode
+                                                    }
+                                                </option>
+                                            )
+                                        )
+                                    }
+                                </select>
+
+                                {
+                                    platforms.length
+                                    === 0
+                                    && (
+                                        <div
+                                            style={{
+                                                fontSize:
+                                                    12,
+
+                                                color:
+                                                    "var(--text-muted)",
+
+                                                marginTop:
+                                                    4,
+                                            }}
+                                        >
+                                            Сначала подключите платформу на вкладке «Настройки».
+                                        </div>
                                     )
                                 }
-                            }
+                            </label>
+                        )
+                    }
 
-                            style={{
-                                width:
-                                    "100%",
-
-                                marginTop:
-                                    6,
-                            }}
-                        >
-                            {
-                                brokers.map(
-                                    broker => (
-                                        <option
-                                            key={
-                                                broker.id
-                                            }
-
-                                            value={
-                                                broker.id
-                                            }
-
-                                            disabled={
-                                                !broker
-                                                    .supported
-                                            }
-                                        >
-                                            {
-                                                broker
-                                                    .name
-                                            }
-
-                                            {
-                                                !broker
-                                                    .supported
-                                                    ? " — скоро"
-                                                    : ""
-                                            }
-                                        </option>
-                                    )
-                                )
-                            }
-                        </select>
-                    </label>
-
-                    <label>
+                    {form.broker !== "bybit" && <label>
                         ID брокерского счёта
 
                         <input
@@ -1054,198 +1177,195 @@ export function AccountsPanel() {
                                     6,
                             }}
                         />
-                    </label>
+                    </label>}
 
-                    <label>
-                        Режим
 
-                        <select
-                            value={
-                                form.mode
-                            }
 
-                            onChange={
-                                event => {
-                                    const mode =
-                                        event.target.value as TradingAccountMode
+                    {
+                        form.broker
+                        === "bybit"
+                        && (
+                            <label>
+                                Основная валюта
 
-                                    setForm(
-                                        previous => ({
-                                            ...previous,
-                                            mode,
-                                        })
-                                    )
+                                <select
+                                    value={
+                                        form
+                                            .baseCurrency
+                                    }
 
-                                    clearDiscovered()
-                                }
-                            }
+                                    onChange={
+                                        event =>
+                                            setForm(
+                                                previous => ({
+                                                    ...previous,
 
-                            style={{
-                                width:
-                                    "100%",
+                                                    baseCurrency:
+                                                        event
+                                                            .target
+                                                            .value,
+                                                })
+                                            )
+                                    }
 
-                                marginTop:
-                                    6,
-                            }}
-                        >
-                            {
-                                (
-                                    selectedBroker
-                                        ?.modes
-                                    ?? [
-                                        "live",
-                                    ]
-                                ).map(
-                                    mode => (
-                                        <option
-                                            key={
-                                                mode
-                                            }
+                                    style={{
+                                        width:
+                                            "100%",
 
-                                            value={
-                                                mode
-                                            }
-                                        >
-                                            {
-                                                mode
-                                                    === "live"
-                                                    ? "Боевой"
-                                                    : "Песочница"
-                                            }
-                                        </option>
-                                    )
-                                )
-                            }
-                        </select>
-                    </label>
+                                        marginTop:
+                                            6,
+                                    }}
+                                >
+                                    <option
+                                        value="USDT"
+                                    >
+                                        USDT
+                                    </option>
+
+                                    <option
+                                        value="USDC"
+                                    >
+                                        USDC
+                                    </option>
+                                </select>
+                            </label>
+                        )
+                    }
                 </div>
 
                 {
-                    selectedBroker
+                    editingId
+                    !== null
+                    && selectedBroker
                     && (
                         <div
                             style={{
                                 marginTop:
-                                    18,
+                                18,
 
                                 display:
-                                    "grid",
+                                "grid",
 
                                 gridTemplateColumns:
-                                    "repeat(auto-fit, minmax(260px, 1fr))",
+                                "repeat(auto-fit, minmax(260px, 1fr))",
 
                                 gap:
-                                    14,
+                                14,
                             }}
                         >
                             {
                                 selectedBroker
-                                    .credential_fields
-                                    .map(
-                                        field => (
-                                            <label
-                                                key={
+                                .credential_fields
+                                .map(
+                                    field => (
+                                        <label
+                                            key={
+                                                field.key
+                                            }
+                                        >
+                                            {
+                                                field.label
+                                            }
+
+                                            <input
+                                                type={
+                                                    field.type
+                                                        === "password"
+                                                        ? "password"
+                                                        : "text"
+                                                }
+
+                                                value={
+                                                    form
+                                                        .credentials[
                                                     field.key
-                                                }
-                                            >
-                                                {
-                                                    field.label
+                                                    ]
+                                                    ?? ""
                                                 }
 
-                                                <input
-                                                    type={
-                                                        field.type
-                                                            === "password"
-                                                            ? "password"
-                                                            : "text"
-                                                    }
+                                                onChange={
+                                                    event =>
+                                                        updateCredential(
+                                                            field.key,
 
-                                                    value={
-                                                        form
-                                                            .credentials[
-                                                        field.key
-                                                        ]
-                                                        ?? ""
-                                                    }
+                                                            event
+                                                                .target
+                                                                .value,
+                                                        )
+                                                }
 
-                                                    onChange={
-                                                        event =>
-                                                            updateCredential(
-                                                                field.key,
+                                                placeholder="Оставьте пустым, чтобы не менять"
 
-                                                                event
-                                                                    .target
-                                                                    .value,
-                                                            )
-                                                    }
+                                                style={{
+                                                    width:
+                                                    "100%",
 
-                                                    onBlur={
-                                                        field.key
-                                                        === "token"
-                                                            ? () => {
-                                                                loadBrokerAccounts()
-                                                            }
-                                                            : undefined
-                                                    }
-
-                                                    placeholder={
-                                                        editingId
-                                                            ? "Оставьте пустым, чтобы не менять"
-                                                            : ""
-                                                    }
-
-                                                    style={{
-                                                        width:
-                                                            "100%",
-
-                                                        marginTop:
-                                                            6,
-                                                    }}
-                                                />
-                                            </label>
-                                        )
+                                                    marginTop:
+                                                    6,
+                                                }}
+                                            />
+                                        </label>
                                     )
+                                )
                             }
                         </div>
                     )
                 }
 
                 {
-                    selectedBroker
-                    ?.supported
+                    editingId
+                    === null
+                    && form.broker !== "bybit"
                     && (
                         <div
                             style={{
                                 marginTop:
-                                    18,
+                                18,
                             }}
                         >
                             <button
                                 type="button"
 
                                 onClick={
-                                    loadBrokerAccounts
+                                    loadPlatformAccounts
                                 }
 
                                 disabled={
                                     discovering
-                                    || (
-                                        form
-                                            .credentials[
-                                        "token"
-                                        ]
-                                        ?? ""
-                                    )
-                                        .trim()
-                                    === ""
+                                    || form
+                                        .platformId
+                                    === null
                                 }
                             >
                                 {
                                     discovering
                                         ? "Загрузка счетов..."
-                                        : "Показать счета по токену"
+                                        : "Показать счета платформы"
                                 }
                             </button>
+
+                            {
+                                platforms.length
+                                > 0
+                                && selectedPlatform
+                                === undefined
+                                && (
+                                    <div
+                                        style={{
+                                            marginTop:
+                                            10,
+
+                                            fontSize:
+                                            13,
+
+                                            color:
+                                            "var(--text-muted)",
+                                        }}
+                                    >
+                                        Выберите платформу, чтобы загрузить доступные счета.
+                                    </div>
+                                )
+                            }
 
                             {
                                 discoveryError
@@ -1262,10 +1382,10 @@ export function AccountsPanel() {
                                                 10,
 
                                             background:
-                                                "#fff1f1",
+                                                "var(--loss-soft)",
 
                                             color:
-                                                "#991b1b",
+                                                "var(--loss)",
 
                                             wordBreak:
                                                 "break-word",
@@ -1304,6 +1424,12 @@ export function AccountsPanel() {
                                                         === account
                                                             .broker_account_id
 
+                                                    const alreadyAdded = (
+                                                        account
+                                                            .already_added
+                                                        === true
+                                                    )
+
                                                     return (
                                                         <button
                                                             key={
@@ -1312,6 +1438,10 @@ export function AccountsPanel() {
                                                             }
 
                                                             type="button"
+
+                                                            disabled={
+                                                                alreadyAdded
+                                                            }
 
                                                             onClick={
                                                                 () =>
@@ -1322,23 +1452,33 @@ export function AccountsPanel() {
 
                                                             style={{
                                                                 textAlign:
-                                                                    "left",
+                                                                "left",
 
                                                                 background:
-                                                                    selected
-                                                                        ? "#effaf2"
-                                                                        : "#f8f9fa",
+                                                                selected
+                                                                    ? "var(--profit-soft)"
+                                                                    : "var(--card-soft)",
 
                                                                 border:
                                                                     selected
                                                                         ? "1px solid #2f9e5f"
-                                                                        : "1px solid #e0e0e0",
+                                                                        : "1px solid var(--border)",
 
                                                                 borderRadius:
-                                                                    12,
+                                                                12,
 
                                                                 padding:
-                                                                    12,
+                                                                12,
+
+                                                                opacity:
+                                                                alreadyAdded
+                                                                    ? 0.55
+                                                                    : 1,
+
+                                                                cursor:
+                                                                alreadyAdded
+                                                                    ? "default"
+                                                                    : "pointer",
                                                             }}
                                                         >
                                                             <div>
@@ -1361,6 +1501,12 @@ export function AccountsPanel() {
                                                                         .status
                                                                     === "1"
                                                                         ? " · активен"
+                                                                        : ""
+                                                                }
+
+                                                                {
+                                                                    alreadyAdded
+                                                                        ? " · уже добавлен"
                                                                         : ""
                                                                 }
                                                             </div>
@@ -1448,7 +1594,7 @@ export function AccountsPanel() {
                     )
                 }
 
-                <div
+                {form.broker !== "bybit" && <div
                     style={{
                         marginTop:
                             18,
@@ -1613,7 +1759,7 @@ export function AccountsPanel() {
                             </>
                         )
                     }
-                </div>
+                </div>}
 
                 <label
                     style={{
@@ -1638,24 +1784,21 @@ export function AccountsPanel() {
                             form.enabled
                         }
 
-                            onChange={
-                                event => {
-                                    setForm(
-                                        previous => ({
-                                            ...previous,
-                                            broker:
-                                                event
-                                                    .target
-                                                    .value,
-                                            credentials:
-                                                {},
-                                        })
-                                    )
+                     onChange={
+                         event => {
+                             setForm(
+                                 previous => ({
+                                     ...previous,
 
-                                    clearDiscovered()
-                                }
-                            }
-                    />
+                                     enabled:
+                                         event
+                                             .target
+                                             .checked,
+                                 })
+                             )
+                         }
+                     }
+                 />
 
                     Счёт активен
                 </label>
@@ -1675,10 +1818,10 @@ export function AccountsPanel() {
                                     10,
 
                                 background:
-                                    "#fff1f1",
+                                    "var(--loss-soft)",
 
                                 color:
-                                    "#991b1b",
+                                    "var(--loss)",
 
                                 wordBreak:
                                     "break-word",
@@ -1739,6 +1882,9 @@ export function AccountsPanel() {
                     style={{
                         marginBottom:
                             0,
+
+                        fontSize:
+                            20,
                     }}
                 >
                     Торговые счета
@@ -1782,8 +1928,7 @@ export function AccountsPanel() {
                                     }
 
                                     style={{
-                                        background:
-                                            "#ffffff",
+                                        background: "var(--card)",
 
                                         borderRadius:
                                             18,
@@ -1800,21 +1945,87 @@ export function AccountsPanel() {
                                             display:
                                                 "flex",
 
-                                            justifyContent:
-                                                "space-between",
+                                            alignItems:
+                                                "center",
 
                                             gap:
-                                                16,
+                                                12,
 
                                             flexWrap:
                                                 "wrap",
                                         }}
                                     >
-                                        <div>
+                                        <div
+                                            style={{
+                                                width:
+                                                    40,
+
+                                                height:
+                                                    40,
+
+                                                borderRadius:
+                                                    "50%",
+
+                                                display:
+                                                    "flex",
+
+                                                alignItems:
+                                                    "center",
+
+                                                justifyContent:
+                                                    "center",
+
+                                                background:
+                                                    account.enabled
+                                                        ? "var(--accent)"
+                                                        : "var(--card-soft)",
+
+                                                color:
+                                                    account.enabled
+                                                        ? "#111111"
+                                                        : "var(--text-muted)",
+
+                                                fontWeight:
+                                                    700,
+
+                                                fontSize:
+                                                    16,
+
+                                                flexShrink:
+                                                    0,
+                                            }}
+                                        >
+                                            {
+                                                (
+                                                    account
+                                                        .name
+                                                        .trim()
+                                                        .charAt(
+                                                            0
+                                                        )
+                                                        .toUpperCase()
+
+                                                    || "С"
+                                                )
+                                            }
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                flex:
+                                                    1,
+
+                                                minWidth:
+                                                    0,
+                                            }}
+                                        >
                                             <h3
                                                 style={{
                                                     margin:
                                                         0,
+
+                                                    fontSize:
+                                                        16,
                                                 }}
                                             >
                                                 {
@@ -1826,15 +2037,19 @@ export function AccountsPanel() {
                                             <div
                                                 style={{
                                                     marginTop:
-                                                        6,
+                                                        2,
 
-                                                    opacity:
-                                                        0.65,
+                                                    fontSize:
+                                                        12,
+
+                                                    color:
+                                                        "var(--text-muted)",
                                                 }}
                                             >
                                                 {
                                                     broker
                                                         ?.name
+
                                                     ?? account
                                                         .broker
                                                 }
@@ -1851,13 +2066,95 @@ export function AccountsPanel() {
                                             </div>
                                         </div>
 
-                                        <div>
-                                            {
-                                                account
-                                                    .enabled
-                                                    ? "Активен"
-                                                    : "Отключён"
-                                            }
+                                        <div
+                                            style={{
+                                                textAlign:
+                                                    "right",
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    fontSize:
+                                                        16,
+
+                                                    fontWeight:
+                                                        700,
+
+                                                    color:
+                                                        "var(--text)",
+                                                }}
+                                            >
+                                                {
+                                                    portfolio
+                                                        ? formatMoney(
+                                                            portfolio.total_value
+                                                        )
+                                                        : "—"
+                                                }
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    marginTop:
+                                                        2,
+
+                                                    display:
+                                                        "inline-flex",
+
+                                                    alignItems:
+                                                        "center",
+
+                                                    gap:
+                                                        4,
+
+                                                    fontSize:
+                                                        11,
+
+                                                    color:
+                                                        account.enabled
+                                                            ? "var(--profit)"
+                                                            : "var(--text-dim)",
+
+                                                    background:
+                                                        account.enabled
+                                                            ? "var(--profit-soft)"
+                                                            : "var(--card-soft)",
+
+                                                    padding:
+                                                        "2px 8px",
+
+                                                    borderRadius:
+                                                        999,
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        width:
+                                                            6,
+
+                                                        height:
+                                                            6,
+
+                                                        borderRadius:
+                                                            "50%",
+
+                                                        background:
+                                                            account.enabled
+                                                                ? "var(--profit)"
+                                                                : "var(--text-dim)",
+
+                                                        display:
+                                                            "inline-block",
+                                                    }}
+                                                />
+
+                                                {
+                                                    account
+                                                        .enabled
+                                                        ? "Активен"
+                                                        : "Отключён"
+                                                }
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2004,8 +2301,8 @@ export function AccountsPanel() {
                                                             && test
                                                                 .account_found
                                                         )
-                                                            ? "#effaf2"
-                                                            : "#fff1f1",
+                                                            ? "var(--profit-soft)"
+                                                            : "var(--loss-soft)",
                                                 }}
                                             >
                                                 {

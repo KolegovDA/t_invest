@@ -145,6 +145,7 @@ def test_operation_log_service_formats_trade_details(
         price=Decimal("105"),
         commission=Decimal("3.15"),
         profit=Decimal("33.8"),
+        planned_profit=Decimal("31.2"),
     )
 
     service.record_order_placed(
@@ -180,8 +181,26 @@ def test_operation_log_service_formats_trade_details(
     )
 
     assert (
-        "прибыль=33.8"
+        "факт=33.8"
         in events[1].details
+    )
+
+    assert (
+        "расчётная=31.2"
+        in events[1].details
+    )
+
+    assert (
+        events[1]
+        .details
+        .index(
+            "расчётная="
+        )
+        < events[1]
+        .details
+        .index(
+            "факт="
+        )
     )
 
     assert (
@@ -300,6 +319,10 @@ def test_trade_event_handler_logs_buy_and_sell(
             commission=Decimal(
                 "9.3"
             ),
+
+            planned_price=(
+                Decimal("312")
+            ),
         )
     )
 
@@ -325,7 +348,12 @@ def test_trade_event_handler_logs_buy_and_sell(
     )
 
     assert (
-        "прибыль="
+        "факт="
+        in events[0].details
+    )
+
+    assert (
+        "расчётная="
         in events[0].details
     )
 

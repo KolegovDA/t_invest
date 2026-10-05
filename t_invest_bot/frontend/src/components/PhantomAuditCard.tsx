@@ -339,8 +339,7 @@ export function PhantomAuditCard({
     return (
         <div
             style={{
-                background:
-                "white",
+                background: "var(--card)",
 
                 borderRadius:
                 14,
@@ -367,7 +366,7 @@ export function PhantomAuditCard({
             <div
                 style={{
                     color:
-                    "#6b7280",
+                    "var(--text-muted)",
 
                     fontSize:
                     13,
@@ -399,13 +398,12 @@ export function PhantomAuditCard({
                     8,
 
                     border:
-                    "1px solid #d1d5db",
+                    "1px solid var(--border)",
 
                     background:
                     isChecking
-                        ? "#e5e7eb"
-                        : "white",
-
+                        ? "var(--card-soft)"
+: "var(--card)",
                     cursor:
                     isChecking
                         ? "default"
@@ -429,7 +427,7 @@ export function PhantomAuditCard({
                         13,
 
                         color:
-                        "#6b7280",
+                        "var(--text-muted)",
                     }}
                 >
                     Проверено счетов: {
@@ -451,10 +449,10 @@ export function PhantomAuditCard({
                         8,
 
                         background:
-                        "#fef2f2",
+                        "var(--loss-soft)",
 
                         color:
-                        "#b91c1c",
+                        "var(--loss)",
 
                         fontSize:
                         12,
@@ -495,7 +493,7 @@ export function PhantomAuditCard({
                             13,
 
                             color:
-                            "#b91c1c",
+                            "var(--loss)",
                         }}
                     >
                         Найдены фантомы:
@@ -533,7 +531,7 @@ export function PhantomAuditCard({
                                         "8px 0",
 
                                         borderTop:
-                                        "1px solid #e5e7eb",
+                                        "1px solid var(--border)",
 
                                         cursor:
                                         "pointer",
@@ -604,7 +602,7 @@ export function PhantomAuditCard({
                                         <span
                                             style={{
                                                 color:
-                                                "#6b7280",
+                                                "var(--text-muted)",
 
                                                 wordBreak:
                                                 "break-all",
@@ -650,8 +648,8 @@ export function PhantomAuditCard({
                                 || selectedCount
                                 === 0
                             )
-                                ? "#e5e7eb"
-                                : "#b91c1c",
+                                ? "var(--card-soft)"
+                                : "var(--loss)",
 
                             color:
                             "white",
@@ -693,7 +691,7 @@ export function PhantomAuditCard({
                             13,
 
                             color:
-                            "#15803d",
+                            "var(--profit)",
                         }}
                     >
                         Фантомов не найдено — история совпадает со счетами.
@@ -710,7 +708,7 @@ export function PhantomAuditCard({
                         13,
 
                         color:
-                        "#15803d",
+                        "var(--profit)",
                     }}
                 >
                     {
@@ -729,7 +727,7 @@ export function PhantomAuditCard({
                         13,
 
                         color:
-                        "#b91c1c",
+                        "var(--loss)",
                     }}
                 >
                     {

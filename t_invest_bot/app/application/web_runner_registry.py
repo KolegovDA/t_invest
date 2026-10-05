@@ -36,6 +36,24 @@ class WebRunnerRegistry:
         default_factory=dict
     )
 
+    def ensure_instruments_available(
+        self,
+        trading_account_id: str,
+        tickers: list[str],
+    ) -> None:
+        requested = {ticker.strip().upper() for ticker in tickers}
+        for existing in self.get_all():
+            if getattr(existing, "trading_account_id", None) != trading_account_id:
+                continue
+            active = {ticker.strip().upper() for ticker in existing.context.instrument_ids_by_ticker}
+            overlap = requested & active
+            if overlap:
+                raise ValueError(
+                    "Активы уже управляются другой сессией этого счёта: "
+                    + ", ".join(sorted(overlap))
+                    + ". Дождитесь её завершения или выберите другие активы."
+                )
+
     def register(
         self,
         runner: WebRunnerService,
@@ -60,6 +78,13 @@ class WebRunnerRegistry:
             raise RuntimeError(
                 "Runner already exists "
                 f"for session: {session_id}"
+            )
+
+        trading_account_id = getattr(runner, "trading_account_id", None)
+        if existing is not runner and trading_account_id:
+            self.ensure_instruments_available(
+                trading_account_id,
+                list(runner.context.instrument_ids_by_ticker),
             )
 
         self.runners_by_session_id[

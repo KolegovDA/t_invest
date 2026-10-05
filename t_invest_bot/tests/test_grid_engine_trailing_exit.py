@@ -112,6 +112,38 @@ def open_position(
     )
 
 
+def test_max_take_profit_exits_at_bid_without_waiting_for_reversal() -> None:
+    grid = create_grid()
+    grid.config.max_take_profit_percent = Decimal("3")
+    open_position(grid)
+    assert grid.on_price(Decimal("103"), sell_reference_price=Decimal("102.99")) == []
+    commands = grid.on_price(Decimal("105"), sell_reference_price=Decimal("103"))
+    sells = [command for command in commands if isinstance(command, PlaceSellLimitCommand)]
+    assert len(sells) == 1
+    assert sells[0].price == Decimal("103") * Decimal("0.9985")
+    assert sells[0].price >= grid.open_positions[1].hard_take_profit_price
+    assert grid.on_price(Decimal("104")) == []
+
+
+def test_max_take_profit_does_not_bypass_safe_profit_activation() -> None:
+    grid = create_grid()
+    grid.config.max_take_profit_percent = Decimal("0.01")
+    open_position(grid)
+    assert grid.on_price(Decimal("100.01")) == []
+    assert grid.open_positions[1].trailing_exit is None
+    activation = grid._calculate_exit_activation_price(grid.open_positions[1].hard_take_profit_price)
+    sells = [command for command in grid.on_price(activation) if isinstance(command, PlaceSellLimitCommand)]
+    assert len(sells) == 1
+    assert sells[0].price >= grid.open_positions[1].hard_take_profit_price
+
+
+def test_max_take_profit_is_disabled_by_default() -> None:
+    grid = create_grid()
+    open_position(grid)
+    assert grid.config.max_take_profit_percent is None
+    assert grid.on_price(Decimal("110")) == []
+
+
 def test_actual_buy_commission_is_used(
 ) -> None:
     grid = create_grid()

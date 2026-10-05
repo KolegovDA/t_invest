@@ -14,7 +14,7 @@ class TradeCapitalService:
         self,
         instrument_id: str,
         level_index: int,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         commission_percent: Decimal,
     ) -> bool:
@@ -44,7 +44,7 @@ class TradeCapitalService:
 
     def calculate_required_buy_amount(
         self,
-        quantity: int,
+        quantity: int | Decimal,
         price: Decimal,
         commission_percent: Decimal,
     ) -> Decimal:

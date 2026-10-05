@@ -104,7 +104,7 @@ export function RunnerStatusCard({
 }
 
 const cardStyle = {
-    background: "white",
+    background: "var(--card)",
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,

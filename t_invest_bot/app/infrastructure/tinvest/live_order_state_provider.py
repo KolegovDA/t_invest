@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from t_tech.invest import (
+    OrderDirection,
     OrderExecutionReportStatus,
 )
 
@@ -81,7 +82,7 @@ class TInvestLiveOrderStateProvider:
         executed_commission = None
         total_order_amount = None
 
-        if is_executed:
+        if executed_quantity > 0 and (is_executed or is_cancelled or is_rejected):
             executed_price = (
                 self._extract_executed_price(
                     response=response,
@@ -195,31 +196,9 @@ class TInvestLiveOrderStateProvider:
             if value > 0:
                 return value
 
-        executed_order_price = getattr(
-            response,
-            "executed_order_price",
-            None,
-        )
-
-        if (
-            executed_order_price
-            is not None
-        ):
-            value = (
-                self._money_to_decimal(
-                    executed_order_price
-                )
-            )
-
-            if value > 0:
-                return value
-
         trades = list(
-            getattr(
-                response,
-                "trades",
-                [],
-            )
+            getattr(response, "stages", None)
+            or getattr(response, "trades", [])
         )
 
         total_quantity = 0
@@ -312,19 +291,24 @@ class TInvestLiveOrderStateProvider:
         self,
         response,
     ) -> Decimal | None:
-        value = getattr(
-            response,
-            "total_order_amount",
-            None,
+        executed_amount = self._money_to_decimal(
+            getattr(response, "executed_order_price", None)
         )
+        if executed_amount > 0:
+            return executed_amount
 
+        value = getattr(response, "total_order_amount", None)
         if value is not None:
-            result = (
-                self._money_to_decimal(
-                    value
-                )
-            )
-
+            result = self._money_to_decimal(value)
+            commission = self._extract_commission(response)
+            direction = getattr(response, "direction", None)
+            if commission is not None:
+                if direction == OrderDirection.ORDER_DIRECTION_BUY:
+                    result -= commission
+                elif direction == OrderDirection.ORDER_DIRECTION_SELL:
+                    result += commission
+                elif commission != 0:
+                    raise ValueError("Order direction is missing for commission-inclusive amount")
             if result > 0:
                 return result
 

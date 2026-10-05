@@ -14,7 +14,7 @@ export function ApiUsageCard({
     return (
         <div
             style={{
-                background: "white",
+                background: "var(--card)",
                 borderRadius: 16,
                 padding: 16,
                 marginBottom: 16,
@@ -46,7 +46,7 @@ export function ApiUsageCard({
                         style={{
                             display: "flex",
                             justifyContent: "space-between",
-                            borderTop: "1px solid #eee",
+                            borderTop: "1px solid var(--border)",
                             paddingTop: 8,
                             marginTop: 8,
                         }}

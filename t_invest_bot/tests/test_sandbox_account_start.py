@@ -460,6 +460,8 @@ class FakeSessionFactory:
         knowledge_engine=None,
         operation_log=None,
         notifier=None,
+        commission_service=None,
+        broker=None,
     ) -> None:
         pass
 

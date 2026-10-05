@@ -49,6 +49,7 @@ class FakePortfolioManager:
         quantity: int,
         price,
         commission,
+        gross_amount=None,
     ) -> None:
         pass
 
@@ -60,6 +61,8 @@ class FakePortfolioManager:
         profit,
         commission,
         buy_commission_to_close,
+        gross_amount=None,
+        purchase_cost_to_close=None,
     ) -> None:
         pass
 

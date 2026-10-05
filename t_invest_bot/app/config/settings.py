@@ -3,6 +3,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.embedded import (
+    EMBEDDED_HEAD_SERVER_ENABLED,
+    EMBEDDED_HEAD_SERVER_URL,
+    is_packaged_build,
+)
+
 
 def _load_dotenv_if_available() -> None:
     try:
@@ -45,8 +51,11 @@ class Settings:
     trading_mode: str = "sandbox"
     live_trading_enabled: bool = False
 
-    telegram_bot_token: str | None = None
-    telegram_chat_id: str | None = None
+    ntfy_server_url: (
+        str | None
+    ) = None
+
+    ntfy_topic: str | None = None
 
     max_access_token: str | None = None
     max_user_id: str | None = None
@@ -116,12 +125,30 @@ class Settings:
     def from_env(cls) -> "Settings":
         _load_dotenv_if_available()
 
+        # В упакованном exe
+        # (PyInstaller) адрес
+        # головного сервера зашит
+        # в сборку (app/config/
+        # embedded.py): пользователь
+        # получает только файл ПО,
+        # без .env. Токены брокера
+        # НЕ зашиваются — они у
+        # каждого пользователя свои
+        # и берутся из настроек
+        # счёта.
+        packaged = (
+            is_packaged_build()
+        )
+
         settings = cls(
             tinvest_token=_empty_to_none(
                 os.getenv("TINVEST_TOKEN")
             ),
+
             tinvest_sandbox_token=_empty_to_none(
-                os.getenv("TINVEST_SANDBOX_TOKEN")
+                os.getenv(
+                    "TINVEST_SANDBOX_TOKEN"
+                )
             ),
 
             tinvest_account_id=_empty_to_none(
@@ -148,11 +175,11 @@ class Settings:
                 False,
             ),
 
-            telegram_bot_token=_empty_to_none(
-                os.getenv("TELEGRAM_BOT_TOKEN")
+            ntfy_server_url=_empty_to_none(
+                os.getenv("NTFY_SERVER_URL")
             ),
-            telegram_chat_id=_empty_to_none(
-                os.getenv("TELEGRAM_CHAT_ID")
+            ntfy_topic=_empty_to_none(
+                os.getenv("NTFY_TOPIC")
             ),
 
             max_access_token=_empty_to_none(
@@ -180,15 +207,32 @@ class Settings:
                 False,
             ),
 
-            head_server_url=_empty_to_none(
-                os.getenv(
-                    "HEAD_SERVER_URL"
+            head_server_url=(
+                _empty_to_none(
+                    os.getenv(
+                        "HEAD_SERVER_URL"
+                    )
+                )
+
+                or (
+                    EMBEDDED_HEAD_SERVER_URL
+
+                    if packaged
+
+                    else None
                 )
             ),
 
             head_server_enabled=_env_bool(
                 "HEAD_SERVER_ENABLED",
-                False,
+
+                (
+                    EMBEDDED_HEAD_SERVER_ENABLED
+
+                    if packaged
+
+                    else False
+                ),
             ),
         )
 

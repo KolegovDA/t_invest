@@ -1,5 +1,6 @@
 export type BrokerType =
     | "tinvest"
+    | "bybit"
     | "alfa"
     | "bcs"
     | "finam"
@@ -49,6 +50,9 @@ export interface TradingAccount {
     broker_account_id: string
 
     mode: TradingAccountMode
+
+    base_currency:
+    string | null
 
     credentials_configured: boolean
 
@@ -134,6 +138,8 @@ export interface DiscoveredBrokerAccount {
 
     portfolio:
         BrokerPortfolio | null
+
+    already_added?: boolean
 }
 
 
@@ -150,6 +156,46 @@ export interface DiscoverBrokerAccountsResponse {
 }
 
 
+export interface PlatformConnection {
+    id: string
+
+    broker: BrokerType
+
+    mode: TradingAccountMode
+
+    credentials_configured: boolean
+
+    created_at:
+        string | null
+
+    updated_at:
+        string | null
+}
+
+
+export interface CreatePlatformConnectionPayload {
+    broker: BrokerType
+
+    mode: TradingAccountMode
+
+    credentials:
+        Record<string, string>
+}
+
+
+export interface DiscoverPlatformAccountsResponse {
+    success: boolean
+
+    platform_id: string
+
+    accounts:
+        DiscoveredBrokerAccount[]
+
+    error:
+        string | null
+}
+
+
 export interface CreateTradingAccountPayload {
     name: string
 
@@ -157,11 +203,17 @@ export interface CreateTradingAccountPayload {
 
     broker_account_id: string
 
-    credentials:
-    Record<string, string>
+    credentials?:
+        Record<string, string>
+
+    platform_id?:
+        string | null
 
     mode:
-    TradingAccountMode
+        TradingAccountMode
+
+    base_currency?:
+    string | null
 
     commission_mode:
     CommissionMode
@@ -188,6 +240,9 @@ export interface UpdateTradingAccountPayload {
 
     mode?:
     TradingAccountMode
+
+    base_currency?:
+    string | null
 
     commission_mode?:
     CommissionMode

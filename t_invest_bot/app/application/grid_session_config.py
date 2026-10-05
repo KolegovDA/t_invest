@@ -26,6 +26,9 @@ class GridSessionConfig:
     min_open_positions_for_compensation: int = 5
     compensation_multiplier: Decimal = Decimal("3")
 
+    early_close_min_working_time_seconds: int = 86400
+    early_close_profit_loss_ratio: Decimal = Decimal("3")
+
     def to_grid_engine_config(self) -> GridEngineConfig:
         return GridEngineConfig(
             quantity=self.quantity,
@@ -37,4 +40,6 @@ class GridSessionConfig:
             take_profit_buffer_percent=self.take_profit_buffer_percent,
             min_open_positions_for_compensation=self.min_open_positions_for_compensation,
             compensation_multiplier=self.compensation_multiplier,
+            early_close_min_working_time_seconds=self.early_close_min_working_time_seconds,
+            early_close_profit_loss_ratio=self.early_close_profit_loss_ratio,
         )
